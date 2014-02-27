@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module PathParser where
 
+import Data.Bits( (.|.), unsafeShiftR )
 import Data.Char( isSpace )
 import Control.Applicative( (<$>), (<$)
                           , (<*>), (<*), (*>)
@@ -12,8 +13,11 @@ import Data.Attoparsec.Text
     , number
     , string
     , skipSpace
+    , satisfy
     )
 import Data.Attoparsec.Combinator( option, sepBy1, many1 )
+import Codec.Picture( PixelRGBA8( .. ) )
+import SvgColor
 
 type Coord = Double
 
@@ -99,4 +103,46 @@ command =  (MoveTo OriginAbsolute <$ string "M" <*> pointList)
                                   <*> numComma
                                   <*> numComma
                                   <*> point
+
+-- | Represent an SVG transformation matrix
+data Transform = Transform
+    { _transformA :: {-# UNPACK #-} !Double
+    , _transformC :: {-# UNPACK #-} !Double
+    , _transformE :: {-# UNPACK #-} !Double -- ^ X translation
+
+    , _transformB :: {-# UNPACK #-} !Double
+    , _transformD :: {-# UNPACK #-} !Double
+    , _transformF :: {-# UNPACK #-} !Double -- ^ Y translation
+    }
+    deriving (Eq, Show)
+
+transformParser :: Parser Transform
+transformParser = string "matrix" *> skipSpace *> string "(" *> skipSpace *> matrixData
+  where
+    numComma = num <* string ","
+    matrixData = Transform <$> numComma <*> numComma <*> numComma
+                           <*> numComma <*> numComma <*> num
+
+colorParser :: Parser (Maybe PixelRGBA8)
+colorParser = none <|> (string "#" *> (Just <$> (colorWithAlpha <|> color <|> colorReduced)))
+  where
+    charRange c1 c2 =
+        (\c -> fromIntegral $ fromEnum c - fromEnum c1) <$> satisfy (\v -> c1 <= v && v <= c2)
+
+    hexChar = charRange '0' '9'
+           <|> ((+ 10) <$> charRange 'a' 'f')
+           <|> ((+ 10) <$> charRange 'A' 'F')
+
+    hexByte = (\h1 h2 -> h1 `unsafeShiftR` 4 .|. h2) <$> hexChar <*> hexChar
+    colorWithAlpha = PixelRGBA8 <$> hexByte <*> hexByte <*> hexByte <*> hexByte
+    color = (\r g b -> PixelRGBA8 r g b 255) <$> hexByte <*> hexByte <*> hexByte
+    rgbColor = (\r g b -> PixelRGBA8 r g b 255)
+            <$> (string "rgb(" *> num)
+            <*> (commaWsp *> num)
+            <*> (commaWsp *> num <* skipSpace <* string ")")
+
+    colorReduced =
+        (\r g b -> PixelRGBA8 (r * 17) (g * 17) (b * 17) 255) <$> hexChar <*> hexChar <*> hexChar
+    none = Nothing <$ string "none"
+    
 

@@ -17,5 +17,7 @@ cabal-version:       >=1.8
 library
   exposed-modules:     PathParser
   -- other-modules:       
-  build-depends:       base ==4.6.*,
-                       attoparsec
+  build-depends: base ==4.6.*,
+                 attoparsec,
+                 JuicyPixels >= 3.1.4.1,
+                 containers >= 0.5
