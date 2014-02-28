@@ -1,8 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
-module PathParser where
+module Graphics.Svg.PathParser where
 
 import Data.Bits( (.|.), unsafeShiftR )
-import Data.Char( isSpace )
 import Control.Applicative( (<$>), (<$)
                           , (<*>), (<*), (*>)
                           , (<|>)
@@ -17,35 +16,9 @@ import Data.Attoparsec.Text
     )
 import Data.Attoparsec.Combinator( option, sepBy1, many1 )
 import Codec.Picture( PixelRGBA8( .. ) )
-import SvgColor
-
-type Coord = Double
-
-type Point = (Coord, Coord)
-
-data Origin
-    = OriginAbsolute
-    | OriginRelative
-    deriving (Eq, Show)
-
-data SvgPath
-    = MoveTo Origin [Point]
-    | LineTo Origin [Point]
-
-    | HorizontalTo  Origin [Coord]
-    | VerticalTo    Origin [Coord]
-
-    -- | Cubic vezier
-    | CurveTo  Origin [(Point, Point, Point)]
-    -- | Cubic bezier
-    | SmoothCurveTo  Origin [(Point, Point)]
-    -- | Quadratic bezier
-    | QuadraticBezier  Origin [(Point, Point)]
-    -- | Quadratic bezier
-    | SmoothQuadraticBezierCurveTo  Origin [Point]
-    | ElipticalArc  Origin [(Coord, Coord, Coord, Coord, Coord, Point)]
-    | EndPath
-    deriving (Eq, Show)
+import Graphics.Svg.NamedColors
+import Data.Word( Word8 )
+import Graphics.Svg.Types
 
 num :: Parser Double
 num = skipSpace *> plusMinus <* skipSpace
@@ -104,17 +77,6 @@ command =  (MoveTo OriginAbsolute <$ string "M" <*> pointList)
                                   <*> numComma
                                   <*> point
 
--- | Represent an SVG transformation matrix
-data Transform = Transform
-    { _transformA :: {-# UNPACK #-} !Double
-    , _transformC :: {-# UNPACK #-} !Double
-    , _transformE :: {-# UNPACK #-} !Double -- ^ X translation
-
-    , _transformB :: {-# UNPACK #-} !Double
-    , _transformD :: {-# UNPACK #-} !Double
-    , _transformF :: {-# UNPACK #-} !Double -- ^ Y translation
-    }
-    deriving (Eq, Show)
 
 transformParser :: Parser Transform
 transformParser = string "matrix" *> skipSpace *> string "(" *> skipSpace *> matrixData
@@ -124,22 +86,31 @@ transformParser = string "matrix" *> skipSpace *> string "(" *> skipSpace *> mat
                            <*> numComma <*> numComma <*> num
 
 colorParser :: Parser (Maybe PixelRGBA8)
-colorParser = none <|> (string "#" *> (Just <$> (colorWithAlpha <|> color <|> colorReduced)))
+colorParser = none
+           <|> (Just <$> rgbColor)
+           <|> (string "#" *> (Just <$> (colorWithAlpha <|> color <|> colorReduced)))
   where
     charRange c1 c2 =
         (\c -> fromIntegral $ fromEnum c - fromEnum c1) <$> satisfy (\v -> c1 <= v && v <= c2)
 
+    hexChar :: Parser Word8
     hexChar = charRange '0' '9'
            <|> ((+ 10) <$> charRange 'a' 'f')
            <|> ((+ 10) <$> charRange 'A' 'F')
+
+    
+    percentToWord v = floor $ v * (255 / 100)
+
+    numPercent = ((percentToWord <$> num) <* string "%")
+              <|> (floor <$> num)
 
     hexByte = (\h1 h2 -> h1 `unsafeShiftR` 4 .|. h2) <$> hexChar <*> hexChar
     colorWithAlpha = PixelRGBA8 <$> hexByte <*> hexByte <*> hexByte <*> hexByte
     color = (\r g b -> PixelRGBA8 r g b 255) <$> hexByte <*> hexByte <*> hexByte
     rgbColor = (\r g b -> PixelRGBA8 r g b 255)
-            <$> (string "rgb(" *> num)
-            <*> (commaWsp *> num)
-            <*> (commaWsp *> num <* skipSpace <* string ")")
+            <$> (string "rgb(" *> numPercent)
+            <*> (commaWsp *> numPercent)
+            <*> (commaWsp *> numPercent <* skipSpace <* string ")")
 
     colorReduced =
         (\r g b -> PixelRGBA8 (r * 17) (g * 17) (b * 17) 255) <$> hexChar <*> hexChar <*> hexChar

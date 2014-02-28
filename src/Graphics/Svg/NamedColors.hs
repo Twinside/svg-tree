@@ -1,4 +1,4 @@
-module SvgColor( svgNamedColors ) where
+module Graphics.Svg.NamedColors( svgNamedColors ) where
 
 import qualified Data.Map as M
 import Codec.Picture( PixelRGBA8( .. ) )
