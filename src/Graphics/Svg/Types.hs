@@ -1,14 +1,19 @@
 module Graphics.Svg.Types
     ( Coord
-    , Point
     , Origin( .. )
+    , Point
+    , SvgDocument( .. )
+    , SvgDrawAttributes( .. )
     , SvgPath( .. )
+    , SvgTree( .. )
     , Transform( .. )
     ) where
 
+import Data.Function( on )
 import Data.Monoid( Monoid( .. ) )
+import Codec.Picture( PixelRGBA8( .. ) )
 
-type Coord = Double
+type Coord = Float
 
 type Point = (Coord, Coord)
 
@@ -38,13 +43,13 @@ data SvgPath
 
 -- | Represent an SVG transformation matrix
 data Transform = Transform
-    { _transformA :: {-# UNPACK #-} !Double
-    , _transformC :: {-# UNPACK #-} !Double
-    , _transformE :: {-# UNPACK #-} !Double -- ^ X translation
+    { _transformA :: {-# UNPACK #-} !Coord
+    , _transformC :: {-# UNPACK #-} !Coord
+    , _transformE :: {-# UNPACK #-} !Coord -- ^ X translation
 
-    , _transformB :: {-# UNPACK #-} !Double
-    , _transformD :: {-# UNPACK #-} !Double
-    , _transformF :: {-# UNPACK #-} !Double -- ^ Y translation
+    , _transformB :: {-# UNPACK #-} !Coord
+    , _transformD :: {-# UNPACK #-} !Coord
+    , _transformF :: {-# UNPACK #-} !Coord -- ^ Y translation
     }
     deriving (Eq, Show)
 
@@ -66,4 +71,42 @@ instance Monoid Transform where
     mappend = transformCombine
     mempty = Transform 1 0 0
                        0 1 0
+
+data SvgTree
+    = SvgNone
+    | Group SvgDrawAttributes [SvgTree]
+    | Path SvgDrawAttributes [SvgPath]
+    deriving (Eq, Show)
+
+data SvgDocument = SvgDocument
+    { _svgViewBox  :: (Int, Int, Int, Int)
+    , _svgElements :: [SvgTree]
+    }
+    deriving (Eq, Show)
+
+data SvgDrawAttributes = SvgDrawAttributes
+    { _strokeWidth :: Maybe Float
+    , _strokeColor :: Maybe PixelRGBA8
+    , _fillColor   :: Maybe PixelRGBA8
+    , _transform   :: Maybe Transform
+    }
+    deriving (Eq, Show)
+
+mayRight :: Maybe a -> Maybe a -> Maybe a
+mayRight _ b@(Just _) = b
+mayRight a Nothing = a
+
+mayMerge :: Monoid a => Maybe a -> Maybe a -> Maybe a
+mayMerge (Just a) (Just b) = Just $ mappend a b
+mayMerge _ b@(Just _) = b
+mayMerge a Nothing = a
+
+instance Monoid SvgDrawAttributes where
+    mempty = SvgDrawAttributes Nothing Nothing Nothing Nothing
+    mappend a b = SvgDrawAttributes
+        { _strokeWidth = (mayRight `on` _strokeWidth) a b
+        , _strokeColor =  (mayRight `on` _strokeColor) a b
+        , _fillColor =  (mayRight `on` _fillColor) a b
+        , _transform =  (mayMerge `on` _transform) a b
+        }
 

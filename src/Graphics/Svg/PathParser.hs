@@ -1,7 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Graphics.Svg.PathParser where
+module Graphics.Svg.PathParser( transformParser, command ) where
 
-import Data.Bits( (.|.), unsafeShiftR )
 import Control.Applicative( (<$>), (<$)
                           , (<*>), (<*), (*>)
                           , (<|>)
@@ -12,16 +11,12 @@ import Data.Attoparsec.Text
     , number
     , string
     , skipSpace
-    , satisfy
     )
 import Data.Attoparsec.Combinator( option, sepBy1, many1 )
-import Codec.Picture( PixelRGBA8( .. ) )
-import Graphics.Svg.NamedColors
-import Data.Word( Word8 )
 import Graphics.Svg.Types
 
-num :: Parser Double
-num = skipSpace *> plusMinus <* skipSpace
+num :: Parser Float
+num = realToFrac <$> (skipSpace *> plusMinus <* skipSpace)
   where toDouble (I i) = fromIntegral i
         toDouble (D d) = d
 
@@ -36,9 +31,6 @@ commaWsp = skipSpace *> option () (string "," *> return ()) <* skipSpace
 
 point :: Parser Point
 point = (,) <$> num <* commaWsp <*> num
-
-pointPair :: Parser (Point, Point)
-pointPair = (,) <$> point <* commaWsp <*> point
 
 command :: Parser SvgPath
 command =  (MoveTo OriginAbsolute <$ string "M" <*> pointList)
@@ -84,36 +76,4 @@ transformParser = string "matrix" *> skipSpace *> string "(" *> skipSpace *> mat
     numComma = num <* string ","
     matrixData = Transform <$> numComma <*> numComma <*> numComma
                            <*> numComma <*> numComma <*> num
-
-colorParser :: Parser (Maybe PixelRGBA8)
-colorParser = none
-           <|> (Just <$> rgbColor)
-           <|> (string "#" *> (Just <$> (colorWithAlpha <|> color <|> colorReduced)))
-  where
-    charRange c1 c2 =
-        (\c -> fromIntegral $ fromEnum c - fromEnum c1) <$> satisfy (\v -> c1 <= v && v <= c2)
-
-    hexChar :: Parser Word8
-    hexChar = charRange '0' '9'
-           <|> ((+ 10) <$> charRange 'a' 'f')
-           <|> ((+ 10) <$> charRange 'A' 'F')
-
-    
-    percentToWord v = floor $ v * (255 / 100)
-
-    numPercent = ((percentToWord <$> num) <* string "%")
-              <|> (floor <$> num)
-
-    hexByte = (\h1 h2 -> h1 `unsafeShiftR` 4 .|. h2) <$> hexChar <*> hexChar
-    colorWithAlpha = PixelRGBA8 <$> hexByte <*> hexByte <*> hexByte <*> hexByte
-    color = (\r g b -> PixelRGBA8 r g b 255) <$> hexByte <*> hexByte <*> hexByte
-    rgbColor = (\r g b -> PixelRGBA8 r g b 255)
-            <$> (string "rgb(" *> numPercent)
-            <*> (commaWsp *> numPercent)
-            <*> (commaWsp *> numPercent <* skipSpace <* string ")")
-
-    colorReduced =
-        (\r g b -> PixelRGBA8 (r * 17) (g * 17) (b * 17) 255) <$> hexChar <*> hexChar <*> hexChar
-    none = Nothing <$ string "none"
-    
 

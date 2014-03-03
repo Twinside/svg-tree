@@ -1,9 +1,11 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Graphics.Svg.NamedColors( svgNamedColors ) where
 
 import qualified Data.Map as M
 import Codec.Picture( PixelRGBA8( .. ) )
+import Data.Text( Text )
 
-svgNamedColors :: M.Map String PixelRGBA8
+svgNamedColors :: M.Map Text PixelRGBA8
 svgNamedColors = M.fromList
   [ ("aliceblue"           , PixelRGBA8 240 248 255 255)
   , ("antiquewhite"        , PixelRGBA8 250 235 215 255)
