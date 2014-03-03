@@ -62,13 +62,13 @@ withTransform trans prims =
     case _transform trans of
        Nothing -> prims
        Just t ->
-           {-(\a -> trace ("====== shifted\n" ++ show a) a)-}
-                {-. trace ("====== transform\n" ++ show t)-}
-                {-. trace ("====== inverse transform\n" ++ show it)-}
-                {-. trace ("====== prims\n" ++ show prims)-}
+           (\a -> trace ("====== shifted\n" ++ show a) a)
+                . trace ("====== transform\n" ++ show t)
+                . trace ("====== inverse transform\n" ++ show it)
+                . trace ("====== prims\n" ++ show prims)
                 {-. transform (pointTransform t) <$> prims-}
-                {-. -}
-                transform (^+^ V2 450 200) <$> prims
+                . transform (^+^ V2 450 200) <$> prims
+                {-. transform (^* 3.0)-}
           where it = inverseTransform t
 
 
@@ -76,7 +76,7 @@ renderSvg :: SvgTree -> Drawing PixelRGBA8 ()
 renderSvg = go initialAttr
   where
     initialAttr =
-      mempty { _strokeColor = Just $ PixelRGBA8 0 0 0 255
+      mempty { _strokeWidth = Just 1.0
              {-, _transform = Just $ mempty { _transformE = 450-}
                                           {-, _transformF = 0-}
                                           {-}-}
@@ -88,11 +88,11 @@ renderSvg = go initialAttr
     go attr (Path pAttr path) = do
       let info = attr <> pAttr
           primitives =
-              withTransform info $ svgPathToPrimitives
-                                 {-$ trace ("===== path\n" ++ show path)-}
-                                 path
+              withTransform info $ svgPathToPrimitives path
 
-      {-
+      withInfo _fillColor info $ \c ->
+        withTexture (uniformTexture c) $ fill primitives
+
       withInfo _strokeWidth info $ \swidth ->
         withInfo _strokeColor info $ \color ->
           withTexture (uniformTexture color) $
@@ -100,11 +100,7 @@ renderSvg = go initialAttr
                 (JoinMiter 0)
                 (CapStraight 0, CapStraight 0)
                 primitives
-                -- -}
 
-      withInfo _fillColor info $ \c ->
-        withTexture (uniformTexture c) $ fill primitives
-              
 svgPathToPrimitives :: [SvgPath] -> [Primitive]
 svgPathToPrimitives lst =
     concat . snd . mapAccumL go (zero, zero, zero)
@@ -203,8 +199,8 @@ renderSvgDocument path doc = writePng path drawing
 main :: IO ()
 main = do
     let _ = svgPathToPrimitives undefined
-    {-f <- loadSvgFile "tigerlight.svg"-}
     f <- loadSvgFile "tiger.svg"
+    {-f <- loadSvgFile "tigerlight.svg"-}
     case f of
        Nothing -> putStrLn "Error while loading SVG"
        Just doc -> renderSvgDocument "tiger.png" doc

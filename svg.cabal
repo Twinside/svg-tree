@@ -36,6 +36,6 @@ Executable svgrender
   Build-Depends: base >= 4.6
                , linear
                , svg
-               , Rasterific
+               , Rasterific >= 0.2
                , JuicyPixels >= 3.1.4.1
 
