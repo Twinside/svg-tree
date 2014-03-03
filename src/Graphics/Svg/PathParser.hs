@@ -12,7 +12,7 @@ import Data.Attoparsec.Text
     , string
     , skipSpace
     )
-import Data.Attoparsec.Combinator( option, sepBy1, many1 )
+import Data.Attoparsec.Combinator( option, sepBy1 )
 import Graphics.Svg.Types
 
 num :: Parser Float
@@ -41,16 +41,16 @@ command =  (MoveTo OriginAbsolute <$ string "M" <*> pointList)
        <|> (HorizontalTo OriginRelative <$ string "h" <*> coordList)
        <|> (VerticalTo OriginAbsolute <$ string "V" <*> coordList)
        <|> (VerticalTo OriginRelative <$ string "v" <*> coordList)
-       <|> (CurveTo OriginAbsolute <$ string "C" <*> many1 curveToArgs)
-       <|> (CurveTo OriginRelative <$ string "c" <*> many1 curveToArgs)
+       <|> (CurveTo OriginAbsolute <$ string "C" <*> manyComma curveToArgs)
+       <|> (CurveTo OriginRelative <$ string "c" <*> manyComma curveToArgs)
        <|> (SmoothCurveTo OriginAbsolute <$ string "S" <*> pointPairList)
        <|> (SmoothCurveTo OriginRelative <$ string "s" <*> pointPairList)
        <|> (QuadraticBezier OriginAbsolute <$ string "Q" <*> pointPairList)
        <|> (QuadraticBezier OriginRelative <$ string "q" <*> pointPairList)
        <|> (SmoothQuadraticBezierCurveTo OriginAbsolute <$ string "T" <*> pointList)
        <|> (SmoothQuadraticBezierCurveTo OriginRelative <$ string "t" <*> pointList)
-       <|> (ElipticalArc OriginAbsolute <$ string "A" <*> many1 elipticalArgs)
-       <|> (ElipticalArc OriginRelative <$ string "a" <*> many1 elipticalArgs)
+       <|> (ElipticalArc OriginAbsolute <$ string "A" <*> manyComma elipticalArgs)
+       <|> (ElipticalArc OriginRelative <$ string "a" <*> manyComma elipticalArgs)
        <|> (EndPath <$ string "Z")
        <|> (EndPath <$ string "z")
     where pointList = point `sepBy1` commaWsp
@@ -60,6 +60,7 @@ command =  (MoveTo OriginAbsolute <$ string "M" <*> pointList)
           curveToArgs = (,,) <$> (point <* commaWsp)
                              <*> (point <* commaWsp)
                              <*> point
+          manyComma a = a `sepBy1` commaWsp
 
           numComma = num <* commaWsp
           elipticalArgs = (,,,,,) <$> numComma

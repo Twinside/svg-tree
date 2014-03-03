@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Graphics.Svg.ColorParser( colorParser ) where
 
-import Data.Bits( (.|.), unsafeShiftR )
+import Data.Bits( (.|.), unsafeShiftL )
 import Control.Applicative( (<$>), (<$)
                           , (<*>), (<*), (*>)
                           , (<|>)
@@ -41,7 +41,7 @@ num = skipSpace *> plusMinus <* skipSpace
 colorParser :: Parser (Maybe PixelRGBA8)
 colorParser = none
            <|> (Just <$> rgbColor)
-           <|> (string "#" *> (Just <$> (colorWithAlpha <|> color <|> colorReduced)))
+           <|> (string "#" *> (Just <$> (color <|> colorReduced)))
            <|> namedColor
            <|> return (Just black)
   where
@@ -64,8 +64,7 @@ colorParser = none
     numPercent = ((percentToWord <$> num) <* string "%")
               <|> (floor <$> num)
 
-    hexByte = (\h1 h2 -> h1 `unsafeShiftR` 4 .|. h2) <$> hexChar <*> hexChar
-    colorWithAlpha = PixelRGBA8 <$> hexByte <*> hexByte <*> hexByte <*> hexByte
+    hexByte = (\h1 h2 -> h1 `unsafeShiftL` 4 .|. h2) <$> hexChar <*> hexChar
     color = (\r g b -> PixelRGBA8 r g b 255) <$> hexByte <*> hexByte <*> hexByte
     rgbColor = (\r g b -> PixelRGBA8 r g b 255)
             <$> (string "rgb(" *> numPercent)

@@ -12,6 +12,7 @@ import Graphics.Svg.Types
 import Graphics.Svg.PathParser
 import Graphics.Svg.ColorParser
 
+import Debug.Trace
 {-
 findAttr :: QName -> Element -> Maybe String
 -}
@@ -27,14 +28,14 @@ attributeFinder str e =
 parseDrawAttributes :: Element -> SvgDrawAttributes
 parseDrawAttributes e = SvgDrawAttributes
     { _strokeWidth = read <$> attribute "stroke-width"
-    , _strokeColor = join $ attribute "stroke" >>= parse colorParser
-    , _fillColor   = join $ attribute "fill" >>= parse colorParser
-    , _transform   = attribute "transform" >>= parse transformParser
+    , _strokeColor = join $ attribute "stroke" >>= parse "stroke" colorParser
+    , _fillColor   = join $ attribute "fill" >>= parse "fill" colorParser
+    , _transform   = attribute "transform" >>= parse "trans" transformParser
     }
   where attribute a = attributeFinder a e
-        parse p str = case parseOnly p (T.pack str) of
+        parse v p str = case parseOnly p (T.pack str) of
             Left _ -> Nothing
-            Right r -> Just r
+            Right r -> trace (">> " ++ str ++ " " ++ v ++ show r) $ Just r
 
 
 unparse :: Element -> SvgTree
