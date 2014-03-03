@@ -2,7 +2,7 @@ import Control.Applicative( (<$>), pure )
 import Data.Monoid( Monoid( .. ), (<>) )
 import Graphics.Svg
 import Graphics.Svg.Types
-import Graphics.Rasterific hiding ( Path )
+import Graphics.Rasterific hiding ( Path, Line )
 import Graphics.Rasterific.Texture
 import Codec.Picture( PixelRGBA8( .. ), writePng )
 import Linear( (^-^), (^+^), (^*) )
@@ -82,17 +82,11 @@ renderSvg = go initialAttr
                                           {-}-}
              }
 
-    go _ SvgNone = return ()
-    go attr (Group groupAttr subTrees) =
-        mapM_ (go (attr <> groupAttr)) subTrees
-    go attr (Path pAttr path) = do
-      let info = attr <> pAttr
-          primitives =
-              withTransform info $ svgPathToPrimitives path
-
+    filler info primitives =
       withInfo _fillColor info $ \c ->
         withTexture (uniformTexture c) $ fill primitives
 
+    stroker info primitives =
       withInfo _strokeWidth info $ \swidth ->
         withInfo _strokeColor info $ \color ->
           withTexture (uniformTexture color) $
@@ -100,6 +94,37 @@ renderSvg = go initialAttr
                 (JoinMiter 0)
                 (CapStraight 0, CapStraight 0)
                 primitives
+
+    go _ SvgNone = return ()
+    go attr (Group groupAttr subTrees) =
+        mapM_ (go (attr <> groupAttr)) subTrees
+
+    go attr (Circle pAttr p r) = do
+      let info = attr <> pAttr
+          c = withTransform info $ circle (toPoint p) r
+      filler info c
+      stroker info c
+
+    go attr (Ellipse pAttr p rx ry) = do
+      let info = attr <> pAttr
+          c = withTransform info
+            $ ellipse (toPoint p) rx ry
+      filler info c
+      stroker info c
+
+    go attr (Line pAttr p1 p2) = do
+      let info = attr <> pAttr
+      stroker info . withTransform info
+                   $ line (toPoint p1) (toPoint p2)
+
+    go attr (Path pAttr path) = do
+      let info = attr <> pAttr
+          primitives =
+              withTransform info $ svgPathToPrimitives path
+      filler info primitives
+      stroker info primitives
+
+
 
 svgPathToPrimitives :: [SvgPath] -> [Primitive]
 svgPathToPrimitives lst =
@@ -198,7 +223,6 @@ renderSvgDocument path doc = writePng path drawing
 
 main :: IO ()
 main = do
-    let _ = svgPathToPrimitives undefined
     f <- loadSvgFile "tiger.svg"
     {-f <- loadSvgFile "tigerlight.svg"-}
     case f of

@@ -1,7 +1,7 @@
 {-# LANGUAGE ViewPatterns #-}
 module Graphics.Svg.XmlParser where
 
-import Control.Applicative( (<$>) )
+import Control.Applicative( (<$>), (<*>) )
 import Control.Monad( join )
 import Text.XML.Light.Proc( findAttr, elChildren )
 import Text.XML.Light.Types( Element( .. )
@@ -32,10 +32,33 @@ parseDrawAttributes e = SvgDrawAttributes
             Left _ -> Nothing
             Right r -> Just r
 
+attributeReal :: String -> Element -> Maybe Float
+attributeReal attr e = read <$> attributeFinder attr e
 
 unparse :: Element -> SvgTree
 unparse e@(nodeName -> "g") =
     Group (parseDrawAttributes e) $ unparse <$> (elChildren e)
+unparse e@(nodeName -> "ellipse") =
+    maybe SvgNone id $ Ellipse (parseDrawAttributes e)
+                        <$> c <*> attr "rx" <*> attr "ry"
+  where
+    attr v = attributeReal v e
+    c = (,) <$> attr "cx" <*> attr "cy"
+
+unparse e@(nodeName -> "circle") =
+    maybe SvgNone id $ Circle (parseDrawAttributes e)
+                        <$> c <*> attributeReal "r" e
+  where
+    c = (,) <$> attributeReal "cx" e
+            <*> attributeReal "cy" e
+
+unparse e@(nodeName -> "line") =
+    maybe SvgNone id $ Line (parseDrawAttributes e) <$> p1 <*> p2
+  where
+    attr v = attributeReal v e
+    p1 = (,) <$> attr "x1" <*> attr "y1"
+    p2 = (,) <$> attr "x2" <*> attr "y2"
+
 unparse e@(nodeName -> "path") =
     Path (parseDrawAttributes e) parsedPath
       where parsedPath = case attributeFinder "d" e of

@@ -76,6 +76,9 @@ data SvgTree
     = SvgNone
     | Group SvgDrawAttributes [SvgTree]
     | Path SvgDrawAttributes [SvgPath]
+    | Circle SvgDrawAttributes Point Float
+    | Ellipse SvgDrawAttributes Point Float Float
+    | Line SvgDrawAttributes Point Point
     deriving (Eq, Show)
 
 data SvgDocument = SvgDocument
