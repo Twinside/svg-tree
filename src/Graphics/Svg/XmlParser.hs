@@ -19,13 +19,30 @@ attributeFinder :: String -> Element -> Maybe String
 attributeFinder str e =
     findAttr QName { qName = str, qURI = Nothing, qPrefix = Nothing }
              e
-    
+
+parseSvgCap :: String -> Maybe SvgCap
+parseSvgCap "butt" = Just SvgCapButt
+parseSvgCap "round" = Just SvgCapRound
+parseSvgCap "square" = Just SvgCapSquare
+parseSvgCap _ = Nothing
+
+parseSvgLineJoin :: String -> Maybe SvgLineJoin
+parseSvgLineJoin "miter" = Just SvgJoinMiter
+parseSvgLineJoin "round" = Just SvgJoinRound
+parseSvgLineJoin "bevel" = Just SvgJoinBevel
+parseSvgLineJoin _ = Nothing
+
 parseDrawAttributes :: Element -> SvgDrawAttributes
 parseDrawAttributes e = SvgDrawAttributes
     { _strokeWidth = read <$> attribute "stroke-width"
     , _strokeColor = join $ attribute "stroke" >>= parse colorParser
+    , _strokeLineCap = attribute "stroke-linecap" >>= parseSvgCap
+    , _strokeLineJoin = attribute "stroke-linejoin" >>= parseSvgLineJoin
+    , _strokeMiterLimit = read <$> attribute "stroke-miterlimit"
     , _fillColor   = join $ attribute "fill" >>= parse colorParser
     , _transform   = attribute "transform" >>= parse transformParser
+    , _fillOpacity = read <$> attribute "fill-opacity"
+    , _strokeOpacity = read <$> attribute "stroke-opacity"
     }
   where attribute a = attributeFinder a e
         parse p str = case parseOnly p (T.pack str) of

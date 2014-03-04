@@ -7,14 +7,32 @@ import Graphics.Rasterific.Texture
 import Codec.Picture( PixelRGBA8( .. ), writePng )
 import Linear( (^-^), (^+^), (^*) )
 import Data.List( mapAccumL )
+import System.Environment( getArgs )
 
-import Debug.Trace
+{-import Debug.Trace-}
 
 toPoint :: (Float, Float) -> V2 Float
 toPoint (a, b) = V2 a b
 
 {-ofPoint :: V2 Float -> (Float, Float)-}
 {-ofPoint (V2 a b) = (a, b)-}
+
+capOfSvg :: SvgDrawAttributes -> (Cap, Cap)
+capOfSvg attrs =
+  case _strokeLineCap attrs of
+    Nothing -> (CapStraight 1, CapStraight 1)
+    Just SvgCapSquare -> (CapStraight 1, CapStraight 1)
+    Just SvgCapButt -> (CapStraight 0, CapStraight 0)
+    Just SvgCapRound -> (CapRound, CapRound)
+
+joinOfSvg :: SvgDrawAttributes -> Join
+joinOfSvg attrs =
+  case (_strokeLineJoin attrs,_strokeMiterLimit attrs) of
+    (Nothing, _) -> JoinRound
+    (Just SvgJoinMiter, Just v) -> JoinMiter v
+    (Just SvgJoinMiter, Nothing) -> JoinMiter 0
+    (Just SvgJoinBevel, _) -> JoinMiter 5
+    (Just SvgJoinRound, _) -> JoinRound
 
 singularize :: [SvgPath] -> [SvgPath]
 singularize = concatMap go
@@ -62,10 +80,11 @@ withTransform trans prims =
     case _transform trans of
        Nothing -> prims
        Just t ->
-           (\a -> trace ("====== shifted\n" ++ show a) a)
-                . trace ("====== transform\n" ++ show t)
-                . trace ("====== inverse transform\n" ++ show it)
-                . trace ("====== prims\n" ++ show prims)
+           {-(\a -> trace ("====== shifted\n" ++ show a) a)-}
+                {-. trace ("====== transform\n" ++ show t)-}
+                {-. trace ("====== inverse transform\n" ++ show it)-}
+                {-. trace ("====== prims\n" ++ show prims)-}
+                id
                 {-. transform (pointTransform t) <$> prims-}
                 . transform (^+^ V2 450 200) <$> prims
                 {-. transform (^* 3.0)-}
@@ -77,6 +96,11 @@ renderSvg = go initialAttr
   where
     initialAttr =
       mempty { _strokeWidth = Just 1.0
+             , _strokeLineCap = Just SvgCapButt
+             , _strokeLineJoin = Just SvgJoinMiter
+             , _strokeMiterLimit = Just 4.0
+             , _strokeOpacity = Just 1.0
+             , _fillOpacity = Just 1.0
              {-, _transform = Just $ mempty { _transformE = 450-}
                                           {-, _transformF = 0-}
                                           {-}-}
@@ -90,10 +114,7 @@ renderSvg = go initialAttr
       withInfo _strokeWidth info $ \swidth ->
         withInfo _strokeColor info $ \color ->
           withTexture (uniformTexture color) $
-            stroke swidth
-                (JoinMiter 0)
-                (CapStraight 0, CapStraight 0)
-                primitives
+            stroke swidth (joinOfSvg info) (capOfSvg info) primitives
 
     go _ SvgNone = return ()
     go attr (Group groupAttr subTrees) =
@@ -221,11 +242,15 @@ renderSvgDocument path doc = writePng path drawing
     drawing = renderDrawing 900 900 white .
         mapM_ renderSvg $ _svgElements doc
 
+loadRender :: [String] -> IO ()
+loadRender [] = putStrLn "not enough arguments"
+loadRender [_] = putStrLn "not enough arguments"
+loadRender (svgfilename:pngfilename:_) = do
+  f <- loadSvgFile svgfilename
+  case f of
+     Nothing -> putStrLn "Error while loading SVG"
+     Just doc -> renderSvgDocument pngfilename doc
+
 main :: IO ()
-main = do
-    f <- loadSvgFile "tiger.svg"
-    {-f <- loadSvgFile "tigerlight.svg"-}
-    case f of
-       Nothing -> putStrLn "Error while loading SVG"
-       Just doc -> renderSvgDocument "tiger.png" doc
+main = getArgs >>= loadRender
 
