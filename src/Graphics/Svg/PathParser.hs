@@ -13,7 +13,9 @@ import Data.Attoparsec.Text
     , skipSpace
     )
 import Data.Attoparsec.Combinator( option, sepBy1 )
+import Linear( V2( V2 ) )
 import Graphics.Svg.Types
+import Graphics.Rasterific.Transformations
 
 num :: Parser Float
 num = realToFrac <$> (skipSpace *> plusMinus <* skipSpace)
@@ -30,7 +32,7 @@ commaWsp :: Parser ()
 commaWsp = skipSpace *> option () (string "," *> return ()) <* skipSpace
 
 point :: Parser Point
-point = (,) <$> num <* commaWsp <*> num
+point = V2 <$> num <* commaWsp <*> num
 
 command :: Parser SvgPath
 command =  (MoveTo OriginAbsolute <$ string "M" <*> pointList)
@@ -71,10 +73,11 @@ command =  (MoveTo OriginAbsolute <$ string "M" <*> pointList)
                                   <*> point
 
 
-transformParser :: Parser Transform
+transformParser :: Parser Transformation
 transformParser = string "matrix" *> skipSpace *> string "(" *> skipSpace *> matrixData
   where
     numComma = num <* string ","
-    matrixData = Transform <$> numComma <*> numComma <*> numComma
-                           <*> numComma <*> numComma <*> num
+    matrixData = Transformation
+              <$> numComma <*> numComma <*> numComma
+              <*> numComma <*> numComma <*> num
 

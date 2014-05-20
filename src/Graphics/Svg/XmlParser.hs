@@ -6,6 +6,7 @@ import Control.Monad( join )
 import Text.XML.Light.Proc( findAttr, elChildren )
 import Text.XML.Light.Types( Element( .. )
                            , QName( .. ) )
+import Linear( V2( V2 ) )
 import qualified Data.Text as T
 import Data.Attoparsec.Text( parseOnly, many1 )
 import Graphics.Svg.Types
@@ -60,21 +61,21 @@ unparse e@(nodeName -> "ellipse") =
                         <$> c <*> attr "rx" <*> attr "ry"
   where
     attr v = attributeReal v e
-    c = (,) <$> attr "cx" <*> attr "cy"
+    c = V2 <$> attr "cx" <*> attr "cy"
 
 unparse e@(nodeName -> "circle") =
     maybe SvgNone id $ Circle (parseDrawAttributes e)
                         <$> c <*> attributeReal "r" e
   where
-    c = (,) <$> attributeReal "cx" e
-            <*> attributeReal "cy" e
+    c = V2 <$> attributeReal "cx" e
+           <*> attributeReal "cy" e
 
 unparse e@(nodeName -> "line") =
     maybe SvgNone id $ Line (parseDrawAttributes e) <$> p1 <*> p2
   where
     attr v = attributeReal v e
-    p1 = (,) <$> attr "x1" <*> attr "y1"
-    p2 = (,) <$> attr "x2" <*> attr "y2"
+    p1 = V2 <$> attr "x1" <*> attr "y1"
+    p2 = V2 <$> attr "x2" <*> attr "y2"
 
 unparse e@(nodeName -> "path") =
     Path (parseDrawAttributes e) parsedPath

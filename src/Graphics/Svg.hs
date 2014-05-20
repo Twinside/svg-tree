@@ -1,8 +1,13 @@
-module Graphics.Svg  where
+module Graphics.Svg ( loadSvgFile
+                    , renderSvgDocument
+                    , renderSvg
+                    ) where
 
-import Graphics.Svg.XmlParser
-import Graphics.Svg.Types
 import Text.XML.Light.Input( parseXMLDoc )
+
+import Graphics.Svg.RasterificRender
+import Graphics.Svg.Types
+import Graphics.Svg.XmlParser
 
 loadSvgFile :: FilePath -> IO (Maybe SvgDocument)
 loadSvgFile filename = do

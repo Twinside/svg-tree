@@ -8,16 +8,15 @@ module Graphics.Svg.Types
     , SvgCap( .. )
     , SvgLineJoin( .. )
     , SvgTree( .. )
-    , Transform( .. )
     ) where
 
 import Data.Function( on )
 import Data.Monoid( Monoid( .. ) )
 import Codec.Picture( PixelRGBA8( .. ) )
+import Graphics.Rasterific.Transformations
+import Graphics.Rasterific
 
 type Coord = Float
-
-type Point = (Coord, Coord)
 
 data Origin
     = OriginAbsolute
@@ -42,37 +41,6 @@ data SvgPath
     | ElipticalArc  Origin [(Coord, Coord, Coord, Coord, Coord, Point)]
     | EndPath
     deriving (Eq, Show)
-
--- | Represent an SVG transformation matrix
-data Transform = Transform
-    { _transformA :: {-# UNPACK #-} !Coord
-    , _transformC :: {-# UNPACK #-} !Coord
-    , _transformE :: {-# UNPACK #-} !Coord -- ^ X translation
-
-    , _transformB :: {-# UNPACK #-} !Coord
-    , _transformD :: {-# UNPACK #-} !Coord
-    , _transformF :: {-# UNPACK #-} !Coord -- ^ Y translation
-    }
-    deriving (Eq, Show)
-
-transformCombine :: Transform -> Transform -> Transform
-transformCombine (Transform a c e
-                            b d f)
-
-                 (Transform a' c' e'
-                            b' d' f') =
-    Transform (a * a' + c * b' {- below b' is zero -})
-              (a * c' + c * d' {- below d' is zero -})
-              (a * e' + c * f' + e {- below f' is one -})
-
-              (b * a' + d * b' {- below b' is zero -})
-              (b * c' + d * d' {- below d' is zero -})
-              (b * e' + d * f' + f {- below f' is one -})
-
-instance Monoid Transform where
-    mappend = transformCombine
-    mempty = Transform 1 0 0
-                       0 1 0
 
 data SvgTree
     = SvgNone
@@ -110,7 +78,7 @@ data SvgDrawAttributes = SvgDrawAttributes
     , _strokeMiterLimit :: Maybe Float
     , _fillColor        :: Maybe PixelRGBA8
     , _fillOpacity      :: Maybe Float
-    , _transform        :: Maybe Transform
+    , _transform        :: Maybe Transformation
     }
     deriving (Eq, Show)
 
