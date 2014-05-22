@@ -1,8 +1,11 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Graphics.Svg.CssParser where
 
 import Control.Applicative( (<$>), (<$)
                           , (<*>), (<*), (*>)
                           , (<|>)
+                          , many
+                          , pure
                           )
 import Data.Attoparsec.Text
     ( Number( .. )
@@ -10,8 +13,17 @@ import Data.Attoparsec.Text
     , number
     , string
     , skipSpace
+    , letter
+    , char
+    , digit
     )
-import Data.Attoparsec.Combinator( option, sepBy1 )
+import Data.Attoparsec.Combinator
+    ( option
+    , sepBy
+    , sepBy1
+    , many1
+    )
+
 import Linear( V2( V2 ) )
 import Graphics.Svg.Types
 import Graphics.Rasterific.Transformations
@@ -28,7 +40,9 @@ num = realToFrac <$> (skipSpace *> plusMinus <* skipSpace)
                  <|> doubleNumber
 
 commaWsp :: Parser ()
-commaWsp = skipSpace *> option () (string "," *> return ()) <* skipSpace
+commaWsp = skipSpace *> 
+    option () (string "," *> return ())
+                     <* skipSpace
 
 
 {-
@@ -95,7 +109,7 @@ cssStatement = ruleSet <|> atRule
 ident :: Parser String
 ident = do
   init <- letter <|> char '_' <|> char '-'
-  (init:) <$> many (letter <|> digit <|> char '_' <|> '-')
+  (init:) <$> many (letter <|> digit <|> char '_' <|> char '-')
 
 atKeyword :: Parser String
 atKeyword = char '@' *> ident <* skipSpace
@@ -109,9 +123,11 @@ atRule = AtQuery <$> atKeyword <*> many cssStatement
 
 data CssElement
     = CssIdent String
-    | CssNumber Ratio
+    | CssNumber CssNumber
     | CssFunction String [CssElement]
     deriving (Eq, Show)
+
+type CssSelector = [CssElement]
 
 data CssNumber
     = Percentage Number
@@ -122,24 +138,31 @@ data CssNumber
 complexNumber :: Parser CssNumber
 complexNumber = do
     n <- number
-    (Percentage n <* char '%')
+    (Percentage n <$ char '%')
         <|> (Named n <$> ident)
         <|> pure (Naked n)
 
 
-any :: Parser CssElement
-any = function
+anyElem :: Parser CssElement
+anyElem = function
    <|> (CssIdent <$> ident)
    <|> (CssNumber <$> complexNumber)
   where
     comma = char ',' <* skipSpace
     function = CssFunction
        <$> ident <* char '('
-       <*> (any `sepBy` comma) <* char ')' <* skipSpace
+       <*> (anyElem `sepBy` comma) <* char ')' <* skipSpace
 
 selector :: Parser CssSelector
-selector = many1 any
+selector = many1 anyElem
 
 ruleSet :: Parser CssRule
 ruleSet = undefined
 
+{-  
+"1pt" equals "1.25px" (and therefore 1.25 user units)
+"1pc" equals "15px" (and therefore 15 user units)
+"1mm" would be "3.543307px" (3.543307 user units)
+"1cm" equals "35.43307px" (and therefore 35.43307 user units)
+"1in" equals "90px" (and therefore 90 user units)
+-}
