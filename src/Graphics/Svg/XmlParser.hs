@@ -1,7 +1,7 @@
 {-# LANGUAGE ViewPatterns #-}
 module Graphics.Svg.XmlParser where
 
-import Control.Applicative( (<$>), (<*>) )
+import Control.Applicative( (<$>), (<*>), (<|>) )
 import Control.Monad( join )
 import Text.XML.Light.Proc( findAttr, elChildren )
 import Text.XML.Light.Types( Element( .. )
