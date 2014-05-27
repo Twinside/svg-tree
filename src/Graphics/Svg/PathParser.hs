@@ -4,18 +4,22 @@ module Graphics.Svg.PathParser( transformParser, command ) where
 import Control.Applicative( (<$>), (<$)
                           , (<*>), (<*), (*>)
                           , (<|>)
+                          , pure
                           )
+import Data.Monoid( mempty )
 import Data.Attoparsec.Text
     ( Number( .. )
     , Parser
     , number
     , string
     , skipSpace
+    , char
     )
 import Data.Attoparsec.Combinator( option, sepBy1 )
 import Graphics.Svg.Types
 import Graphics.Rasterific.Linear( V2( V2 ) )
 import Graphics.Rasterific.Transformations
+import qualified Data.Text as T
 
 num :: Parser Float
 num = realToFrac <$> (skipSpace *> plusMinus <* skipSpace)
@@ -73,15 +77,75 @@ command =  (MoveTo OriginAbsolute <$ string "M" <*> pointList)
                                   <*> point
 
 
-transformParser :: Parser Transformation
+transformParser :: Parser SvgTransformation
 transformParser = matrixParser
+               <|> translationParser
+               <|> scaleParser
+               <|> rotateParser
+               <|> skewYParser
+               <|> skewXParser
 
-matrixParser :: Parser Transformation
-matrixParser = string "matrix" *> skipSpace *> string "(" *> skipSpace *> matrixData
-  where
-    numComma = num <* string "," <* skipSpace
-    close = skipSpace <* string ")" <* skipSpace
-    matrixData = Transformation
-              <$> numComma <*> numComma <*> numComma
-              <*> numComma <*> numComma <*> (num <* close)
+functionParser :: T.Text -> Parser [Float]
+functionParser funcName =
+    string funcName *> skipSpace
+                    *> char '(' *> skipSpace
+                    *> num `sepBy1` commaWsp
+                    <* skipSpace <* char ')' <* skipSpace
 
+translationParser :: Parser SvgTransformation
+translationParser = do
+  args <- functionParser "translate"
+  return $ case args of
+    [x] -> SvgTranslate x 0
+    [x, y] -> SvgTranslate x y
+    _ -> SvgTransformUnknown
+
+skewXParser :: Parser SvgTransformation
+skewXParser = do
+  args <- functionParser "skewX"
+  return $ case args of
+    [x] -> SvgSkewX x
+    _ -> SvgTransformUnknown
+
+skewYParser :: Parser SvgTransformation
+skewYParser = do
+  args <- functionParser "skewY"
+  return $ case args of
+    [x] -> SvgSkewY x
+    _ -> SvgTransformUnknown
+
+
+scaleParser :: Parser SvgTransformation
+scaleParser = do
+  args <- functionParser "scale"
+  return $ case args of
+    [x] -> SvgScale x Nothing
+    [x, y] -> SvgScale x (Just y)
+    _ -> SvgTransformUnknown
+
+matrixParser :: Parser SvgTransformation
+matrixParser = do
+  args <- functionParser "matrix"
+  return $ case args of
+    [a, b, c, d, e, f] ->
+        SvgTransformMatrix $ Transformation a b c d e f
+    _ -> SvgTransformUnknown
+
+rotateParser :: Parser SvgTransformation
+rotateParser = do
+  args <- functionParser "rotate"
+  return $ case args of
+    [angle] -> SvgRotate angle Nothing
+    [angle, x, y] -> SvgRotate angle $ Just (x, y)
+    _ -> SvgTransformUnknown
+{-
+rotate(<rotate-angle> [<cx> <cy>]), which specifies a rotation by <rotate-angle> degrees about a given point.
+
+If optional parameters <cx> and <cy> are not supplied, the rotation is about the origin of the current user coordinate system. The operation corresponds to the matrix [cos(a) sin(a) -sin(a) cos(a) 0 0].
+
+If optional parameters <cx> and <cy> are supplied, the rotation is about the point (cx, cy). The operation represents the equivalent of the following specification: translate(<cx>, <cy>) rotate(<rotate-angle>) translate(-<cx>, -<cy>).
+
+skewX(<skew-angle>), which specifies a skew transformation along the x-axis.
+
+skewY(<skew-angle>), which specifies a skew transformation along the y-axis.
+    -}

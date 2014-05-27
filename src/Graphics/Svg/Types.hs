@@ -9,13 +9,19 @@ module Graphics.Svg.Types
     , SvgLineJoin( .. )
     , SvgTree( .. )
     , SvgNumber( .. )
+    , SvgTransformation( .. )
     , SvgPoint
     , toSvgPoint
     , svgDocumentSize
+
+    , isPathArc
+    , isPathWithArc
     ) where
 
 import Data.Function( on )
 import Data.Monoid( Monoid( .. ) )
+import Data.Foldable( Foldable )
+import qualified Data.Foldable as F
 import Codec.Picture( PixelRGBA8( .. ) )
 import Graphics.Rasterific.Transformations
 import Graphics.Rasterific
@@ -56,6 +62,13 @@ type SvgPoint = (SvgNumber, SvgNumber)
 toSvgPoint :: SvgNumber -> SvgNumber -> SvgPoint
 toSvgPoint = (,)
 
+isPathArc :: SvgPath -> Bool
+isPathArc (ElipticalArc _ _) = True
+isPathArc _ = False
+
+isPathWithArc :: Foldable f => f SvgPath -> Bool
+isPathWithArc = F.any isPathArc
+
 data SvgTree
     = SvgNone
     | Group SvgDrawAttributes [SvgTree]
@@ -64,6 +77,16 @@ data SvgTree
     | Ellipse SvgDrawAttributes SvgPoint SvgNumber SvgNumber
     | Line SvgDrawAttributes SvgPoint SvgPoint
     | Rectangle SvgDrawAttributes SvgPoint SvgNumber SvgNumber
+    deriving (Eq, Show)
+
+data SvgTransformation
+    = SvgTransformMatrix Transformation
+    | SvgTranslate Float Float
+    | SvgScale Float (Maybe Float)
+    | SvgRotate Float (Maybe (Float, Float))
+    | SvgSkewX Float
+    | SvgSkewY Float
+    | SvgTransformUnknown
     deriving (Eq, Show)
 
 data SvgDocument = SvgDocument

@@ -46,6 +46,7 @@ singularize = concatMap go
    go EndPath = [EndPath]
 
 svgPathToPrimitives :: [SvgPath] -> [Primitive]
+svgPathToPrimitives lst | isPathWithArc lst = []
 svgPathToPrimitives lst =
     concat . snd . mapAccumL go (zero, zero, zero)
            $ singularize lst
