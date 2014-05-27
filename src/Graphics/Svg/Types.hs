@@ -8,6 +8,10 @@ module Graphics.Svg.Types
     , SvgCap( .. )
     , SvgLineJoin( .. )
     , SvgTree( .. )
+    , SvgNumber( .. )
+    , SvgPoint
+    , toSvgPoint
+    , svgDocumentSize
     ) where
 
 import Data.Function( on )
@@ -42,20 +46,39 @@ data SvgPath
     | EndPath
     deriving (Eq, Show)
 
+data SvgNumber
+    = SvgNum Coord
+    | SvgPercent Coord
+    deriving (Eq, Show)
+
+type SvgPoint = (SvgNumber, SvgNumber)
+
+toSvgPoint :: SvgNumber -> SvgNumber -> SvgPoint
+toSvgPoint = (,)
+
 data SvgTree
     = SvgNone
     | Group SvgDrawAttributes [SvgTree]
     | Path SvgDrawAttributes [SvgPath]
-    | Circle SvgDrawAttributes Point Float
-    | Ellipse SvgDrawAttributes Point Float Float
-    | Line SvgDrawAttributes Point Point
+    | Circle SvgDrawAttributes SvgPoint SvgNumber
+    | Ellipse SvgDrawAttributes SvgPoint SvgNumber SvgNumber
+    | Line SvgDrawAttributes SvgPoint SvgPoint
+    | Rectangle SvgDrawAttributes SvgPoint SvgNumber SvgNumber
     deriving (Eq, Show)
 
 data SvgDocument = SvgDocument
-    { _svgViewBox  :: (Int, Int, Int, Int)
+    { _svgViewBox  :: Maybe (Int, Int, Int, Int)
+    , _svgWidth    :: Maybe Int
+    , _svgHeight   :: Maybe Int
     , _svgElements :: [SvgTree]
     }
     deriving (Eq, Show)
+
+svgDocumentSize :: SvgDocument -> (Int, Int)
+svgDocumentSize SvgDocument { _svgViewBox = Just (x1, y1, x2, y2) } =
+    (abs $ x2 - x1, abs $ y2 - y1)
+svgDocumentSize SvgDocument { _svgWidth = Just w, _svgHeight = Just h } = (w, h)
+svgDocumentSize _ = (1, 1)
 
 data SvgCap
     = SvgCapRound
@@ -70,15 +93,15 @@ data SvgLineJoin
     deriving (Eq, Show)
 
 data SvgDrawAttributes = SvgDrawAttributes
-    { _strokeWidth      :: Maybe Float
-    , _strokeColor      :: Maybe PixelRGBA8
-    , _strokeOpacity    :: Maybe Float
-    , _strokeLineCap    :: Maybe SvgCap
-    , _strokeLineJoin   :: Maybe SvgLineJoin
-    , _strokeMiterLimit :: Maybe Float
-    , _fillColor        :: Maybe PixelRGBA8
-    , _fillOpacity      :: Maybe Float
-    , _transform        :: Maybe Transformation
+    { _strokeWidth      :: !(Maybe Float)
+    , _strokeColor      :: !(Maybe PixelRGBA8)
+    , _strokeOpacity    :: !(Maybe Float)
+    , _strokeLineCap    :: !(Maybe SvgCap)
+    , _strokeLineJoin   :: !(Maybe SvgLineJoin)
+    , _strokeMiterLimit :: !(Maybe Float)
+    , _fillColor        :: !(Maybe PixelRGBA8)
+    , _fillOpacity      :: !(Maybe Float)
+    , _transform        :: !(Maybe Transformation)
     }
     deriving (Eq, Show)
 

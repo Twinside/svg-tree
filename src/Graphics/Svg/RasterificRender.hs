@@ -1,13 +1,16 @@
 module Graphics.Svg.RasterificRender where
 
-import Control.Applicative( (<$>), (<*>), pure )
-import Codec.Picture( PixelRGBA8( .. ), writePng )
+import Control.Applicative( (<$>), pure )
+import Codec.Picture( Image, PixelRGBA8( .. ) )
+import Data.Maybe( fromMaybe )
 import Data.Monoid( mempty, (<>) )
 import Data.List( mapAccumL )
-import Linear( (^+^), (^-^), (^*) )
+import Graphics.Rasterific.Linear( (^+^), (^-^), (^*) )
 import Graphics.Rasterific hiding ( Path, Line )
 import Graphics.Rasterific.Texture
+import Graphics.Rasterific.Transformations
 import Graphics.Svg.Types
+{-import Graphics.Svg.XmlParser-}
 
 capOfSvg :: SvgDrawAttributes -> (Cap, Cap)
 capOfSvg attrs =
@@ -122,12 +125,24 @@ svgPathToPrimitives lst =
     go _ (ElipticalArc _ _) = error "Unimplemented"
 
 
-renderSvgDocument :: FilePath -> SvgDocument -> IO ()
-renderSvgDocument path doc = writePng path drawing
+renderSvgDocument :: Maybe (Int, Int) -> SvgDocument -> Image PixelRGBA8
+renderSvgDocument sizes doc = case sizes of
+    Just s -> renderAtSize 
+    Nothing -> renderAtSize $ svgDocumentSize doc
   where
+    (x1, y1, x2, y2) = case _svgViewBox doc of
+        Just v -> v
+        Nothing ->
+
+    box = (V2 (fromIntegral x1) (fromIntegral y1),
+           V2 (fromIntegral x2) (fromIntegral y2))
+    emptyContext = RenderContext
+        { _renderViewBox = box
+        , _initialViewBox = box
+        }
     white = PixelRGBA8 255 255 255 255
-    drawing = renderDrawing 900 900 white .
-        mapM_ renderSvg $ _svgElements doc
+    renderAtSize (w, h) =
+        renderDrawing w h white . mapM_ (renderSvg emptyContext) $ _svgElements doc
 
 withInfo :: Monad m => (a -> Maybe b) -> a -> (b -> m ()) -> m ()
 withInfo accessor val action =
@@ -139,18 +154,68 @@ withTransform :: SvgDrawAttributes -> [Primitive] -> [Primitive]
 withTransform trans prims =
     case _transform trans of
        Nothing -> prims
-       Just t ->
-           {-(\a -> trace ("====== shifted\n" ++ show a) a)-}
-                {-. trace ("====== transform\n" ++ show t)-}
-                {-. trace ("====== inverse transform\n" ++ show it)-}
-                {-. trace ("====== prims\n" ++ show prims)-}
-                id
-                {-. transform (pointTransform t) <$> prims-}
-                . transform (^+^ V2 450 200) <$> prims
-                {-. transform (^* 3.0)-}
+       Just t -> transform (applyTransformation t) <$> prims
 
-renderSvg :: SvgTree -> Drawing PixelRGBA8 ()
-renderSvg = go initialAttr
+data RenderContext = RenderContext
+    { _initialViewBox :: (Point, Point)
+    , _renderViewBox :: (Point, Point)
+    }
+
+type ViewBox = (Point, Point)
+
+filler :: SvgDrawAttributes -> [Primitive] -> Drawing PixelRGBA8 ()
+filler info primitives =
+  withInfo _fillColor info $ \c ->
+    withTexture (uniformTexture c) $ fill primitives
+
+stroker :: SvgDrawAttributes -> [Primitive] -> Drawing PixelRGBA8 ()
+stroker info primitives =
+  withInfo _strokeWidth info $ \swidth ->
+    withInfo _strokeColor info $ \color ->
+      withTexture (uniformTexture color) $
+        stroke swidth (joinOfSvg info) (capOfSvg info) primitives
+
+mergeContext :: RenderContext -> SvgDrawAttributes -> RenderContext
+mergeContext ctxt attr = case _transform attr of
+  Nothing -> ctxt
+  Just v -> ctxt { _renderViewBox = (trans iniMin, trans iniMax) }
+    where
+      (iniMin, iniMax) = _initialViewBox ctxt
+      inv = fromMaybe mempty $ inverseTransformation v
+      trans = applyTransformation inv
+
+lineariseXLength :: RenderContext -> SvgNumber -> Coord
+lineariseXLength _ (SvgNum i) = i
+lineariseXLength ctxt (SvgPercent p) = abs (xe - xs) * p
+  where
+    (V2 xs _, V2 xe _) = _renderViewBox ctxt
+
+lineariseYLength :: RenderContext -> SvgNumber -> Coord
+lineariseYLength _ (SvgNum i) = i
+lineariseYLength ctxt (SvgPercent p) = abs (ye - ys) * p
+  where
+    (V2 _ ys, V2 _ ye) = _renderViewBox ctxt
+    
+
+linearisePoint :: RenderContext -> SvgPoint -> Point
+linearisePoint ctxt (p1, p2) =
+    V2 (xs + lineariseXLength ctxt p1)
+       (ys + lineariseYLength ctxt p2)
+  where (V2 xs ys, _) = _renderViewBox ctxt
+
+lineariseLength :: RenderContext -> SvgNumber -> Coord
+lineariseLength _ (SvgNum i) = i
+lineariseLength ctxt (SvgPercent v) = v * coeff
+  where
+    (V2 x1 y1, V2 x2 y2) = _renderViewBox ctxt
+    actualWidth = abs $ x2 - x1
+    actualHeight = abs $ y2 - y1
+    two = 2 :: Int
+    coeff = sqrt (actualWidth ^^ two + actualHeight ^^ two)
+          / sqrt 2
+
+renderSvg :: RenderContext -> SvgTree -> Drawing PixelRGBA8 ()
+renderSvg initialContext = go initialContext initialAttr
   where
     initialAttr =
       mempty { _strokeWidth = Just 1.0
@@ -164,37 +229,49 @@ renderSvg = go initialAttr
                                           {-}-}
              }
 
-    filler info primitives =
-      withInfo _fillColor info $ \c ->
-        withTexture (uniformTexture c) $ fill primitives
+    go _ _ SvgNone = return ()
+    go ctxt attr (Group groupAttr subTrees) =
+        mapM_ (go context' attr') subTrees
+      where attr' = attr <> groupAttr
+            context' = mergeContext ctxt groupAttr
 
-    stroker info primitives =
-      withInfo _strokeWidth info $ \swidth ->
-        withInfo _strokeColor info $ \color ->
-          withTexture (uniformTexture color) $
-            stroke swidth (joinOfSvg info) (capOfSvg info) primitives
-
-    go _ SvgNone = return ()
-    go attr (Group groupAttr subTrees) =
-        mapM_ (go (attr <> groupAttr)) subTrees
-
-    go attr (Circle pAttr p r) = do
+    go ctxt attr (Rectangle pAttr p w h) = do
       let info = attr <> pAttr
-          c = withTransform info $ circle p r
+          context' = mergeContext ctxt pAttr
+          p' = linearisePoint context' p
+          w' = lineariseLength context' w
+          h' = lineariseLength context' h
+          rect = withTransform info $ rectangle p' w' h'
+      filler info rect
+      stroker info rect
+
+    go ctxt attr (Circle pAttr p r) = do
+      let info = attr <> pAttr
+          context' = mergeContext ctxt pAttr
+          p' = linearisePoint context' p
+          r' = lineariseLength context' r
+          c = withTransform info $ circle p' r'
       filler info c
       stroker info c
 
-    go attr (Ellipse pAttr p rx ry) = do
+    go ctxt attr (Ellipse pAttr p rx ry) = do
       let info = attr <> pAttr
-          c = withTransform info $ ellipse p rx ry
+          context' = mergeContext ctxt pAttr
+          p' = linearisePoint context' p
+          rx' = lineariseXLength context' rx
+          ry' = lineariseYLength context' ry
+          c = withTransform info $ ellipse p' rx' ry'
       filler info c
       stroker info c
 
-    go attr (Line pAttr p1 p2) = do
+    go ctxt attr (Line pAttr p1 p2) = do
       let info = attr <> pAttr
-      stroker info . withTransform info $ line p1 p2
+          context' = mergeContext ctxt pAttr
+          p1' = linearisePoint context' p1
+          p2' = linearisePoint context' p2
+      stroker info . withTransform info $ line p1' p2'
 
-    go attr (Path pAttr path) = do
+    go _ctxt attr (Path pAttr path) = do
       let info = attr <> pAttr
           primitives =
               withTransform info $ svgPathToPrimitives path

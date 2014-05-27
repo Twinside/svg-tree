@@ -6,12 +6,12 @@ import Control.Monad( join )
 import Text.XML.Light.Proc( findAttr, elChildren )
 import Text.XML.Light.Types( Element( .. )
                            , QName( .. ) )
-import Linear( V2( V2 ) )
 import qualified Data.Text as T
 import Data.Attoparsec.Text( parseOnly, many1 )
 import Graphics.Svg.Types
 import Graphics.Svg.PathParser
 import Graphics.Svg.ColorParser
+import Graphics.Svg.CssParser( complexNumber )
 
 nodeName :: Element -> String
 nodeName = qName . elName
@@ -36,6 +36,7 @@ parseSvgLineJoin _ = Nothing
 parseDrawAttributes :: Element -> SvgDrawAttributes
 parseDrawAttributes e = SvgDrawAttributes
     { _strokeWidth = read <$> attribute "stroke-width"
+
     , _strokeColor = join $ attribute "stroke" >>= parse colorParser
     , _strokeLineCap = attribute "stroke-linecap" >>= parseSvgCap
     , _strokeLineJoin = attribute "stroke-linejoin" >>= parseSvgLineJoin
@@ -53,6 +54,13 @@ parseDrawAttributes e = SvgDrawAttributes
 attributeReal :: String -> Element -> Maybe Float
 attributeReal attr e = read <$> attributeFinder attr e
 
+attributeLength :: String -> Element -> Maybe SvgNumber
+attributeLength attr e = do
+  attrValue <- attributeFinder attr e
+  case parseOnly complexNumber (T.pack attrValue) of
+    Left msg -> fail msg
+    Right v -> return v
+
 unparse :: Element -> SvgTree
 unparse e@(nodeName -> "g") =
     Group (parseDrawAttributes e) $ unparse <$> (elChildren e)
@@ -60,22 +68,29 @@ unparse e@(nodeName -> "ellipse") =
     maybe SvgNone id $ Ellipse (parseDrawAttributes e)
                         <$> c <*> attr "rx" <*> attr "ry"
   where
-    attr v = attributeReal v e
-    c = V2 <$> attr "cx" <*> attr "cy"
+    attr v = attributeLength v e
+    c = toSvgPoint <$> attr "cx" <*> attr "cy"
+
+unparse e@(nodeName -> "rect") =
+    maybe SvgNone id $ Rectangle (parseDrawAttributes e)
+                    <$> c <*> attr "width" <*> attr "height"
+  where
+    attr v = attributeLength v e
+    c = toSvgPoint <$> attr "x" <*> attr "y"
 
 unparse e@(nodeName -> "circle") =
     maybe SvgNone id $ Circle (parseDrawAttributes e)
-                        <$> c <*> attributeReal "r" e
+                        <$> c <*> attr "r"
   where
-    c = V2 <$> attributeReal "cx" e
-           <*> attributeReal "cy" e
+    attr v = attributeLength v e
+    c = toSvgPoint <$> attr "cx" <*> attr "cy"
 
 unparse e@(nodeName -> "line") =
     maybe SvgNone id $ Line (parseDrawAttributes e) <$> p1 <*> p2
   where
-    attr v = attributeReal v e
-    p1 = V2 <$> attr "x1" <*> attr "y1"
-    p2 = V2 <$> attr "x2" <*> attr "y2"
+    attr v = attributeLength v e
+    p1 = toSvgPoint <$> attr "x1" <*> attr "y1"
+    p2 = toSvgPoint <$> attr "x2" <*> attr "y2"
 
 unparse e@(nodeName -> "path") =
     Path (parseDrawAttributes e) parsedPath
@@ -92,8 +107,14 @@ unparse _ = SvgNone
 
 unparseDocument :: Element -> Maybe SvgDocument
 unparseDocument e@(nodeName -> "svg") = Just $ SvgDocument 
-    { _svgViewBox = (0, 0, 0, 0)
+    { _svgViewBox = (0, 0, w, h)
     , _svgElements = unparse <$> elChildren e
+    , _svgWidth = width
+    , _svgHeight = height
     }
+  where
+    attr v = attributeLength v e
+    width@(Just w) = (floor <$> attr "width") <|> return 0
+    height@(Just h) = (floor <$> attr "height") <|> return 0
 unparseDocument _ = Nothing   
 

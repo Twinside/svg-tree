@@ -13,8 +13,8 @@ import Data.Attoparsec.Text
     , skipSpace
     )
 import Data.Attoparsec.Combinator( option, sepBy1 )
-import Linear( V2( V2 ) )
 import Graphics.Svg.Types
+import Graphics.Rasterific.Linear( V2( V2 ) )
 import Graphics.Rasterific.Transformations
 
 num :: Parser Float

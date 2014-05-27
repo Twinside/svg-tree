@@ -17,6 +17,7 @@ library
   Ghc-options: -O3 -Wall
   exposed-modules: Graphics.Svg
                  , Graphics.Svg.Types
+                 , Graphics.Svg.CssParser
   other-modules: Graphics.Svg.NamedColors
                , Graphics.Svg.XmlParser
                , Graphics.Svg.PathParser
@@ -29,7 +30,6 @@ library
                  containers >= 0.5,
                  xml        >= 1.3,
                  Rasterific >= 0.3,
-                 linear,
                  text
 
 Executable svgrender
@@ -41,4 +41,6 @@ Executable svgrender
                , rasterific-svg
                , Rasterific >= 0.3
                , JuicyPixels >= 3.1.4.1
+               , directory
+               , filepath
 

@@ -20,13 +20,13 @@ import Data.Attoparsec.Text
 import Data.Attoparsec.Combinator
     ( option
     , sepBy
-    , sepBy1
+    {-, sepBy1-}
     , many1
     )
 
-import Linear( V2( V2 ) )
 import Graphics.Svg.Types
-import Graphics.Rasterific.Transformations
+{-import Graphics.Rasterific.Linear( V2( V2 ) )-}
+{-import Graphics.Rasterific.Transformations-}
 
 num :: Parser Float
 num = realToFrac <$> (skipSpace *> plusMinus <* skipSpace)
@@ -108,8 +108,9 @@ cssStatement = ruleSet <|> atRule
 
 ident :: Parser String
 ident = do
-  init <- letter <|> char '_' <|> char '-'
-  (init:) <$> many (letter <|> digit <|> char '_' <|> char '-')
+  firstLetter <- letter <|> char '_' <|> char '-'
+  (firstLetter:) <$>
+      many (letter <|> digit <|> char '_' <|> char '-')
 
 atKeyword :: Parser String
 atKeyword = char '@' *> ident <* skipSpace
@@ -123,25 +124,26 @@ atRule = AtQuery <$> atKeyword <*> many cssStatement
 
 data CssElement
     = CssIdent String
-    | CssNumber CssNumber
+    | CssNumber SvgNumber
     | CssFunction String [CssElement]
     deriving (Eq, Show)
 
 type CssSelector = [CssElement]
 
-data CssNumber
-    = Percentage Number
-    | Naked Number
-    | Named Number String
-    deriving (Eq, Show)
-
-complexNumber :: Parser CssNumber
+complexNumber :: Parser SvgNumber
 complexNumber = do
-    n <- number
-    (Percentage n <$ char '%')
-        <|> (Named n <$> ident)
-        <|> pure (Naked n)
-
+    n <- num
+    let apply f = SvgNum $ f n
+    (SvgPercent (n / 100) <$ char '%')
+        <|> (apply <$> unit)
+        <|> pure (SvgNum n)
+  where
+    unit = (* 1.25) <$ "pt"
+        <|> (* 15) <$ "pc"
+        <|> (* 3.543307) <$ "mm"
+        <|> (* 35.43307) <$ "cm"
+        <|> (* 90) <$ "in"
+        <|> id <$ "px"
 
 anyElem :: Parser CssElement
 anyElem = function
@@ -159,10 +161,3 @@ selector = many1 anyElem
 ruleSet :: Parser CssRule
 ruleSet = undefined
 
-{-  
-"1pt" equals "1.25px" (and therefore 1.25 user units)
-"1pc" equals "15px" (and therefore 15 user units)
-"1mm" would be "3.543307px" (3.543307 user units)
-"1cm" equals "35.43307px" (and therefore 35.43307 user units)
-"1in" equals "90px" (and therefore 90 user units)
--}
