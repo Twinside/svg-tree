@@ -74,10 +74,14 @@ command =  (MoveTo OriginAbsolute <$ string "M" <*> pointList)
 
 
 transformParser :: Parser Transformation
-transformParser = string "matrix" *> skipSpace *> string "(" *> skipSpace *> matrixData
+transformParser = matrixParser
+
+matrixParser :: Parser Transformation
+matrixParser = string "matrix" *> skipSpace *> string "(" *> skipSpace *> matrixData
   where
-    numComma = num <* string ","
+    numComma = num <* string "," <* skipSpace
+    close = skipSpace <* string ")" <* skipSpace
     matrixData = Transformation
               <$> numComma <*> numComma <*> numComma
-              <*> numComma <*> numComma <*> num
+              <*> numComma <*> numComma <*> (num <* close)
 

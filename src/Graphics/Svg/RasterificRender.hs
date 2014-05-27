@@ -127,12 +127,13 @@ svgPathToPrimitives lst =
 
 renderSvgDocument :: Maybe (Int, Int) -> SvgDocument -> Image PixelRGBA8
 renderSvgDocument sizes doc = case sizes of
-    Just s -> renderAtSize 
+    Just s -> renderAtSize s
     Nothing -> renderAtSize $ svgDocumentSize doc
   where
-    (x1, y1, x2, y2) = case _svgViewBox doc of
-        Just v -> v
-        Nothing ->
+    (x1, y1, x2, y2) = case (_svgViewBox doc, _svgWidth doc, _svgHeight doc) of
+        (Just v,      _,      _) -> v
+        (     _, Just w, Just h) -> (0, 0, w, h)
+        _                        -> (0, 0, 1, 1)
 
     box = (V2 (fromIntegral x1) (fromIntegral y1),
            V2 (fromIntegral x2) (fromIntegral y2))
@@ -150,11 +151,11 @@ withInfo accessor val action =
     Nothing -> return ()
     Just v -> action v
 
-withTransform :: SvgDrawAttributes -> [Primitive] -> [Primitive]
-withTransform trans prims =
+withTransform :: SvgDrawAttributes -> Drawing a () -> Drawing a ()
+withTransform trans draw =
     case _transform trans of
-       Nothing -> prims
-       Just t -> transform (applyTransformation t) <$> prims
+       Nothing -> draw
+       Just t -> withTransformation t $ draw
 
 data RenderContext = RenderContext
     { _initialViewBox :: (Point, Point)
@@ -168,12 +169,14 @@ filler info primitives =
   withInfo _fillColor info $ \c ->
     withTexture (uniformTexture c) $ fill primitives
 
-stroker :: SvgDrawAttributes -> [Primitive] -> Drawing PixelRGBA8 ()
-stroker info primitives =
+stroker :: RenderContext -> SvgDrawAttributes -> [Primitive]
+        -> Drawing PixelRGBA8 ()
+stroker ctxt info primitives =
   withInfo _strokeWidth info $ \swidth ->
     withInfo _strokeColor info $ \color ->
-      withTexture (uniformTexture color) $
-        stroke swidth (joinOfSvg info) (capOfSvg info) primitives
+      withTexture (uniformTexture color) $ do
+        let realWidth = lineariseLength ctxt swidth
+        stroke realWidth (joinOfSvg info) (capOfSvg info) primitives
 
 mergeContext :: RenderContext -> SvgDrawAttributes -> RenderContext
 mergeContext ctxt attr = case _transform attr of
@@ -218,15 +221,12 @@ renderSvg :: RenderContext -> SvgTree -> Drawing PixelRGBA8 ()
 renderSvg initialContext = go initialContext initialAttr
   where
     initialAttr =
-      mempty { _strokeWidth = Just 1.0
+      mempty { _strokeWidth = Just (SvgNum 1.0)
              , _strokeLineCap = Just SvgCapButt
              , _strokeLineJoin = Just SvgJoinMiter
              , _strokeMiterLimit = Just 4.0
              , _strokeOpacity = Just 1.0
              , _fillOpacity = Just 1.0
-             {-, _transform = Just $ mempty { _transformE = 450-}
-                                          {-, _transformF = 0-}
-                                          {-}-}
              }
 
     go _ _ SvgNone = return ()
@@ -241,18 +241,20 @@ renderSvg initialContext = go initialContext initialAttr
           p' = linearisePoint context' p
           w' = lineariseLength context' w
           h' = lineariseLength context' h
-          rect = withTransform info $ rectangle p' w' h'
-      filler info rect
-      stroker info rect
+          rect = rectangle p' w' h'
+      withTransform info $ do
+        filler info rect
+        stroker context' info rect
 
     go ctxt attr (Circle pAttr p r) = do
       let info = attr <> pAttr
           context' = mergeContext ctxt pAttr
           p' = linearisePoint context' p
           r' = lineariseLength context' r
-          c = withTransform info $ circle p' r'
-      filler info c
-      stroker info c
+          c = circle p' r'
+      withTransform info $ do
+        filler info c
+        stroker context' info c
 
     go ctxt attr (Ellipse pAttr p rx ry) = do
       let info = attr <> pAttr
@@ -260,21 +262,22 @@ renderSvg initialContext = go initialContext initialAttr
           p' = linearisePoint context' p
           rx' = lineariseXLength context' rx
           ry' = lineariseYLength context' ry
-          c = withTransform info $ ellipse p' rx' ry'
-      filler info c
-      stroker info c
+          c = ellipse p' rx' ry'
+      withTransform info $ do
+        filler info c
+        stroker context' info c
 
     go ctxt attr (Line pAttr p1 p2) = do
       let info = attr <> pAttr
           context' = mergeContext ctxt pAttr
           p1' = linearisePoint context' p1
           p2' = linearisePoint context' p2
-      stroker info . withTransform info $ line p1' p2'
+      withTransform info . stroker context' info $ line p1' p2'
 
-    go _ctxt attr (Path pAttr path) = do
+    go ctxt attr (Path pAttr path) = do
       let info = attr <> pAttr
-          primitives =
-              withTransform info $ svgPathToPrimitives path
-      filler info primitives
-      stroker info primitives
+          primitives = svgPathToPrimitives path
+      withTransform info $ do
+        filler info primitives
+        stroker ctxt info primitives
 

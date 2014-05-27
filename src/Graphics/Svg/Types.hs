@@ -75,9 +75,9 @@ data SvgDocument = SvgDocument
     deriving (Eq, Show)
 
 svgDocumentSize :: SvgDocument -> (Int, Int)
+svgDocumentSize SvgDocument { _svgWidth = Just w, _svgHeight = Just h } = (w, h)
 svgDocumentSize SvgDocument { _svgViewBox = Just (x1, y1, x2, y2) } =
     (abs $ x2 - x1, abs $ y2 - y1)
-svgDocumentSize SvgDocument { _svgWidth = Just w, _svgHeight = Just h } = (w, h)
 svgDocumentSize _ = (1, 1)
 
 data SvgCap
@@ -93,7 +93,7 @@ data SvgLineJoin
     deriving (Eq, Show)
 
 data SvgDrawAttributes = SvgDrawAttributes
-    { _strokeWidth      :: !(Maybe Float)
+    { _strokeWidth      :: !(Maybe SvgNumber)
     , _strokeColor      :: !(Maybe PixelRGBA8)
     , _strokeOpacity    :: !(Maybe Float)
     , _strokeLineCap    :: !(Maybe SvgCap)
