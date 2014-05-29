@@ -259,7 +259,7 @@ renderSvg initialContext = go initialContext initialAttr
 
     go _ _ SvgNone = return ()
     go ctxt attr (Group groupAttr subTrees) =
-        mapM_ (go context' attr') subTrees
+        withTransform groupAttr $ mapM_ (go context' attr') subTrees
       where attr' = attr <> groupAttr
             context' = mergeContext ctxt groupAttr
 
@@ -278,7 +278,7 @@ renderSvg initialContext = go initialContext initialAttr
             (0, v) -> roundedRectangle p' w' h' v v
             (vx, vy) -> roundedRectangle p' w' h' vx vy
 
-      withTransform info $ do
+      withTransform pAttr $ do
         filler info rect
         stroker context' info rect
 
@@ -288,7 +288,7 @@ renderSvg initialContext = go initialContext initialAttr
           p' = linearisePoint context' p
           r' = lineariseLength context' r
           c = circle p' r'
-      withTransform info $ do
+      withTransform pAttr $ do
         filler info c
         stroker context' info c
 
@@ -299,7 +299,7 @@ renderSvg initialContext = go initialContext initialAttr
           rx' = lineariseXLength context' rx
           ry' = lineariseYLength context' ry
           c = ellipse p' rx' ry'
-      withTransform info $ do
+      withTransform pAttr $ do
         filler info c
         stroker context' info c
 
@@ -331,12 +331,12 @@ renderSvg initialContext = go initialContext initialAttr
           context' = mergeContext ctxt pAttr
           p1' = linearisePoint context' p1
           p2' = linearisePoint context' p2
-      withTransform info . stroker context' info $ line p1' p2'
+      withTransform pAttr . stroker context' info $ line p1' p2'
 
     go ctxt attr (Path pAttr path) = do
       let info = attr <> pAttr
           primitives = svgPathToPrimitives path
-      withTransform info $ do
+      withTransform pAttr $ do
         filler info primitives
         stroker ctxt info primitives
 

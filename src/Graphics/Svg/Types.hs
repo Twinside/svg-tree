@@ -126,7 +126,7 @@ data SvgDrawAttributes = SvgDrawAttributes
     , _strokeMiterLimit :: !(Maybe Float)
     , _fillColor        :: !(Maybe PixelRGBA8)
     , _fillOpacity      :: !(Maybe Float)
-    , _transform        :: !(Maybe [SvgTransformation])
+    , _transform        :: (Maybe [SvgTransformation])
     }
     deriving (Eq, Show)
 
@@ -153,6 +153,6 @@ instance Monoid SvgDrawAttributes where
         , _strokeMiterLimit = (mayRight `on` _strokeMiterLimit) a b
         , _fillColor =  (mayRight `on` _fillColor) a b
         , _fillOpacity = (mayRight `on` _fillOpacity) a b
-        , _transform =  (mayMerge `on` _transform) a b
+        , _transform = (mayMerge `on` _transform) a b
         }
 
