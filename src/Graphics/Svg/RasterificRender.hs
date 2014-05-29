@@ -303,6 +303,29 @@ renderSvg initialContext = go initialContext initialAttr
         filler info c
         stroker context' info c
 
+    go ctxt attr (PolyLine pAttr points) =
+      go ctxt (dropFillColor attr)
+            . Path (dropFillColor pAttr)
+            $ toPath points
+      where
+        dropFillColor v = v { _fillColor = Nothing }
+        toPath [] = []
+        toPath (x:xs) =
+            [ MoveTo OriginAbsolute [x]
+            , LineTo OriginAbsolute xs
+            ]
+
+    go ctxt attr (Polygon pAttr points) =
+      go ctxt attr . Path pAttr $ toPath points
+      where
+        toPath [] = []
+        toPath (x:xs) =
+            [ MoveTo OriginAbsolute [x]
+            , LineTo OriginAbsolute xs
+            , EndPath
+            ]
+
+
     go ctxt attr (Line pAttr p1 p2) = do
       let info = attr <> pAttr
           context' = mergeContext ctxt pAttr

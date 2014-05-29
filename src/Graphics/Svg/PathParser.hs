@@ -2,6 +2,7 @@
 module Graphics.Svg.PathParser( transformParser
                               , command
                               , viewBox
+                              , pointData
                               ) where
 
 import Control.Applicative( (<$>), (<$)
@@ -16,7 +17,9 @@ import Data.Attoparsec.Text
     , skipSpace
     , char
     )
-import Data.Attoparsec.Combinator( option, sepBy1 )
+import Data.Attoparsec.Combinator( option
+                                 , sepBy
+                                 , sepBy1 )
 import Graphics.Svg.Types
 import Graphics.Rasterific.Linear( V2( V2 ) )
 import Graphics.Rasterific.Transformations
@@ -44,6 +47,9 @@ commaWsp = skipSpace *> option () (string "," *> return ()) <* skipSpace
 
 point :: Parser Point
 point = V2 <$> num <* commaWsp <*> num
+
+pointData :: Parser [Point]
+pointData = point `sepBy` commaWsp
 
 command :: Parser SvgPath
 command =  (MoveTo OriginAbsolute <$ string "M" <*> pointList)

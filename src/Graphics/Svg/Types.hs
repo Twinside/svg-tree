@@ -76,6 +76,8 @@ data SvgTree
     | Circle SvgDrawAttributes SvgPoint SvgNumber
     | Ellipse SvgDrawAttributes SvgPoint SvgNumber SvgNumber
     | Line SvgDrawAttributes SvgPoint SvgPoint
+    | PolyLine SvgDrawAttributes [Point]
+    | Polygon SvgDrawAttributes [Point]
     | Rectangle SvgDrawAttributes SvgPoint SvgNumber SvgNumber SvgNumber SvgNumber
     deriving (Eq, Show)
 

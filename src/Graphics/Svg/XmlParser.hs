@@ -1,7 +1,9 @@
 {-# LANGUAGE ViewPatterns #-}
 module Graphics.Svg.XmlParser where
 
-import Control.Applicative( (<$>), (<*>), many )
+import Control.Applicative( (<$>)
+                          {-, (<*>)-}
+                          , many )
 import Control.Monad( join )
 import Text.XML.Light.Proc( findAttr, elChildren )
 import Text.XML.Light.Types( Element( .. )
@@ -77,6 +79,22 @@ unparse e@(nodeName -> "rect") =
   where
     attr v = fromMaybe (SvgNum 0) $ attributeLength v e
     c = toSvgPoint (attr "x") (attr "y")
+
+unparse e@(nodeName -> "polyline") =
+    PolyLine (parseDrawAttributes e) polyData
+  where
+    polyData =
+        fromMaybe [] $ do
+          pointString <- attributeFinder "points" e
+          parse pointData $ pointString
+
+unparse e@(nodeName -> "polygon") =
+    Polygon (parseDrawAttributes e) polyData
+  where
+    polyData =
+        fromMaybe [] $ do
+          pointString <- attributeFinder "points" e
+          parse pointData $ pointString
 
 unparse e@(nodeName -> "circle") =
     Circle (parseDrawAttributes e) c (attr "r")
