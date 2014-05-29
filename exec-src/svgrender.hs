@@ -27,7 +27,7 @@ testOutputFolder = "gen_test"
 
 img :: FilePath -> Int -> Int -> Html
 img path _w _h =
-    printf "<img src=\"%s\" />" path
+    printf "<img src=\"%s\" alt=\"%s\" />" path path
 
 table :: [Html] -> [[Html]] -> Html
 table headers cells =
@@ -39,8 +39,11 @@ testFileOfPath :: FilePath -> FilePath
 testFileOfPath path = testOutputFolder </> base <.> "png"
   where (_, base) = splitFileName path
 
+text :: String -> Html
+text txt = txt ++ "<br/>"
+
 generateFileInfo :: FilePath -> [Html]
-generateFileInfo path = [img path 0 0, img pngRef 0 0,  img (testFileOfPath path) 0 0]
+generateFileInfo path = [text path, img path 0 0, img pngRef 0 0,  img (testFileOfPath path) 0 0]
   where
     pngRef = dropExtension path <.> "png"
 

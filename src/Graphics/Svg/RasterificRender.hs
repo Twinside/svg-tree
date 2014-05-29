@@ -2,15 +2,18 @@ module Graphics.Svg.RasterificRender where
 
 import Control.Applicative( (<$>), pure )
 import Codec.Picture( Image, PixelRGBA8( .. ) )
-import Data.Maybe( fromMaybe )
 import Data.Monoid( mempty, (<>) )
+import qualified Data.Foldable as F
 import Data.List( mapAccumL )
-import Graphics.Rasterific.Linear( (^+^), (^-^), (^*) )
+import Graphics.Rasterific.Linear( (^+^), (^-^), (^*), zero )
 import Graphics.Rasterific hiding ( Path, Line )
 import Graphics.Rasterific.Texture
 import Graphics.Rasterific.Transformations
 import Graphics.Svg.Types
 {-import Graphics.Svg.XmlParser-}
+
+{-import Debug.Trace-}
+{-import Text.Printf-}
 
 capOfSvg :: SvgDrawAttributes -> (Cap, Cap)
 capOfSvg attrs =
@@ -51,8 +54,6 @@ svgPathToPrimitives lst =
     concat . snd . mapAccumL go (zero, zero, zero)
            $ singularize lst
   where
-    zero = V2 0 0
-
     go o@(lastPoint, _, firstPoint) EndPath =
         (o, line lastPoint firstPoint)
 
@@ -143,8 +144,23 @@ renderSvgDocument sizes doc = case sizes of
         , _initialViewBox = box
         }
     white = PixelRGBA8 255 255 255 255
+
+    sizeFitter (V2 0 0, V2 vw vh) (actualWidth, actualHeight)
+      | aw /= vw || vh /= ah =
+            withTransformation (scale (aw / vw) (ah / vh))
+           where
+             aw = fromIntegral actualWidth
+             ah = fromIntegral actualHeight
+    sizeFitter (V2 0 0, _) _ = id
+    sizeFitter (p@(V2 xs ys), V2 xEnd yEnd) actualSize =
+        withTransformation (translate (negate p)) .
+            sizeFitter (zero, V2 (xEnd - xs) (yEnd - ys)) actualSize
+
     renderAtSize (w, h) =
-        renderDrawing w h white . mapM_ (renderSvg emptyContext) $ _svgElements doc
+        renderDrawing w h white 
+            . sizeFitter box (w, h)
+            . mapM_ (renderSvg emptyContext)
+            $ _svgElements doc
 
 withInfo :: Monad m => (a -> Maybe b) -> a -> (b -> m ()) -> m ()
 withInfo accessor val action =
@@ -152,11 +168,28 @@ withInfo accessor val action =
     Nothing -> return ()
     Just v -> action v
 
+toTransformationMatrix :: SvgTransformation -> Transformation
+toTransformationMatrix = go where
+  toRadian v = v / 180 * pi
+
+  go (SvgTransformMatrix t) = t
+  go (SvgTranslate x y) = translate $ V2 x y
+  go (SvgScale xs Nothing) = scale xs xs
+  go (SvgScale xs (Just ys)) = scale xs ys
+  go (SvgRotate angle Nothing) =
+      rotate $ toRadian angle
+  go (SvgRotate angle (Just (cx, cy))) =
+      rotateCenter (toRadian angle) $ V2 cx cy
+  go (SvgSkewX v) = skewX $ toRadian v
+  go (SvgSkewY v) = skewY $ toRadian v
+  go SvgTransformUnknown = mempty
+
 withTransform :: SvgDrawAttributes -> Drawing a () -> Drawing a ()
 withTransform trans draw =
     case _transform trans of
        Nothing -> draw
-       Just t -> withTransformation t $ draw
+       Just t -> withTransformation fullTrans $ draw
+         where fullTrans = F.foldMap toTransformationMatrix t
 
 data RenderContext = RenderContext
     { _initialViewBox :: (Point, Point)
@@ -180,13 +213,7 @@ stroker ctxt info primitives =
         stroke realWidth (joinOfSvg info) (capOfSvg info) primitives
 
 mergeContext :: RenderContext -> SvgDrawAttributes -> RenderContext
-mergeContext ctxt attr = case _transform attr of
-  Nothing -> ctxt
-  Just v -> ctxt { _renderViewBox = (trans iniMin, trans iniMax) }
-    where
-      (iniMin, iniMax) = _initialViewBox ctxt
-      inv = fromMaybe mempty $ inverseTransformation v
-      trans = applyTransformation inv
+mergeContext ctxt _attr = ctxt
 
 lineariseXLength :: RenderContext -> SvgNumber -> Coord
 lineariseXLength _ (SvgNum i) = i
@@ -236,13 +263,21 @@ renderSvg initialContext = go initialContext initialAttr
       where attr' = attr <> groupAttr
             context' = mergeContext ctxt groupAttr
 
-    go ctxt attr (Rectangle pAttr p w h) = do
+    go ctxt attr (Rectangle pAttr p w h rx ry) = do
       let info = attr <> pAttr
           context' = mergeContext ctxt pAttr
           p' = linearisePoint context' p
-          w' = lineariseLength context' w
-          h' = lineariseLength context' h
-          rect = rectangle p' w' h'
+          w' = lineariseXLength context' w
+          h' = lineariseYLength context' h
+
+          rx' = lineariseXLength context' rx
+          ry' = lineariseXLength context' ry
+          rect = case (rx', ry') of
+            (0, 0) -> rectangle p' w' h'
+            (v, 0) -> roundedRectangle p' w' h' v v
+            (0, v) -> roundedRectangle p' w' h' v v
+            (vx, vy) -> roundedRectangle p' w' h' vx vy
+
       withTransform info $ do
         filler info rect
         stroker context' info rect

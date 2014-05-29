@@ -1,7 +1,7 @@
 {-# LANGUAGE ViewPatterns #-}
 module Graphics.Svg.XmlParser where
 
-import Control.Applicative( (<$>), (<*>) )
+import Control.Applicative( (<$>), (<*>), many )
 import Control.Monad( join )
 import Text.XML.Light.Proc( findAttr, elChildren )
 import Text.XML.Light.Types( Element( .. )
@@ -12,7 +12,7 @@ import Data.Attoparsec.Text( Parser, parseOnly, many1 )
 import Graphics.Svg.Types
 import Graphics.Svg.PathParser
 import Graphics.Svg.ColorParser
-import Graphics.Svg.CssParser( complexNumber, num )
+import Graphics.Svg.CssParser( complexNumber, num, unitNumber )
 
 nodeName :: Element -> String
 nodeName = qName . elName
@@ -47,7 +47,7 @@ parseDrawAttributes e = SvgDrawAttributes
     , _strokeLineJoin = attribute "stroke-linejoin" >>= parseSvgLineJoin
     , _strokeMiterLimit = attribute "stroke-miterlimit" >>= parse num
     , _fillColor   = join $ attribute "fill" >>= parse colorParser
-    , _transform   = attribute "transform" >>= parse transformParser
+    , _transform   = attribute "transform" >>= parse (many transformParser)
     , _fillOpacity = attribute "fill-opacity" >>= parse num
     , _strokeOpacity = attribute "stroke-opacity" >>= parse num
     }
@@ -65,52 +65,50 @@ unparse :: Element -> SvgTree
 unparse e@(nodeName -> "g") =
     Group (parseDrawAttributes e) $ unparse <$> (elChildren e)
 unparse e@(nodeName -> "ellipse") =
-    maybe SvgNone id $ Ellipse (parseDrawAttributes e)
-                        <$> c <*> attr "rx" <*> attr "ry"
+    Ellipse (parseDrawAttributes e) c (attr "rx") (attr "ry")
   where
-    attr v = attributeLength v e
-    c = toSvgPoint <$> attr "cx" <*> attr "cy"
+    attr v = fromMaybe (SvgNum 0) $ attributeLength v e
+    c = toSvgPoint (attr "cx") (attr "cy")
 
 unparse e@(nodeName -> "rect") =
-    maybe SvgNone id $ Rectangle (parseDrawAttributes e)
-                    <$> c <*> attr "width" <*> attr "height"
+     Rectangle (parseDrawAttributes e) c
+            (attr "width") (attr "height")
+            (attr "rx") (attr "ry")
   where
-    attr v = attributeLength v e
-    c = toSvgPoint <$> attr "x" <*> attr "y"
+    attr v = fromMaybe (SvgNum 0) $ attributeLength v e
+    c = toSvgPoint (attr "x") (attr "y")
 
 unparse e@(nodeName -> "circle") =
-    maybe SvgNone id $ Circle (parseDrawAttributes e)
-                        <$> c <*> attr "r"
+    Circle (parseDrawAttributes e) c (attr "r")
   where
-    attr v = attributeLength v e
-    c = toSvgPoint <$> attr "cx" <*> attr "cy"
+    attr v = fromMaybe (SvgNum 0) $ attributeLength v e
+    c = toSvgPoint (attr "cx") (attr "cy")
 
 unparse e@(nodeName -> "line") =
-    maybe SvgNone id $ Line (parseDrawAttributes e) <$> p1 <*> p2
+    Line (parseDrawAttributes e) p1 p2
   where
-    attr v = attributeLength v e
-    p1 = toSvgPoint <$> attr "x1" <*> attr "y1"
-    p2 = toSvgPoint <$> attr "x2" <*> attr "y2"
+    attr v = fromMaybe (SvgNum 0) $ attributeLength v e
+    p1 = toSvgPoint (attr "x1") (attr "y1")
+    p2 = toSvgPoint (attr "x2") (attr "y2")
 
 unparse e@(nodeName -> "path") =
     Path (parseDrawAttributes e) parsedPath
       where parsedPath = fromMaybe [] $
               attributeFinder "d" e >>= parse (many1 command)
 
-
 unparse _ = SvgNone
 
 unparseDocument :: Element -> Maybe SvgDocument
 unparseDocument e@(nodeName -> "svg") = Just $ SvgDocument 
-    { _svgViewBox = Just (0, 0, floor width, floor height)
+    { _svgViewBox =
+        attributeFinder "viewBox" e >>= parse viewBox
     , _svgElements = unparse <$> elChildren e
     , _svgWidth = Just $ floor width
     , _svgHeight = Just $ floor height
     }
   where
-    lengthFind :: String -> Float
     lengthFind n =
-        fromMaybe 0 $ (attributeFinder n e >>= parse num)
+        fromMaybe 0 $ (attributeFinder n e >>= parse unitNumber)
 
     width :: Float
     width = lengthFind "width"

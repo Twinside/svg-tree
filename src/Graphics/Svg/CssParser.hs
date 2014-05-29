@@ -130,20 +130,29 @@ data CssElement
 
 type CssSelector = [CssElement]
 
+unitParser :: Parser (Float -> Float)
+unitParser =
+      (* 1.25) <$ "pt"
+  <|> (* 15) <$ "pc"
+  <|> (* 3.543307) <$ "mm"
+  <|> (* 35.43307) <$ "cm"
+  <|> (* 90) <$ "in"
+  <|> id <$ "px"
+  <|> pure id
+
+unitNumber :: Parser Float
+unitNumber = do
+  n <- num
+  f <- unitParser
+  return $ f n
+
 complexNumber :: Parser SvgNumber
 complexNumber = do
     n <- num
     let apply f = SvgNum $ f n
     (SvgPercent (n / 100) <$ char '%')
-        <|> (apply <$> unit)
+        <|> (apply <$> unitParser)
         <|> pure (SvgNum n)
-  where
-    unit = (* 1.25) <$ "pt"
-        <|> (* 15) <$ "pc"
-        <|> (* 3.543307) <$ "mm"
-        <|> (* 35.43307) <$ "cm"
-        <|> (* 90) <$ "in"
-        <|> id <$ "px"
 
 anyElem :: Parser CssElement
 anyElem = function

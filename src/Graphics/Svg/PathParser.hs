@@ -1,12 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Graphics.Svg.PathParser( transformParser, command ) where
+module Graphics.Svg.PathParser( transformParser
+                              , command
+                              , viewBox
+                              ) where
 
 import Control.Applicative( (<$>), (<$)
                           , (<*>), (<*), (*>)
                           , (<|>)
-                          , pure
                           )
-import Data.Monoid( mempty )
 import Data.Attoparsec.Text
     ( Number( .. )
     , Parser
@@ -31,6 +32,12 @@ num = realToFrac <$> (skipSpace *> plusMinus <* skipSpace)
         plusMinus = negate <$ string "-" <*> doubleNumber
                  <|> string "+" *> doubleNumber
                  <|> doubleNumber
+
+viewBox :: Parser (Int, Int, Int, Int)
+viewBox = (,,,)
+       <$> iParse <*> iParse <*> iParse <*> iParse
+  where
+    iParse = floor <$> num <* skipSpace
 
 commaWsp :: Parser ()
 commaWsp = skipSpace *> option () (string "," *> return ()) <* skipSpace

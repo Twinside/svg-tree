@@ -76,7 +76,7 @@ data SvgTree
     | Circle SvgDrawAttributes SvgPoint SvgNumber
     | Ellipse SvgDrawAttributes SvgPoint SvgNumber SvgNumber
     | Line SvgDrawAttributes SvgPoint SvgPoint
-    | Rectangle SvgDrawAttributes SvgPoint SvgNumber SvgNumber
+    | Rectangle SvgDrawAttributes SvgPoint SvgNumber SvgNumber SvgNumber SvgNumber
     deriving (Eq, Show)
 
 data SvgTransformation
@@ -124,7 +124,7 @@ data SvgDrawAttributes = SvgDrawAttributes
     , _strokeMiterLimit :: !(Maybe Float)
     , _fillColor        :: !(Maybe PixelRGBA8)
     , _fillOpacity      :: !(Maybe Float)
-    , _transform        :: !(Maybe Transformation)
+    , _transform        :: !(Maybe [SvgTransformation])
     }
     deriving (Eq, Show)
 
