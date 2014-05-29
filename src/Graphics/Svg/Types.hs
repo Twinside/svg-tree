@@ -54,6 +54,7 @@ data SvgPath
 
 data SvgNumber
     = SvgNum Coord
+    | SvgEm Coord
     | SvgPercent Coord
     deriving (Eq, Show)
 
@@ -100,7 +101,8 @@ data SvgDocument = SvgDocument
     deriving (Eq, Show)
 
 svgDocumentSize :: SvgDocument -> (Int, Int)
-svgDocumentSize SvgDocument { _svgWidth = Just w, _svgHeight = Just h } = (w, h)
+svgDocumentSize SvgDocument { _svgWidth = Just w
+                            , _svgHeight = Just h } = (w, h)
 svgDocumentSize SvgDocument { _svgViewBox = Just (x1, y1, x2, y2) } =
     (abs $ x2 - x1, abs $ y2 - y1)
 svgDocumentSize _ = (1, 1)
@@ -120,12 +122,13 @@ data SvgLineJoin
 data SvgDrawAttributes = SvgDrawAttributes
     { _strokeWidth      :: !(Maybe SvgNumber)
     , _strokeColor      :: !(Maybe PixelRGBA8)
-    , _strokeOpacity    :: !(Maybe Float)
+    , _strokeOpacity    :: !Float
     , _strokeLineCap    :: !(Maybe SvgCap)
     , _strokeLineJoin   :: !(Maybe SvgLineJoin)
     , _strokeMiterLimit :: !(Maybe Float)
     , _fillColor        :: !(Maybe PixelRGBA8)
-    , _fillOpacity      :: !(Maybe Float)
+    , _fillOpacity      :: !Float
+    , _fontSize         :: !(Maybe Float)
     , _transform        :: (Maybe [SvgTransformation])
     }
     deriving (Eq, Show)
@@ -141,18 +144,19 @@ mayMerge a Nothing = a
 
 instance Monoid SvgDrawAttributes where
     mempty =
-        SvgDrawAttributes Nothing Nothing Nothing Nothing
-                          Nothing Nothing Nothing Nothing
-                          Nothing
+        SvgDrawAttributes Nothing Nothing 1.0 Nothing
+                          Nothing Nothing Nothing 1.0
+                          Nothing Nothing
     mappend a b = SvgDrawAttributes
         { _strokeWidth = (mayRight `on` _strokeWidth) a b
         , _strokeColor =  (mayRight `on` _strokeColor) a b
         , _strokeLineCap = (mayRight `on` _strokeLineCap) a b
-        , _strokeOpacity = (mayRight `on` _strokeOpacity) a b
+        , _strokeOpacity = ((*) `on` _strokeOpacity) a b
         , _strokeLineJoin = (mayRight `on` _strokeLineJoin) a b
         , _strokeMiterLimit = (mayRight `on` _strokeMiterLimit) a b
         , _fillColor =  (mayRight `on` _fillColor) a b
-        , _fillOpacity = (mayRight `on` _fillOpacity) a b
+        , _fillOpacity = ((*) `on` _fillOpacity) a b
+        , _fontSize = (mayRight `on` _fontSize) a b
         , _transform = (mayMerge `on` _transform) a b
         }
 

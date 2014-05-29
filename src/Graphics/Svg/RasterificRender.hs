@@ -27,7 +27,7 @@ joinOfSvg :: SvgDrawAttributes -> Join
 joinOfSvg attrs =
   case (_strokeLineJoin attrs,_strokeMiterLimit attrs) of
     (Nothing, _) -> JoinRound
-    (Just SvgJoinMiter, Just v) -> JoinMiter v
+    (Just SvgJoinMiter, Just v) -> JoinMiter (v / 4)
     (Just SvgJoinMiter, Nothing) -> JoinMiter 0
     (Just SvgJoinBevel, _) -> JoinMiter 5
     (Just SvgJoinRound, _) -> JoinRound
@@ -198,10 +198,15 @@ data RenderContext = RenderContext
 
 type ViewBox = (Point, Point)
 
+fillAlphaCombine :: SvgDrawAttributes -> PixelRGBA8 -> PixelRGBA8
+fillAlphaCombine attr (PixelRGBA8 r g b _) = PixelRGBA8 r g b alpha
+    where alpha = floor . max 0 . min 255 $ _fillOpacity attr * 255
+
 filler :: SvgDrawAttributes -> [Primitive] -> Drawing PixelRGBA8 ()
 filler info primitives =
   withInfo _fillColor info $ \c ->
-    withTexture (uniformTexture c) $ fill primitives
+    let realColor = fillAlphaCombine info c in
+    withTexture (uniformTexture realColor) $ fill primitives
 
 stroker :: RenderContext -> SvgDrawAttributes -> [Primitive]
         -> Drawing PixelRGBA8 ()
@@ -209,34 +214,47 @@ stroker ctxt info primitives =
   withInfo _strokeWidth info $ \swidth ->
     withInfo _strokeColor info $ \color ->
       withTexture (uniformTexture color) $ do
-        let realWidth = lineariseLength ctxt swidth
+        let realWidth = lineariseLength ctxt info swidth
         stroke realWidth (joinOfSvg info) (capOfSvg info) primitives
 
 mergeContext :: RenderContext -> SvgDrawAttributes -> RenderContext
 mergeContext ctxt _attr = ctxt
 
-lineariseXLength :: RenderContext -> SvgNumber -> Coord
-lineariseXLength _ (SvgNum i) = i
-lineariseXLength ctxt (SvgPercent p) = abs (xe - xs) * p
+emTransform :: SvgDrawAttributes -> Float -> Float
+emTransform attr n = case _fontSize attr of
+    Nothing -> 16 * n
+    Just v -> v * n
+
+lineariseXLength :: RenderContext -> SvgDrawAttributes -> SvgNumber
+                 -> Coord
+lineariseXLength _ _ (SvgNum i) = i
+lineariseXLength _ attr (SvgEm i) = emTransform attr i
+lineariseXLength ctxt _ (SvgPercent p) = abs (xe - xs) * p
   where
     (V2 xs _, V2 xe _) = _renderViewBox ctxt
 
-lineariseYLength :: RenderContext -> SvgNumber -> Coord
-lineariseYLength _ (SvgNum i) = i
-lineariseYLength ctxt (SvgPercent p) = abs (ye - ys) * p
+lineariseYLength :: RenderContext -> SvgDrawAttributes -> SvgNumber
+                 -> Coord
+lineariseYLength _ _ (SvgNum i) = i
+lineariseYLength _ attr (SvgEm n) = emTransform attr n
+lineariseYLength ctxt _ (SvgPercent p) = abs (ye - ys) * p
   where
     (V2 _ ys, V2 _ ye) = _renderViewBox ctxt
     
 
-linearisePoint :: RenderContext -> SvgPoint -> Point
-linearisePoint ctxt (p1, p2) =
-    V2 (xs + lineariseXLength ctxt p1)
-       (ys + lineariseYLength ctxt p2)
+linearisePoint :: RenderContext -> SvgDrawAttributes -> SvgPoint
+               -> Point
+linearisePoint ctxt attr (p1, p2) =
+    V2 (xs + lineariseXLength ctxt attr p1)
+       (ys + lineariseYLength ctxt attr p2)
   where (V2 xs ys, _) = _renderViewBox ctxt
 
-lineariseLength :: RenderContext -> SvgNumber -> Coord
-lineariseLength _ (SvgNum i) = i
-lineariseLength ctxt (SvgPercent v) = v * coeff
+lineariseLength :: RenderContext -> SvgDrawAttributes -> SvgNumber
+                -> Coord
+lineariseLength _ _ (SvgNum i) = i
+lineariseLength _ attr (SvgEm i) =
+    emTransform attr i
+lineariseLength ctxt _ (SvgPercent v) = v * coeff
   where
     (V2 x1 y1, V2 x2 y2) = _renderViewBox ctxt
     actualWidth = abs $ x2 - x1
@@ -253,8 +271,8 @@ renderSvg initialContext = go initialContext initialAttr
              , _strokeLineCap = Just SvgCapButt
              , _strokeLineJoin = Just SvgJoinMiter
              , _strokeMiterLimit = Just 4.0
-             , _strokeOpacity = Just 1.0
-             , _fillOpacity = Just 1.0
+             , _strokeOpacity = 1.0
+             , _fillOpacity = 1.0
              }
 
     go _ _ SvgNone = return ()
@@ -266,12 +284,12 @@ renderSvg initialContext = go initialContext initialAttr
     go ctxt attr (Rectangle pAttr p w h rx ry) = do
       let info = attr <> pAttr
           context' = mergeContext ctxt pAttr
-          p' = linearisePoint context' p
-          w' = lineariseXLength context' w
-          h' = lineariseYLength context' h
+          p' = linearisePoint context' info p
+          w' = lineariseXLength context' info w
+          h' = lineariseYLength context' info h
 
-          rx' = lineariseXLength context' rx
-          ry' = lineariseXLength context' ry
+          rx' = lineariseXLength context' info rx
+          ry' = lineariseXLength context' info ry
           rect = case (rx', ry') of
             (0, 0) -> rectangle p' w' h'
             (v, 0) -> roundedRectangle p' w' h' v v
@@ -285,8 +303,8 @@ renderSvg initialContext = go initialContext initialAttr
     go ctxt attr (Circle pAttr p r) = do
       let info = attr <> pAttr
           context' = mergeContext ctxt pAttr
-          p' = linearisePoint context' p
-          r' = lineariseLength context' r
+          p' = linearisePoint context' info p
+          r' = lineariseLength context' info r
           c = circle p' r'
       withTransform pAttr $ do
         filler info c
@@ -295,9 +313,9 @@ renderSvg initialContext = go initialContext initialAttr
     go ctxt attr (Ellipse pAttr p rx ry) = do
       let info = attr <> pAttr
           context' = mergeContext ctxt pAttr
-          p' = linearisePoint context' p
-          rx' = lineariseXLength context' rx
-          ry' = lineariseYLength context' ry
+          p' = linearisePoint context' info p
+          rx' = lineariseXLength context' info rx
+          ry' = lineariseYLength context' info ry
           c = ellipse p' rx' ry'
       withTransform pAttr $ do
         filler info c
@@ -329,8 +347,8 @@ renderSvg initialContext = go initialContext initialAttr
     go ctxt attr (Line pAttr p1 p2) = do
       let info = attr <> pAttr
           context' = mergeContext ctxt pAttr
-          p1' = linearisePoint context' p1
-          p2' = linearisePoint context' p2
+          p1' = linearisePoint context' info p1
+          p2' = linearisePoint context' info p2
       withTransform pAttr . stroker context' info $ line p1' p2'
 
     go ctxt attr (Path pAttr path) = do

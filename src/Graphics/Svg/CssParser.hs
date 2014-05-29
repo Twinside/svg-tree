@@ -151,6 +151,7 @@ complexNumber = do
     n <- num
     let apply f = SvgNum $ f n
     (SvgPercent (n / 100) <$ char '%')
+        <|> (SvgEm n <$ string "em")
         <|> (apply <$> unitParser)
         <|> pure (SvgNum n)
 

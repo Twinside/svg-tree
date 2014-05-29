@@ -73,7 +73,9 @@ analyzeFolder folder = do
 
 
 testSuite :: IO ()
-testSuite = analyzeFolder "w3csvg"
+testSuite = do
+    analyzeFolder "w3csvg"
+    analyzeFolder "test"
 
 main :: IO ()
 main = do

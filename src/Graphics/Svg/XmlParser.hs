@@ -41,27 +41,36 @@ parse p str = case parseOnly p (T.pack str) of
   Left _ -> Nothing
   Right r -> Just r
 
+parseMayStartDot :: Parser a -> String -> Maybe a
+parseMayStartDot p l@('.':_) = parse p ('0':l)
+parseMayStartDot p l = parse p l
+
 parseDrawAttributes :: Element -> SvgDrawAttributes
 parseDrawAttributes e = SvgDrawAttributes
     { _strokeWidth = attribute "stroke-width" >>= parse complexNumber
     , _strokeColor = join $ attribute "stroke" >>= parse colorParser
     , _strokeLineCap = attribute "stroke-linecap" >>= parseSvgCap
     , _strokeLineJoin = attribute "stroke-linejoin" >>= parseSvgLineJoin
-    , _strokeMiterLimit = attribute "stroke-miterlimit" >>= parse num
+    , _strokeMiterLimit = attribute "stroke-miterlimit" >>= parseMayStartDot num
     , _fillColor   = join $ attribute "fill" >>= parse colorParser
     , _transform   = attribute "transform" >>= parse (many transformParser)
-    , _fillOpacity = attribute "fill-opacity" >>= parse num
-    , _strokeOpacity = attribute "stroke-opacity" >>= parse num
+    , _fillOpacity =
+         oneDefault $ attribute "opacity" >>= parseMayStartDot num
+    , _strokeOpacity = 
+         oneDefault $ attribute "stroke-opacity" >>= parseMayStartDot num
+    , _fontSize = attribute "font-size" >>= parseMayStartDot num
     }
   where attribute :: String -> Maybe String
         attribute a = attributeFinder a e
+
+        oneDefault = fromMaybe 1
 
 attributeReal :: String -> Element -> Maybe Float
 attributeReal attr e = read <$> attributeFinder attr e
 
 attributeLength :: String -> Element -> Maybe SvgNumber
 attributeLength attr e = 
-  attributeFinder attr e >>= parse complexNumber
+  attributeFinder attr e >>= parseMayStartDot complexNumber
 
 unparse :: Element -> SvgTree
 unparse e@(nodeName -> "g") =
@@ -121,15 +130,11 @@ unparseDocument e@(nodeName -> "svg") = Just $ SvgDocument
     { _svgViewBox =
         attributeFinder "viewBox" e >>= parse viewBox
     , _svgElements = unparse <$> elChildren e
-    , _svgWidth = Just $ floor width
-    , _svgHeight = Just $ floor height
+    , _svgWidth = floor <$> lengthFind "width"
+    , _svgHeight = floor <$> lengthFind "height"
     }
   where
     lengthFind n =
-        fromMaybe 0 $ (attributeFinder n e >>= parse unitNumber)
-
-    width :: Float
-    width = lengthFind "width"
-    height = lengthFind "height"
+        attributeFinder n e >>= parse unitNumber
 unparseDocument _ = Nothing   
 
