@@ -55,7 +55,7 @@ analyzeFolder :: FilePath -> IO ()
 analyzeFolder folder = do
   createDirectoryIfMissing True testOutputFolder
   fileList <- filter (".svg" `isSuffixOf`) <$> getDirectoryContents folder
-  let all_table = table ["W3C Svg", "W3C ref PNG", "mine"] 
+  let all_table = table ["name", "W3C Svg", "W3C ref PNG", "mine"] 
                 . map generateFileInfo $ map (folder </>) fileList
       doc = toHtmlDocument all_table
       (_, folderBase) = splitFileName folder
@@ -65,6 +65,7 @@ analyzeFolder folder = do
     let realFilename = folder </> p
     putStrLn $ "Loading: " ++ realFilename
     svg <- loadSvgFile realFilename
+    {-print svg-}
     case svg of
       Nothing -> putStrLn $ "Failed to load " ++ p
       Just d -> do

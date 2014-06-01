@@ -2,18 +2,20 @@ module Graphics.Svg.RasterificRender where
 
 import Control.Applicative( (<$>), pure )
 import Codec.Picture( Image, PixelRGBA8( .. ) )
-import Data.Monoid( mempty, (<>) )
 import qualified Data.Foldable as F
+import qualified Data.Map as M
+import Data.Monoid( mempty, (<>) )
 import Data.List( mapAccumL )
 import Graphics.Rasterific.Linear( (^+^), (^-^), (^*), zero )
 import Graphics.Rasterific hiding ( Path, Line )
+import Graphics.Rasterific.Outline
 import Graphics.Rasterific.Texture
 import Graphics.Rasterific.Transformations
 import Graphics.Svg.Types
 {-import Graphics.Svg.XmlParser-}
 
-{-import Debug.Trace-}
-{-import Text.Printf-}
+import Debug.Trace
+import Text.Printf
 
 capOfSvg :: SvgDrawAttributes -> (Cap, Cap)
 capOfSvg attrs =
@@ -27,7 +29,7 @@ joinOfSvg :: SvgDrawAttributes -> Join
 joinOfSvg attrs =
   case (_strokeLineJoin attrs,_strokeMiterLimit attrs) of
     (Nothing, _) -> JoinRound
-    (Just SvgJoinMiter, Just v) -> JoinMiter (v / 4)
+    (Just SvgJoinMiter, Just _) -> JoinMiter 0
     (Just SvgJoinMiter, Nothing) -> JoinMiter 0
     (Just SvgJoinBevel, _) -> JoinMiter 5
     (Just SvgJoinRound, _) -> JoinRound
@@ -142,6 +144,7 @@ renderSvgDocument sizes doc = case sizes of
     emptyContext = RenderContext
         { _renderViewBox = box
         , _initialViewBox = box
+        , _definitions = _svgDefinitions doc
         }
     white = PixelRGBA8 255 255 255 255
 
@@ -158,6 +161,7 @@ renderSvgDocument sizes doc = case sizes of
 
     renderAtSize (w, h) =
         renderDrawing w h white 
+            {-. (\a -> trace (dumpDrawing a) a)-}
             . sizeFitter box (w, h)
             . mapM_ (renderSvg emptyContext)
             $ _svgElements doc
@@ -193,29 +197,110 @@ withTransform trans draw =
 
 data RenderContext = RenderContext
     { _initialViewBox :: (Point, Point)
-    , _renderViewBox :: (Point, Point)
+    , _renderViewBox  :: (Point, Point)
+    , _definitions    :: M.Map String SvgElement
     }
 
 type ViewBox = (Point, Point)
 
-fillAlphaCombine :: SvgDrawAttributes -> PixelRGBA8 -> PixelRGBA8
-fillAlphaCombine attr (PixelRGBA8 r g b _) = PixelRGBA8 r g b alpha
-    where alpha = floor . max 0 . min 255 $ _fillOpacity attr * 255
+fillAlphaCombine :: Float -> PixelRGBA8 -> PixelRGBA8
+fillAlphaCombine opacity (PixelRGBA8 r g b a) =
+    PixelRGBA8 r g b alpha
+  where 
+    a' = fromIntegral a / 255.0
+    alpha = floor . max 0 . min 255 $ opacity * a' * 255
 
-filler :: SvgDrawAttributes -> [Primitive] -> Drawing PixelRGBA8 ()
-filler info primitives =
-  withInfo _fillColor info $ \c ->
-    let realColor = fillAlphaCombine info c in
-    withTexture (uniformTexture realColor) $ fill primitives
+boundbingBoxLinearise :: SvgDrawAttributes -> PlaneBound -> SvgPoint
+                      -> Point
+boundbingBoxLinearise
+    attr (PlaneBound mini@(V2 xi yi) maxi) (xp, yp) = V2 finalX finalY
+  where
+    V2 w h = abs <$> (maxi ^-^ mini)
+    finalX = case xp of
+      SvgNum n -> n
+      SvgEm n -> emTransform attr n
+      SvgPercent p -> p * w + xi
+
+    finalY = case yp of
+      SvgNum n -> n
+      SvgEm n -> emTransform attr n
+      SvgPercent p -> p * h + yi
+
+prepareLinearGradientTexture :: RenderContext -> SvgDrawAttributes
+                             -> SvgLinearGradient
+                             -> Float
+                             -> [Primitive]
+                             -> Texture PixelRGBA8
+prepareLinearGradientTexture ctxt attr grad opa prims =
+  let bounds = F.foldMap planeBounds prims
+      lineariser = case _linearGradientUnits grad of
+        GradientUserSpace -> linearisePoint ctxt attr
+        GradientBoundingBox -> boundbingBoxLinearise attr bounds
+      gradient =
+        [(offset, fillAlphaCombine opa color)
+            | SvgGradientStop offset color <- _linearGradientStops grad]
+      startPoint = lineariser $ _linearGradientStart grad
+      stopPoint = lineariser $ _linearGradientStop grad
+  in
+  {-trace (printf "Gradient start:%s stop:%s colors:%s"-}
+            {-(show startPoint)-}
+            {-(show stopPoint)-}
+            {-(show gradient)) $-}
+  linearGradientTexture gradient startPoint stopPoint
+
+prepareRadialGradientTexture :: SvgRadialGradient
+                             -> Float
+                             -> [Primitive]
+                             -> Texture PixelRGBA8
+prepareRadialGradientTexture _grad _opa _prims =
+    uniformTexture $ PixelRGBA8 255 255 0 255
+
+fillMethodOfSvg :: SvgDrawAttributes -> FillMethod
+fillMethodOfSvg attr = case _fillRule attr of
+    Nothing -> FillWinding
+    Just SvgFillNonZero -> FillWinding
+    Just SvgFillEvenOdd -> FillEvenOdd
+
+withSvgTexture :: RenderContext -> SvgDrawAttributes
+               -> SvgTexture -> Float
+               -> [Primitive]
+               -> Drawing PixelRGBA8 ()
+withSvgTexture _ _ FillNone _opacity _ = return ()
+withSvgTexture _ attr (ColorRef color) opacity prims =
+  let realColor = fillAlphaCombine opacity color
+      method = fillMethodOfSvg attr in
+  withTexture (uniformTexture realColor) $ fillWithMethod method prims
+withSvgTexture ctxt attr (TextureRef ref) opacity prims =
+  case M.lookup ref $ _definitions ctxt of
+    Nothing -> return ()
+    Just (ElementGeometry _) -> return ()
+    Just (ElementLinearGradient grad) ->
+        let tex = prepareLinearGradientTexture ctxt attr 
+                    grad opacity prims
+            method = fillMethodOfSvg attr in
+        withTexture tex $ fillWithMethod method prims
+    Just (ElementRadialGradient grad) ->
+        let tex = prepareRadialGradientTexture grad opacity prims
+            method = fillMethodOfSvg attr in
+        withTexture tex $ fillWithMethod method prims
+
+filler :: RenderContext
+       -> SvgDrawAttributes
+       -> [Primitive]
+       -> Drawing PixelRGBA8 ()
+filler ctxt info primitives =
+  withInfo _fillColor info $ \svgTexture ->
+    withSvgTexture ctxt info svgTexture (_fillOpacity info) primitives
 
 stroker :: RenderContext -> SvgDrawAttributes -> [Primitive]
         -> Drawing PixelRGBA8 ()
 stroker ctxt info primitives =
   withInfo _strokeWidth info $ \swidth ->
-    withInfo _strokeColor info $ \color ->
-      withTexture (uniformTexture color) $ do
-        let realWidth = lineariseLength ctxt info swidth
-        stroke realWidth (joinOfSvg info) (capOfSvg info) primitives
+    withInfo _strokeColor info $ \svgTexture ->
+      withSvgTexture ctxt info svgTexture (_strokeOpacity info) $
+        let realWidth = lineariseLength ctxt info swidth in
+        strokize realWidth (joinOfSvg info) (capOfSvg info) 
+                 primitives
 
 mergeContext :: RenderContext -> SvgDrawAttributes -> RenderContext
 mergeContext ctxt _attr = ctxt
@@ -272,16 +357,20 @@ renderSvg initialContext = go initialContext initialAttr
              , _strokeLineJoin = Just SvgJoinMiter
              , _strokeMiterLimit = Just 4.0
              , _strokeOpacity = 1.0
+             , _fillColor = Just . ColorRef $ PixelRGBA8 0 0 0 255
              , _fillOpacity = 1.0
+             , _fillRule = Just SvgFillNonZero
              }
 
     go _ _ SvgNone = return ()
-    go ctxt attr (Group groupAttr subTrees) =
+    go ctxt attr (Use _ subTree) =
+        go ctxt attr subTree
+    go ctxt attr (Group (SvgGroup groupAttr subTrees)) =
         withTransform groupAttr $ mapM_ (go context' attr') subTrees
       where attr' = attr <> groupAttr
             context' = mergeContext ctxt groupAttr
 
-    go ctxt attr (Rectangle pAttr p w h rx ry) = do
+    go ctxt attr (Rectangle (SvgRectangle pAttr p w h (rx, ry))) = do
       let info = attr <> pAttr
           context' = mergeContext ctxt pAttr
           p' = linearisePoint context' info p
@@ -297,20 +386,20 @@ renderSvg initialContext = go initialContext initialAttr
             (vx, vy) -> roundedRectangle p' w' h' vx vy
 
       withTransform pAttr $ do
-        filler info rect
+        filler context' info rect
         stroker context' info rect
 
-    go ctxt attr (Circle pAttr p r) = do
+    go ctxt attr (Circle (SvgCircle pAttr p r)) = do
       let info = attr <> pAttr
           context' = mergeContext ctxt pAttr
           p' = linearisePoint context' info p
           r' = lineariseLength context' info r
           c = circle p' r'
       withTransform pAttr $ do
-        filler info c
+        filler context' info c
         stroker context' info c
 
-    go ctxt attr (Ellipse pAttr p rx ry) = do
+    go ctxt attr (Ellipse (SvgEllipse pAttr p rx ry)) = do
       let info = attr <> pAttr
           context' = mergeContext ctxt pAttr
           p' = linearisePoint context' info p
@@ -318,12 +407,12 @@ renderSvg initialContext = go initialContext initialAttr
           ry' = lineariseYLength context' info ry
           c = ellipse p' rx' ry'
       withTransform pAttr $ do
-        filler info c
+        filler context' info c
         stroker context' info c
 
-    go ctxt attr (PolyLine pAttr points) =
+    go ctxt attr (PolyLine (SvgPolyLine pAttr points)) =
       go ctxt (dropFillColor attr)
-            . Path (dropFillColor pAttr)
+            . Path . SvgPathPrim (dropFillColor pAttr)
             $ toPath points
       where
         dropFillColor v = v { _fillColor = Nothing }
@@ -333,8 +422,8 @@ renderSvg initialContext = go initialContext initialAttr
             , LineTo OriginAbsolute xs
             ]
 
-    go ctxt attr (Polygon pAttr points) =
-      go ctxt attr . Path pAttr $ toPath points
+    go ctxt attr (Polygon (SvgPolygon pAttr points)) =
+      go ctxt attr . Path . SvgPathPrim pAttr $ toPath points
       where
         toPath [] = []
         toPath (x:xs) =
@@ -344,17 +433,17 @@ renderSvg initialContext = go initialContext initialAttr
             ]
 
 
-    go ctxt attr (Line pAttr p1 p2) = do
+    go ctxt attr (Line (SvgLine pAttr p1 p2)) = do
       let info = attr <> pAttr
           context' = mergeContext ctxt pAttr
           p1' = linearisePoint context' info p1
           p2' = linearisePoint context' info p2
       withTransform pAttr . stroker context' info $ line p1' p2'
 
-    go ctxt attr (Path pAttr path) = do
+    go ctxt attr (Path (SvgPathPrim pAttr path)) = do
       let info = attr <> pAttr
           primitives = svgPathToPrimitives path
       withTransform pAttr $ do
-        filler info primitives
+        filler ctxt info primitives
         stroker ctxt info primitives
 
