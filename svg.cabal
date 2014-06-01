@@ -38,6 +38,7 @@ Executable svgrender
   hs-source-dirs: exec-src
   Main-Is: svgrender.hs
   Ghc-options: -O3 -Wall
+  ghc-prof-options: -rtsopts -Wall -prof -auto-all
   Build-Depends: base >= 4.6
                , linear
                , rasterific-svg

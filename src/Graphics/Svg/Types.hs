@@ -30,7 +30,7 @@ module Graphics.Svg.Types
     , defaultLinearGradient
     , HasSvgLinearGradient( .. )
 
-    , SvgRadialGradient
+    , SvgRadialGradient( .. )
     , defaultRadialGradient
     , HasSvgRadialGradient( .. )
 

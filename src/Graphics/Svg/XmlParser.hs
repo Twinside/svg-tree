@@ -286,7 +286,10 @@ unparseDefs e@(nodeName -> "linearGradient") =
     unparser ee =
       (xmlUnparse ee) & linearGradientStops .~ parseGradientStops ee
 unparseDefs e@(nodeName -> "radialGradient") =
-  withId e $ ElementRadialGradient .  xmlUnparse
+  withId e $ ElementRadialGradient . unparser
+  where
+    unparser ee =
+      (xmlUnparse ee) & radialGradientStops .~ parseGradientStops ee
 unparseDefs e = do
   el <- unparse e
   withId e (const $ ElementGeometry el)

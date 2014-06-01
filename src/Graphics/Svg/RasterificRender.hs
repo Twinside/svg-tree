@@ -210,6 +210,20 @@ fillAlphaCombine opacity (PixelRGBA8 r g b a) =
     a' = fromIntegral a / 255.0
     alpha = floor . max 0 . min 255 $ opacity * a' * 255
 
+boundingBoxLength :: SvgDrawAttributes -> PlaneBound -> SvgNumber
+                  -> Float
+boundingBoxLength attr (PlaneBound mini maxi) num =
+    case num of
+      SvgNum n -> n
+      SvgEm n -> emTransform attr n
+      SvgPercent p -> p * coeff
+  where
+     V2 actualWidth actualHeight =
+                abs <$> (maxi ^-^ mini)
+     two = 2 :: Int
+     coeff = sqrt (actualWidth ^^ two + actualHeight ^^ two)
+           / sqrt 2
+
 boundbingBoxLinearise :: SvgDrawAttributes -> PlaneBound -> SvgPoint
                       -> Point
 boundbingBoxLinearise
@@ -226,11 +240,10 @@ boundbingBoxLinearise
       SvgEm n -> emTransform attr n
       SvgPercent p -> p * h + yi
 
-prepareLinearGradientTexture :: RenderContext -> SvgDrawAttributes
-                             -> SvgLinearGradient
-                             -> Float
-                             -> [Primitive]
-                             -> Texture PixelRGBA8
+prepareLinearGradientTexture
+    :: RenderContext -> SvgDrawAttributes
+    -> SvgLinearGradient -> Float -> [Primitive]
+    -> Texture PixelRGBA8
 prepareLinearGradientTexture ctxt attr grad opa prims =
   let bounds = F.foldMap planeBounds prims
       lineariser = case _linearGradientUnits grad of
@@ -242,18 +255,38 @@ prepareLinearGradientTexture ctxt attr grad opa prims =
       startPoint = lineariser $ _linearGradientStart grad
       stopPoint = lineariser $ _linearGradientStop grad
   in
-  {-trace (printf "Gradient start:%s stop:%s colors:%s"-}
-            {-(show startPoint)-}
-            {-(show stopPoint)-}
-            {-(show gradient)) $-}
   linearGradientTexture gradient startPoint stopPoint
 
-prepareRadialGradientTexture :: SvgRadialGradient
-                             -> Float
-                             -> [Primitive]
-                             -> Texture PixelRGBA8
-prepareRadialGradientTexture _grad _opa _prims =
-    uniformTexture $ PixelRGBA8 255 255 0 255
+prepareRadialGradientTexture
+    :: RenderContext -> SvgDrawAttributes
+    -> SvgRadialGradient -> Float -> [Primitive]
+    -> Texture PixelRGBA8
+prepareRadialGradientTexture ctxt attr grad opa prims =
+  let bounds = F.foldMap planeBounds prims
+      (lineariser, lengthLinearise) = case _radialGradientUnits grad of
+        GradientUserSpace ->
+          (linearisePoint ctxt attr, lineariseLength ctxt attr)
+        GradientBoundingBox ->
+          (boundbingBoxLinearise attr bounds, boundingBoxLength attr bounds)
+      gradient =
+        [(offset, fillAlphaCombine opa color)
+            | SvgGradientStop offset color <- _radialGradientStops grad]
+      center = lineariser $ _radialGradientCenter grad
+      radius = lengthLinearise $ _radialGradientRadius grad
+  in
+  case (_radialGradientFocusX grad, 
+            _radialGradientFocusY grad) of
+    (Nothing, Nothing) ->
+      radialGradientTexture gradient center radius
+    (Just fx, Nothing) ->
+      radialGradientWithFocusTexture gradient center radius
+        $ lineariser (fx, snd $ _radialGradientCenter grad)
+    (Nothing, Just fy) ->
+      radialGradientWithFocusTexture gradient center radius
+        $ lineariser (fst $ _radialGradientCenter grad, fy)
+    (Just fx, Just fy) ->
+      radialGradientWithFocusTexture gradient center radius
+        $ lineariser (fx, fy)
 
 fillMethodOfSvg :: SvgDrawAttributes -> FillMethod
 fillMethodOfSvg attr = case _fillRule attr of
@@ -280,7 +313,8 @@ withSvgTexture ctxt attr (TextureRef ref) opacity prims =
             method = fillMethodOfSvg attr in
         withTexture tex $ fillWithMethod method prims
     Just (ElementRadialGradient grad) ->
-        let tex = prepareRadialGradientTexture grad opacity prims
+        let tex = prepareRadialGradientTexture ctxt attr
+                    grad opacity prims
             method = fillMethodOfSvg attr in
         withTexture tex $ fillWithMethod method prims
 
