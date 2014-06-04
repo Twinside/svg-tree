@@ -8,9 +8,8 @@ import Control.Applicative( (<$>), (<$)
                           , pure
                           )
 import Data.Attoparsec.Text
-    ( Number( .. )
-    , Parser
-    , number
+    ( Parser
+    , scientific
     , string
     , skipSpace
     , letter
@@ -30,10 +29,7 @@ import Graphics.Svg.Types
 
 num :: Parser Float
 num = realToFrac <$> (skipSpace *> plusMinus <* skipSpace)
-  where toDouble (I i) = fromIntegral i
-        toDouble (D d) = d
-
-        doubleNumber = toDouble <$> number
+  where doubleNumber = toRational <$> scientific
 
         plusMinus = negate <$ string "-" <*> doubleNumber
                  <|> string "+" *> doubleNumber

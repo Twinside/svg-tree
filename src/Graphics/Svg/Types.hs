@@ -67,6 +67,10 @@ module Graphics.Svg.Types
     , defaultEllipse
     , HasSvgEllipse( .. )
 
+    , SvgUse( .. )
+    , defaultUse
+    , HasSvgUse( .. )
+
     , WithSvgDrawAttributes( .. )
     , isPathArc
     , isPathWithArc
@@ -330,6 +334,24 @@ defaultEllipse = SvgEllipse
   , _svgEllipseCenter = (SvgNum 0, SvgNum 0)
   , _svgEllipseXRadius = SvgNum 0
   , _svgEllipseYRadius = SvgNum 0
+  }
+
+data SvgUse = SvgUse
+  { _svgUsePlacement :: SvgPoint
+  , _svgUseTarget    :: String
+  , _svgUseWidth     :: Maybe SvgNumber
+  , _svgUseHeight    :: Maybe SvgNumber
+  }
+  deriving (Eq, Show)
+
+makeClassy ''SvgUse
+
+defaultUse :: SvgUse
+defaultUse = SvgUse
+  { _svgUsePlacement = (SvgNum 0, SvgNum 0)
+  , _svgUseTarget = ""
+  , _svgUseWidth = Nothing
+  , _svgUseHeight = Nothing
   }
 
 data SvgTree
