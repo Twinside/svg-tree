@@ -14,8 +14,8 @@ import Graphics.Rasterific.Transformations
 import Graphics.Svg.Types
 {-import Graphics.Svg.XmlParser-}
 
-import Debug.Trace
-import Text.Printf
+{-import Debug.Trace-}
+{-import Text.Printf-}
 
 capOfSvg :: SvgDrawAttributes -> (Cap, Cap)
 capOfSvg attrs =
@@ -382,6 +382,10 @@ lineariseLength ctxt _ (SvgPercent v) = v * coeff
     coeff = sqrt (actualWidth ^^ two + actualHeight ^^ two)
           / sqrt 2
 
+viewBoxOfTree :: SvgTree -> Maybe (Int, Int, Int, Int)
+viewBoxOfTree (Symbol g) = _svgGroupViewBox g
+viewBoxOfTree _ = Nothing
+
 renderSvg :: RenderContext -> SvgTree -> Drawing PixelRGBA8 ()
 renderSvg initialContext = go initialContext initialAttr
   where
@@ -396,10 +400,35 @@ renderSvg initialContext = go initialContext initialAttr
              , _fillRule = Just SvgFillNonZero
              }
 
+    fitUse ctxt attr use subTree =
+      let origin = linearisePoint ctxt attr $ _svgUseBase use
+          w = lineariseXLength ctxt attr <$> _svgUseWidth use
+          h = lineariseYLength ctxt attr <$> _svgUseHeight use
+      in
+      case viewBoxOfTree subTree of
+        Nothing -> withTransformation (translate origin)
+        (Just (xs, ys, xe, ye)) ->
+          let boxOrigin = V2 (fromIntegral xs) (fromIntegral ys)
+              boxEnd = V2 (fromIntegral xe) (fromIntegral ye)
+              V2 bw bh = abs $ boxEnd ^-^ boxOrigin
+              xScaleFactor = case w of
+                Just wpx -> wpx / bw
+                Nothing -> 1.0
+              yScaleFactor = case h of
+                Just hpx -> hpx / bh
+                Nothing -> 1.0
+          in
+          withTransformation $ translate origin
+                            <> scale xScaleFactor yScaleFactor
+                            <> translate (negate boxOrigin)
+
+
     go _ _ SvgNone = return ()
-    go ctxt attr (Use _ subTree) =
-        go ctxt attr subTree
-    go ctxt attr (Group (SvgGroup groupAttr subTrees)) =
+    go ctxt attr (Use useData subTree) =
+        fitUse ctxt attr useData subTree $ go ctxt attr subTree
+
+    go ctxt attr (Symbol g) = go ctxt attr $ Group g
+    go ctxt attr (Group (SvgGroup groupAttr subTrees _)) =
         withTransform groupAttr $ mapM_ (go context' attr') subTrees
       where attr' = attr <> groupAttr
             context' = mergeContext ctxt groupAttr
