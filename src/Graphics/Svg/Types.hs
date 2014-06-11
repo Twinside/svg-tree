@@ -58,6 +58,10 @@ module Graphics.Svg.Types
     , defaultGroup
     , svgGroupDrawAttributes
     , svgGroupChildren
+    , svgGroupViewBox
+
+    , SvgSymbol( .. )
+    , groupOfSymbol
 
     , SvgCircle( .. )
     , defaultCircle
@@ -68,7 +72,7 @@ module Graphics.Svg.Types
     , HasSvgEllipse( .. )
 
     , SvgUse( .. )
-    , defaultUse
+    , defaultSvgUse
     , HasSvgUse( .. )
 
     , WithSvgDrawAttributes( .. )
@@ -283,6 +287,7 @@ defaultPathPrim = SvgPathPrim
 data SvgGroup a = SvgGroup
   { _svgGroupDrawAttributes :: !SvgDrawAttributes
   , _svgGroupChildren  :: ![a]
+  , _svgGroupViewBox   :: !(Maybe (Int, Int, Int, Int))
   }
   deriving (Eq, Show)
 
@@ -291,10 +296,19 @@ makeLenses ''SvgGroup
 instance WithSvgDrawAttributes (SvgGroup a) where
     drawAttr = svgGroupDrawAttributes
 
+newtype SvgSymbol a =
+    SvgSymbol { _groupOfSymbol :: SvgGroup a }
+
+makeLenses ''SvgSymbol
+
+instance WithSvgDrawAttributes (SvgSymbol a) where
+    drawAttr = groupOfSymbol . drawAttr
+
 defaultGroup :: SvgGroup a
 defaultGroup = SvgGroup
   { _svgGroupDrawAttributes = mempty
   , _svgGroupChildren  = []
+  , _svgGroupViewBox = Nothing
   }
 
 data SvgCircle = SvgCircle
@@ -338,27 +352,28 @@ defaultEllipse = SvgEllipse
   }
 
 data SvgUse = SvgUse
-  { _svgUsePlacement :: SvgPoint
-  , _svgUseTarget    :: String
-  , _svgUseWidth     :: Maybe SvgNumber
-  , _svgUseHeight    :: Maybe SvgNumber
+  { _svgUseBase   :: SvgPoint
+  , _svgUseName   :: String
+  , _svgUseWidth  :: Maybe SvgNumber
+  , _svgUseHeight :: Maybe SvgNumber
   }
   deriving (Eq, Show)
 
 makeClassy ''SvgUse
 
-defaultUse :: SvgUse
-defaultUse = SvgUse
-  { _svgUsePlacement = (SvgNum 0, SvgNum 0)
-  , _svgUseTarget = ""
-  , _svgUseWidth = Nothing
+defaultSvgUse :: SvgUse
+defaultSvgUse = SvgUse
+  { _svgUseBase   = (SvgNum 0, SvgNum 0)
+  , _svgUseName   = ""
+  , _svgUseWidth  = Nothing
   , _svgUseHeight = Nothing
   }
 
 data SvgTree
     = SvgNone
-    | Use !String !SvgTree
+    | Use !SvgUse !SvgTree
     | Group !(SvgGroup SvgTree)
+    | Symbol !(SvgGroup SvgTree)
     | Path !SvgPathPrim
     | Circle !SvgCircle
     | PolyLine !SvgPolyLine
@@ -373,6 +388,7 @@ drawAttrOfTree v = case v of
   SvgNone -> mempty
   Use _ t -> drawAttrOfTree t
   Group e -> e ^. drawAttr
+  Symbol e -> e ^. drawAttr
   Path e -> e ^. drawAttr
   Circle e -> e ^. drawAttr
   PolyLine e -> e ^. drawAttr
@@ -386,6 +402,7 @@ setDrawAttrOfTree v attr = case v of
   SvgNone -> SvgNone
   Use n t -> Use n $ setDrawAttrOfTree t attr
   Group e -> Group $ e & drawAttr .~ attr
+  Symbol e -> Symbol $ e & drawAttr .~ attr
   Path e -> Path $ e & drawAttr .~ attr
   Circle e -> Circle $ e & drawAttr .~ attr
   PolyLine e -> PolyLine $ e & drawAttr .~ attr

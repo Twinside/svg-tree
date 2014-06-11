@@ -86,12 +86,14 @@ xmlUnparseWithDrawAttr
 xmlUnparseWithDrawAttr e =
     xmlUnparse e & drawAttr .~ xmlUnparse e
 
+xmlUpdateDrawAttr :: (WithSvgDrawAttributes a) => Element -> a -> a
+xmlUpdateDrawAttr e svg = svg & drawAttr .~ drawAttr'
+  where drawAttr' = xmlUpdate (svg ^. drawAttr) e
+
 xmlUpdateWithDrawAttr
     :: (SvgXMLUpdatable a, WithSvgDrawAttributes a)
     => Element -> a -> a
-xmlUpdateWithDrawAttr e svg = svg' & drawAttr .~ drawAttr'
-  where svg' = xmlUpdate svg e
-        drawAttr' = xmlUpdate (svg ^. drawAttr) e
+xmlUpdateWithDrawAttr e svg = xmlUpdate (xmlUpdateDrawAttr e svg) e
 
 attributeReal :: String -> Element -> Maybe Float
 attributeReal attr e = read <$> attributeFinder attr e
@@ -232,6 +234,12 @@ instance SvgXMLUpdatable (SvgGroup a) where
   defaultSvg = defaultGroup
   svgAttributes = []
 
+instance SvgXMLUpdatable (SvgSymbol a) where
+  defaultSvg = SvgSymbol defaultSvg
+  svgAttributes =
+        [("viewBox", parserMaySetter (groupOfSymbol . svgGroupViewBox) viewBox)]
+
+
 instance SvgXMLUpdatable SvgRadialGradient where
   defaultSvg = defaultRadialGradient
   svgAttributes =
@@ -247,6 +255,19 @@ instance SvgXMLUpdatable SvgRadialGradient where
     ,("fx", numericMaySetter radialGradientFocusX)
     ,("fy", numericMaySetter radialGradientFocusY)
     ]
+
+instance SvgXMLUpdatable SvgUse where
+  defaultSvg = defaultSvgUse
+  svgAttributes =
+    [("x", numericSetter $ svgUseBase._1)
+    ,("y", numericSetter $ svgUseBase._2)
+    ,("width", numericMaySetter svgUseWidth)
+    ,("height", numericMaySetter svgUseHeight)
+    ,("href", \e s -> e & svgUseName .~ dropSharp s)
+    ]
+    where
+      dropSharp ('#':rest) = rest
+      dropSharp a = a
 
 gradientOffsetSetter :: SvgGradientStop -> String -> SvgGradientStop
 gradientOffsetSetter el str = el & gradientOffset .~ val
@@ -302,6 +323,7 @@ svgTreeModify
 svgTreeModify f v = case v of
   SvgNone -> SvgNone
   Use n t -> Use n t
+  Symbol e -> Symbol $ f e
   Group e -> Group $ f e
   Path e -> Path $ f e
   Circle e -> Circle $ f e
@@ -316,11 +338,20 @@ unparse :: Element -> State SvgSymbols SvgTree
 unparse e@(nodeName -> "defs") = do
     mapM_ unparseDefs $ elChildren e
     return SvgNone
-unparse e@(nodeName -> "g") =
-  Group . SvgGroup (xmlUnparse e) . filter isNotNone
-     <$> groupChildren
+unparse e@(nodeName -> "symbol") = do
+  svgChildren <- mapM unparse $ elChildren e
+  let realChildren = filter isNotNone svgChildren
+  pure . Symbol $ groupNode & svgGroupChildren .~ realChildren
   where
-    groupChildren = mapM unparse $ elChildren e
+    groupNode = _groupOfSymbol $ xmlUnparseWithDrawAttr e
+    isNotNone SvgNone = False
+    isNotNone _ = True
+
+unparse e@(nodeName -> "g") = do
+  svgChildren <- mapM unparse $ elChildren e
+  let realChildren = filter isNotNone svgChildren
+  pure . Group $ xmlUnparseWithDrawAttr e & svgGroupChildren .~ realChildren
+  where
     isNotNone SvgNone = False
     isNotNone _ = True
 
@@ -338,20 +369,15 @@ unparse e@(nodeName -> "line") =
   pure . Line $ xmlUnparseWithDrawAttr e
 unparse e@(nodeName -> "path") =
   pure . Path $ xmlUnparseWithDrawAttr e
-unparse e@(nodeName -> "use") =
-  case attributeFinder "href" e of
-    Nothing -> return SvgNone
-    Just n -> do
-      let dropSharp ('#':rest) = rest
-          dropSharp a = a
-
-      svgElem <- gets . M.lookup $ dropSharp n
-      case svgElem of
-        Nothing -> pure SvgNone
-        Just (ElementLinearGradient _) -> pure SvgNone
-        Just (ElementRadialGradient _) -> pure SvgNone
-        Just (ElementGeometry g) ->
-          pure . Use n $ svgTreeModify (xmlUpdateWithDrawAttr e) g
+unparse e@(nodeName -> "use") = do
+  let useInfo = xmlUnparse e
+  svgElem <- gets . M.lookup $ _svgUseName useInfo
+  case svgElem of
+    Nothing -> pure SvgNone
+    Just (ElementLinearGradient _) -> pure SvgNone
+    Just (ElementRadialGradient _) -> pure SvgNone
+    Just (ElementGeometry g) ->
+      pure . Use useInfo $ xmlUpdateDrawAttr e g
 
 unparse _ = pure SvgNone
 

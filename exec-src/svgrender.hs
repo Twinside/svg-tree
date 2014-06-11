@@ -1,7 +1,7 @@
 import Control.Applicative( (<$>) )
 import Control.Monad( forM_ )
 import Graphics.Svg
-import Data.List( isSuffixOf )
+import Data.List( isSuffixOf, sort )
 import System.Environment( getArgs )
 import System.Directory( createDirectoryIfMissing, getDirectoryContents )
 import System.FilePath( dropExtension, (</>), (<.>), splitFileName )
@@ -54,7 +54,7 @@ toHtmlDocument html =
 analyzeFolder :: FilePath -> IO ()
 analyzeFolder folder = do
   createDirectoryIfMissing True testOutputFolder
-  fileList <- filter (".svg" `isSuffixOf`) <$> getDirectoryContents folder
+  fileList <- sort . filter (".svg" `isSuffixOf`) <$> getDirectoryContents folder
   let all_table = table ["name", "W3C Svg", "W3C ref PNG", "mine"] 
                 . map generateFileInfo $ map (folder </>) fileList
       doc = toHtmlDocument all_table
