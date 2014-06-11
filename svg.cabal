@@ -26,6 +26,7 @@ library
 
   build-depends: base >= 4.6,
                  attoparsec,
+                 scientific >= 0.3,
                  JuicyPixels >= 3.1.4.1,
                  containers >= 0.5,
                  xml        >= 1.3,

@@ -179,6 +179,7 @@ data SvgDrawAttributes = SvgDrawAttributes
     , _fontSize         :: !(Maybe Float)
     , _transform        :: (Maybe [SvgTransformation])
     , _fillRule         :: !(Maybe SvgFillRule)
+    , _attrClass        :: Maybe String
     }
     deriving (Eq, Show)
 
@@ -508,6 +509,7 @@ instance Monoid SvgDrawAttributes where
         , _fontSize         = Nothing
         , _transform        = Nothing
         , _fillRule         = Nothing
+        , _attrClass        = Nothing
         }
 
     mappend a b = SvgDrawAttributes
@@ -522,5 +524,6 @@ instance Monoid SvgDrawAttributes where
         , _fontSize = (mayRight `on` _fontSize) a b
         , _transform = (mayMerge `on` _transform) a b
         , _fillRule = (mayRight `on` _fillRule) a b
+        , _attrClass = (mayRight `on` _attrClass) a b
         }
 

@@ -60,6 +60,8 @@ analyzeFolder folder = do
       doc = toHtmlDocument all_table
       (_, folderBase) = splitFileName folder
 
+  print fileList
+
   writeFile (folder </> ".." </> folderBase <.> "html") doc
   forM_ fileList $ \p -> do
     let realFilename = folder </> p

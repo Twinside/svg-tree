@@ -158,6 +158,7 @@ instance SvgXMLUpdatable SvgDrawAttributes where
     ,("stroke-opacity", numSetter strokeOpacity)
     ,("font-size", numMaySetter fontSize)
     ,("fill-rule", \e s -> e & fillRule .~ parseFillRule s)
+    ,("class", \e s -> e & attrClass .~ Just s)
     ]
 
 instance SvgXMLUpdatable SvgRectangle where

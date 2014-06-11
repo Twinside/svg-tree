@@ -16,6 +16,8 @@ import Data.Attoparsec.Text
     , char
     , digit
     )
+import qualified Data.Attoparsec.Text as AT
+
 import Data.Attoparsec.Combinator
     ( option
     , sepBy
@@ -24,6 +26,8 @@ import Data.Attoparsec.Combinator
     )
 
 import Graphics.Svg.Types
+import Data.Text( Text )
+import qualified Data.Text as T
 {-import Graphics.Rasterific.Linear( V2( V2 ) )-}
 {-import Graphics.Rasterific.Transformations-}
 
@@ -41,49 +45,21 @@ commaWsp = skipSpace *>
                      <* skipSpace
 
 
-{-
-stylesheet  : [ CDO | CDC | S | statement ]*;
-statement   : ruleset | at-rule;
-at-rule     : ATKEYWORD S* any* [ block | ';' S* ];
-block       : '{' S* [ any | block | ATKEYWORD S* | ';' S* ]* '}' S*;
-ruleset     : selector? '{' S* declaration? [ ';' S* declaration? ]* '}' S*;
-selector    : any+;
-declaration : property S* ':' S* value;
-property    : IDENT;
-value       : [ any | block | ATKEYWORD S* ]+;
-any         : [ IDENT | NUMBER | PERCENTAGE | DIMENSION | STRING
-              | DELIM | URI | HASH | UNICODE-RANGE | INCLUDES
-              | DASHMATCH | ':' | FUNCTION S* [any|unused]* ')'
-              | '(' S* [any|unused]* ')' | '[' S* [any|unused]* ']'
-              ] S*;
-unused      : block | ATKEYWORD S* | ';' S* | CDO S* | CDC S*;
--- -}
+ident :: Parser Text
+ident =
+  (\f c -> f . T.cons c . T.pack)
+        <$> trailingSub
+        <*> nmstart <*> nmchar
+  where
+    trailingSub = option id $ (T.cons '-') <$ char '-'
+    underscore = char '_'
+    nmstart = letter <|> underscore
+    nmchar = many (letter <|> digit <|> underscore <|> char '-')
+
+str :: Parser Text
+str = char '"' *> AT.takeWhile (/= '"') <* char '"' <* skipSpace
 
 {-
-ident 	[-]?{nmstart}{nmchar}*
-name 	{nmchar}+
-nmstart 	[_a-z]|{nonascii}|{escape}
-nonascii	[^\0-\237]
-unicode 	\\[0-9a-f]{1,6}(\r\n|[ \n\r\t\f])?
-escape 	{unicode}|\\[^\n\r\f0-9a-f]
-nmchar 	[_a-z0-9-]|{nonascii}|{escape}
-num 	[0-9]+|[0-9]*\.[0-9]+
-
-IDENT 	{ident}
-ATKEYWORD 	@{ident}
-STRING 	{string}
-BAD_STRING 	{badstring}
-BAD_URI 	{baduri}
-BAD_COMMENT 	{badcomment}
-HASH 	#{name}
-NUMBER 	{num}
-PERCENTAGE 	{num}%
-DIMENSION 	{num}{ident}
-URI 	url\({w}{string}{w}\)
-|url\({w}([!#$%&*-\[\]-~]|{nonascii}|{escape})*{w}\)
-UNICODE-RANGE 	u\+[0-9a-f?]{1,6}(-[0-9a-f]{1,6})?
-CDO 	<!--
-CDC 	-->
 : 	:
 ; 	;
 { 	\{
@@ -97,34 +73,128 @@ COMMENT 	\/\*[^*]*\*+([^/*][^*]*\*+)*\/
 FUNCTION 	{ident}\(
 INCLUDES 	~=
 DASHMATCH 	|
+-}
+
+{-  
+stylesheet
+  : [ CHARSET_SYM STRING ';' ]?
+    [S|CDO|CDC]* [ import [ CDO S* | CDC S* ]* ]*
+    [ [ ruleset | media | page ] [ CDO S* | CDC S* ]* ]*
+  ;
+-- -}
+{-
+operator
+  : '/' S* | ',' S*
+  ;
 -- -}
 
-cssStatement :: Parser CssRule
-cssStatement = ruleSet <|> atRule
+data CssSelector
+  = Nearby          -- ^ '+'
+  | DirectChildren  -- ^ '>'
+  | AnyElem         -- ^ '*'
+  | AllOf [CssSelector]
+  | OfClass Text    -- ^ .IDENT
+  | OfName  Text    -- ^ IDENT
+  | OfId    Text    -- ^ #IDENT
+  | OfPseudoClass Text   -- ^ :IDENT (ignore function syntax)
+  | WithAttrib Text Text
+  deriving (Eq, Show)
 
-ident :: Parser String
-ident = do
-  firstLetter <- letter <|> char '_' <|> char '-'
-  (firstLetter:) <$>
-      many (letter <|> digit <|> char '_' <|> char '-')
+-- | combinator: '+' S* | '>' S*
+combinator :: Parser CssSelector
+combinator = parse <* skipSpace where
+  parse = Nearby <$ char '+'
+       <|> DirectChildren <$ char '>'
 
-atKeyword :: Parser String
+{-
+unary_operator
+  : '-' | '+'
+  ;
+-- -}
+property :: Parser Text
+property = ident <* skipSpace
+{-
+ruleset
+  : selector [ ',' S* selector ]*
+    '{' S* declaration? [ ';' S* declaration? ]* '}' S*
+  ;
+-- -}
+{-
+selector
+  : simple_selector [ combinator selector | S+ [ combinator? selector ]? ]?
+  ;
+-- -}
+
+selector :: Parser [CssSelector]
+selector = (:)
+        <$> (AllOf <$> simpleSelector)
+        <*> ((:) <$> combinator <*> selector
+            <|> next
+            <|> return [])
+  where
+    combOpt :: Parser ([CssSelector] -> [CssSelector])
+
+    combOpt = skipSpace *> (option id $ (:) <$> combinator)
+    next :: Parser [CssSelector]
+    next = id <$> combOpt <*> selector
+
+simpleSelector :: Parser [CssSelector]
+simpleSelector = (:) <$> elementName <*> many whole
+              <|> many1 whole
+ where
+  whole = hash <|> classParser <|> attrib <|> pseudo
+  pseudo = char ':' *> (OfPseudoClass <$> ident)
+  hash = char '#' *> (OfId <$> ident)
+  classParser = char '.' *> (OfClass <$> ident)
+  elementName = (OfName <$> ident)
+             <|> AnyElem <$ char '*'
+  bracket p =
+      char '[' *> skipSpace *> p
+              <* skipSpace <* char ']' <* skipSpace
+  attrib = bracket $
+    WithAttrib <$> ident <*> (char '=' *> skipSpace *> (ident <|> str))
+
+{-
+declaration
+  : property ':' S* expr prio?
+  ;
+-- -}
+{-
+prio
+  : IMPORTANT_SYM S*
+  ;
+-- -}
+{-
+expr
+  : term [ operator? term ]*
+  ;
+-- -}
+{-
+term
+  : unary_operator?
+    [ NUMBER S* | PERCENTAGE S* | LENGTH S* | EMS S* | EXS S* | ANGLE S* |
+      TIME S* | FREQ S* ]
+  | STRING S* | IDENT S* | URI S* | hexcolor | function
+  ;
+-- -}
+{-
+function
+  : FUNCTION S* expr ')' S*
+  ;
+-- -}
+
+atKeyword :: Parser Text
 atKeyword = char '@' *> ident <* skipSpace
 
 data CssRule
     = AtQuery String [CssRule]
     deriving (Eq, Show)
 
-atRule :: Parser CssRule
-atRule = AtQuery <$> atKeyword <*> many cssStatement
-
 data CssElement
-    = CssIdent String
+    = CssIdent Text
     | CssNumber SvgNumber
-    | CssFunction String [CssElement]
+    | CssFunction Text [CssElement]
     deriving (Eq, Show)
-
-type CssSelector = [CssElement]
 
 unitParser :: Parser (Float -> Float)
 unitParser =
@@ -160,10 +230,4 @@ anyElem = function
     function = CssFunction
        <$> ident <* char '('
        <*> (anyElem `sepBy` comma) <* char ')' <* skipSpace
-
-selector :: Parser CssSelector
-selector = many1 anyElem
-
-ruleSet :: Parser CssRule
-ruleSet = undefined
 

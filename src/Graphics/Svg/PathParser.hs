@@ -9,10 +9,10 @@ import Control.Applicative( (<$>), (<$)
                           , (<*>), (<*), (*>)
                           , (<|>)
                           )
+import Data.Scientific( toRealFloat )
 import Data.Attoparsec.Text
-    ( Number( .. )
-    , Parser
-    , number
+    ( Parser
+    , scientific
     , string
     , skipSpace
     , char
@@ -27,10 +27,8 @@ import qualified Data.Text as T
 
 num :: Parser Float
 num = realToFrac <$> (skipSpace *> plusMinus <* skipSpace)
-  where toDouble (I i) = fromIntegral i
-        toDouble (D d) = d
-
-        doubleNumber = toDouble <$> number
+  where doubleNumber :: Parser Float
+        doubleNumber = toRealFloat <$> scientific
 
         plusMinus = negate <$ string "-" <*> doubleNumber
                  <|> string "+" *> doubleNumber
