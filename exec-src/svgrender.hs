@@ -1,11 +1,18 @@
-import Control.Applicative( (<$>) )
+import Control.Applicative( (<$>), many, (<*) )
 import Control.Monad( forM_ )
 import Graphics.Svg
 import Data.List( isSuffixOf, sort )
 import System.Environment( getArgs )
 import System.Directory( createDirectoryIfMissing, getDirectoryContents )
+import Data.Attoparsec.Text( IResult( .. )
+                           , parse
+                           , parseOnly
+                           , char
+                           , endOfInput )
 import System.FilePath( dropExtension, (</>), (<.>), splitFileName )
 import Codec.Picture( writePng )
+import Graphics.Svg.CssParser
+import qualified Data.Text as T
 {-import Debug.Trace-}
 import Text.Printf
 
@@ -80,10 +87,46 @@ testSuite = do
     analyzeFolder "w3csvg"
     analyzeFolder "test"
 
+baseTest :: String
+baseTest = 
+  "      /* rule 1 */ #MyUse { fill: blue }" ++
+  "      /* rule 2 */ #MyPath { stroke: red }" ++
+  "      /* rule 3 */ use { fill-opacity: .5 }" ++
+  "      /* rule 4 */ path { stroke-opacity: .5 }" ++
+  "      /* rule 5 */ .MyUseClass { stroke-linecap: round }" ++
+  "      /* rule 6 */ .MyPathClass { stroke-linejoin: bevel }" ++
+  "      /* rule 7 */ use > path { shape-rendering: optimizeQuality }" ++
+  "      /* rule 8 */ g > path { visibility: hidden }" ++
+  "/* Meuh rule */ g.cata#pon .flou#pa #po {}" ++
+  "g use, use g { cataran: rgb(12, 13, 15); grameu: 12; prout: #333 }"
+
+cssParseTest :: String -> IO ()
+cssParseTest css = do
+  case parseOnly (many ruleSet) (T.pack css) of
+    Left err -> putStrLn $ "Fail to parse " ++ err
+    Right r -> mapM_ print r
+  where
+    test parser txt name =
+        case parse (parser) (T.pack txt) of
+            Fail r contexts msg -> do
+                putStrLn $ "Error: " ++ show contexts ++ " " ++ msg
+                putStrLn $ "  >> |" ++ T.unpack r
+            Done after r -> do
+                putStrLn (name ++ " : ") >> print r 
+                putStrLn $ "  >> |" ++ T.unpack after
+            Partial _ -> putStrLn $ name ++ " UNFINISHED"
+
+    testOnly parser txt name =
+        case parseOnly (parser) (T.pack txt) of
+            Left msg -> putStrLn $ "Error: " ++ msg
+            Right r -> putStrLn (name ++ " : ") >> print r
+
+
 main :: IO ()
 main = do
     args <- getArgs
     case args of
       "test":_ -> testSuite
+      "csstest":_ -> cssParseTest baseTest
       _ -> loadRender args
 

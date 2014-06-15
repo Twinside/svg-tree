@@ -21,7 +21,9 @@ import Codec.Picture( PixelRGBA8( .. ) )
 import Graphics.Svg.Types
 import Graphics.Svg.PathParser
 import Graphics.Svg.ColorParser
-import Graphics.Svg.CssParser( complexNumber, num, unitNumber )
+import Graphics.Svg.CssParser( complexNumber
+                             , num
+                             , unitNumber )
 
 {-import Debug.Trace-}
 

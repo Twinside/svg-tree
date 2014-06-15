@@ -7,9 +7,7 @@ import Control.Applicative( (<$>), (<$)
                           , (<|>)
                           )
 import Data.Attoparsec.Text
-    ( Number( .. )
-    , Parser
-    , number
+    ( Parser
     , string
     , skipSpace
     , satisfy
@@ -20,8 +18,10 @@ import Data.Attoparsec.Text
     , digit
     , letter
     , many1
+    , scientific
     )
 
+import Data.Scientific( toRealFloat )
 import Codec.Picture( PixelRGBA8( .. ) )
 import Data.Word( Word8 )
 import Graphics.Svg.NamedColors
@@ -32,17 +32,15 @@ commaWsp :: Parser ()
 commaWsp = skipSpace *> option () (string "," *> return ())
                      <* skipSpace
 
-num :: Parser Double
-num = skipSpace *> plusMinus <* skipSpace
-  where toDouble (I i) = fromIntegral i
-        toDouble (D d) = d
 
-        doubleNumber = toDouble <$> number
+num :: Parser Double
+num = realToFrac <$> (skipSpace *> plusMinus <* skipSpace)
+  where doubleNumber :: Parser Float
+        doubleNumber = toRealFloat <$> scientific
 
         plusMinus = negate <$ string "-" <*> doubleNumber
                  <|> string "+" *> doubleNumber
                  <|> doubleNumber
-
 
 colorParser :: Parser PixelRGBA8
 colorParser = rgbColor

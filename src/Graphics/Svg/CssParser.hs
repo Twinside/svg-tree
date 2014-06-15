@@ -1,5 +1,14 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Graphics.Svg.CssParser where
+{-# LANGUAGE PatternGuards #-}
+module Graphics.Svg.CssParser
+    ( CssElement( .. )
+    , complexNumber
+    , declaration
+    , unitNumber
+    , ruleSet
+    , num
+    )
+    where
 
 import Control.Applicative( (<$>), (<$)
                           , (<*>), (<*), (*>)
@@ -9,12 +18,18 @@ import Control.Applicative( (<$>), (<$)
                           )
 import Data.Attoparsec.Text
     ( Parser
-    , scientific
+    , double
     , string
     , skipSpace
     , letter
     , char
     , digit
+    , skip
+    , sepBy1
+    , (<?>)
+    , skipMany
+    , satisfy
+    , notChar
     )
 import qualified Data.Attoparsec.Text as AT
 
@@ -25,24 +40,31 @@ import Data.Attoparsec.Combinator
     , many1
     )
 
+import Codec.Picture( PixelRGBA8( .. ) )
 import Graphics.Svg.Types
 import Data.Text( Text )
+import Graphics.Svg.NamedColors( svgNamedColors )
+import Graphics.Svg.ColorParser( colorParser )
+import Graphics.Svg.CssTypes
 import qualified Data.Text as T
+import qualified Data.Map as M
 {-import Graphics.Rasterific.Linear( V2( V2 ) )-}
 {-import Graphics.Rasterific.Transformations-}
 
 num :: Parser Float
 num = realToFrac <$> (skipSpace *> plusMinus <* skipSpace)
-  where doubleNumber = toRational <$> scientific
+  where doubleNumber = char '.' *> (scale <$> double)
+                    <|> double
+
+        scalingCoeff n = 10 ^ digitCount
+          where digitCount :: Int
+                digitCount = ceiling . logBase 10 $ abs n
+
+        scale n = n / scalingCoeff n
 
         plusMinus = negate <$ string "-" <*> doubleNumber
                  <|> string "+" *> doubleNumber
                  <|> doubleNumber
-
-commaWsp :: Parser ()
-commaWsp = skipSpace *> 
-    option () (string "," *> return ())
-                     <* skipSpace
 
 
 ident :: Parser Text
@@ -58,6 +80,17 @@ ident =
 
 str :: Parser Text
 str = char '"' *> AT.takeWhile (/= '"') <* char '"' <* skipSpace
+   <?> "str"
+
+between :: Char -> Char -> Parser a -> Parser a
+between o e p =
+  (skipSpace *>
+      char o *> skipSpace *> p
+           <* skipSpace <* char e <* skipSpace)
+           <?> ("between " ++ [o, e])
+
+bracket :: Parser a -> Parser a
+bracket = between '[' ']'
 
 {-
 : 	:
@@ -82,119 +115,95 @@ stylesheet
     [ [ ruleset | media | page ] [ CDO S* | CDC S* ]* ]*
   ;
 -- -}
-{-
-operator
-  : '/' S* | ',' S*
-  ;
--- -}
 
-data CssSelector
-  = Nearby          -- ^ '+'
-  | DirectChildren  -- ^ '>'
-  | AnyElem         -- ^ '*'
-  | AllOf [CssSelector]
-  | OfClass Text    -- ^ .IDENT
-  | OfName  Text    -- ^ IDENT
-  | OfId    Text    -- ^ #IDENT
-  | OfPseudoClass Text   -- ^ :IDENT (ignore function syntax)
-  | WithAttrib Text Text
-  deriving (Eq, Show)
+comment :: Parser ()
+comment = string "/*" *> toStar *> skipSpace
+  where
+    toStar = skipMany (notChar '*') *> char '*' *> testEnd
+    testEnd = (() <$ char '/') <|> toStar
+
+cleanSpace :: Parser ()
+cleanSpace = skipSpace <* many comment
 
 -- | combinator: '+' S* | '>' S*
 combinator :: Parser CssSelector
-combinator = parse <* skipSpace where
+combinator = parse <* cleanSpace where
   parse = Nearby <$ char '+'
        <|> DirectChildren <$ char '>'
+       <?> "combinator"
 
-{-
-unary_operator
-  : '-' | '+'
-  ;
--- -}
-property :: Parser Text
-property = ident <* skipSpace
-{-
-ruleset
-  : selector [ ',' S* selector ]*
-    '{' S* declaration? [ ';' S* declaration? ]* '}' S*
-  ;
--- -}
-{-
-selector
-  : simple_selector [ combinator selector | S+ [ combinator? selector ]? ]?
-  ;
--- -}
+-- unary_operator : '-' | '+' ;
+
+ruleSet :: Parser CssRule
+ruleSet = cleanSpace *> rule where
+  commaWsp = skipSpace *> char ',' <* skipSpace
+  semiWsp = skipSpace *> char ';' <* skipSpace
+  rule = CssRule
+      <$> selector `sepBy1` commaWsp
+      <*> between '{' '}'
+            (declaration `sepBy` semiWsp )
+      <?> "cssrule"
 
 selector :: Parser [CssSelector]
 selector = (:)
-        <$> (AllOf <$> simpleSelector)
-        <*> ((:) <$> combinator <*> selector
-            <|> next
-            <|> return [])
+        <$> (AllOf <$> simpleSelector <* skipSpace <?> "firstpart:(")
+        <*> ((next <|> return []) <?> "secondpart")
+        <?> "selector"
   where
     combOpt :: Parser ([CssSelector] -> [CssSelector])
 
-    combOpt = skipSpace *> (option id $ (:) <$> combinator)
+    combOpt = cleanSpace *> (option id $ (:) <$> combinator)
     next :: Parser [CssSelector]
     next = id <$> combOpt <*> selector
 
 simpleSelector :: Parser [CssSelector]
 simpleSelector = (:) <$> elementName <*> many whole
-              <|> many1 whole
+              <|> (many1 whole <?> "inmany")
+              <?> "simple selector"
  where
-  whole = hash <|> classParser <|> attrib <|> pseudo
+  whole = pseudo <|> hash <|> classParser <|> attrib
+       <?> "whole"
   pseudo = char ':' *> (OfPseudoClass <$> ident)
+        <?> "pseudo"
   hash = char '#' *> (OfId <$> ident)
+      <?> "hash"
   classParser = char '.' *> (OfClass <$> ident)
-  elementName = (OfName <$> ident)
-             <|> AnyElem <$ char '*'
-  bracket p =
-      char '[' *> skipSpace *> p
-              <* skipSpace <* char ']' <* skipSpace
-  attrib = bracket $
-    WithAttrib <$> ident <*> (char '=' *> skipSpace *> (ident <|> str))
+              <?> "classParser"
 
-{-
-declaration
-  : property ':' S* expr prio?
-  ;
--- -}
-{-
-prio
-  : IMPORTANT_SYM S*
-  ;
--- -}
-{-
-expr
-  : term [ operator? term ]*
-  ;
--- -}
-{-
-term
-  : unary_operator?
-    [ NUMBER S* | PERCENTAGE S* | LENGTH S* | EMS S* | EXS S* | ANGLE S* |
-      TIME S* | FREQ S* ]
-  | STRING S* | IDENT S* | URI S* | hexcolor | function
-  ;
--- -}
-{-
-function
-  : FUNCTION S* expr ')' S*
-  ;
--- -}
+  elementName = el <* skipSpace <?> "elementName"
+    where el = (OfName <$> ident)
+            <|> AnyElem <$ char '*'
 
-atKeyword :: Parser Text
-atKeyword = char '@' *> ident <* skipSpace
+  attrib = (bracket $
+    WithAttrib <$> ident <*> (char '=' *> skipSpace *> (ident <|> str)))
+           <?> "attrib"
 
-data CssRule
-    = AtQuery String [CssRule]
-    deriving (Eq, Show)
+declaration :: Parser CssDeclaration
+declaration =
+  CssDeclaration <$> property
+                 <*> (char ':' 
+                      *> cleanSpace
+                      *> many1 expr
+                      <* prio
+                      )
+                 <?> "declaration"
+  where
+    property = ident <* cleanSpace
+    prio = option "" $ string "!important"
 
-data CssElement
-    = CssIdent Text
-    | CssNumber SvgNumber
-    | CssFunction Text [CssElement]
-    deriving (Eq, Show)
+operator :: Parser CssElement
+operator = op <* skipSpace
+  where
+    op = CssOpSlash <$ char '/'
+      <|> CssOpComa <$ char ',' 
+      <?> "operator"
+
+expr :: Parser [CssElement]
+expr = ((:) <$> term <*> (concat <$> many termOp))
+    <?> "expr"
+  where
+    op = option (:[]) $ (\a b -> [a, b]) <$> operator
+    termOp = ($) <$> op <*> term
 
 unitParser :: Parser (Float -> Float)
 unitParser =
@@ -221,13 +230,29 @@ complexNumber = do
         <|> (apply <$> unitParser)
         <|> pure (SvgNum n)
 
-anyElem :: Parser CssElement
-anyElem = function
-   <|> (CssIdent <$> ident)
-   <|> (CssNumber <$> complexNumber)
+term :: Parser CssElement
+term = checkRgb <$> function
+    <|> (CssNumber <$> complexNumber)
+    <|> (CssString <$> str)
+    <|> (checkNamedColor <$> ident)
+    <|> (CssColor <$> colorParser)
   where
     comma = char ',' <* skipSpace
+    checkNamedColor n 
+        | Just c <- M.lookup n svgNamedColors = CssColor c
+        | otherwise = CssIdent n
+
+    checkRgb (CssFunction "rgb"
+                [CssNumber r, CssNumber g, CssNumber b]) =
+        CssColor $ PixelRGBA8 (to r) (to g) (to b) 255
+       where clamp = max 0 . min 255
+             to (SvgNum n) = floor $ clamp n 
+             to (SvgPercent p) = floor . clamp $ p * 255
+             to (SvgEm c) = floor $ clamp c
+
+    checkRgb a = a
+
     function = CssFunction
        <$> ident <* char '('
-       <*> (anyElem `sepBy` comma) <* char ')' <* skipSpace
+       <*> (term `sepBy` comma) <* char ')' <* skipSpace
 

@@ -43,8 +43,10 @@ Executable svgrender
   Build-Depends: base >= 4.6
                , linear
                , rasterific-svg
-               , Rasterific >= 0.3
-               , JuicyPixels >= 3.1.4.1
+               , Rasterific
+               , JuicyPixels
                , directory
                , filepath
+               , attoparsec
+               , text
 
