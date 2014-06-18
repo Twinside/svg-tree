@@ -24,11 +24,11 @@ import Data.Attoparsec.Text
     , letter
     , char
     , digit
-    , skip
+    {-, skip-}
     , sepBy1
     , (<?>)
     , skipMany
-    , satisfy
+    {-, satisfy-}
     , notChar
     )
 import qualified Data.Attoparsec.Text as AT
@@ -156,7 +156,7 @@ selector = (:)
     next :: Parser [CssSelector]
     next = id <$> combOpt <*> selector
 
-simpleSelector :: Parser [CssSelector]
+simpleSelector :: Parser [CssDescriptor]
 simpleSelector = (:) <$> elementName <*> many whole
               <|> (many1 whole <?> "inmany")
               <?> "simple selector"

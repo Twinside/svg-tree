@@ -1,14 +1,10 @@
-import Control.Applicative( (<$>), many, (<*) )
+import Control.Applicative( (<$>), many )
 import Control.Monad( forM_ )
 import Graphics.Svg
 import Data.List( isSuffixOf, sort )
 import System.Environment( getArgs )
 import System.Directory( createDirectoryIfMissing, getDirectoryContents )
-import Data.Attoparsec.Text( IResult( .. )
-                           , parse
-                           , parseOnly
-                           , char
-                           , endOfInput )
+import Data.Attoparsec.Text( parseOnly )
 import System.FilePath( dropExtension, (</>), (<.>), splitFileName )
 import Codec.Picture( writePng )
 import Graphics.Svg.CssParser
@@ -105,22 +101,6 @@ cssParseTest css = do
   case parseOnly (many ruleSet) (T.pack css) of
     Left err -> putStrLn $ "Fail to parse " ++ err
     Right r -> mapM_ print r
-  where
-    test parser txt name =
-        case parse (parser) (T.pack txt) of
-            Fail r contexts msg -> do
-                putStrLn $ "Error: " ++ show contexts ++ " " ++ msg
-                putStrLn $ "  >> |" ++ T.unpack r
-            Done after r -> do
-                putStrLn (name ++ " : ") >> print r 
-                putStrLn $ "  >> |" ++ T.unpack after
-            Partial _ -> putStrLn $ name ++ " UNFINISHED"
-
-    testOnly parser txt name =
-        case parseOnly (parser) (T.pack txt) of
-            Left msg -> putStrLn $ "Error: " ++ msg
-            Right r -> putStrLn (name ++ " : ") >> print r
-
 
 main :: IO ()
 main = do
