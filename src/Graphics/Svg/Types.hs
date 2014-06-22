@@ -184,6 +184,7 @@ data SvgDrawAttributes = SvgDrawAttributes
     , _transform        :: (Maybe [SvgTransformation])
     , _fillRule         :: !(Maybe SvgFillRule)
     , _attrClass        :: Maybe String
+    , _attrId           :: Maybe String
     }
     deriving (Eq, Show)
 
@@ -527,6 +528,7 @@ instance Monoid SvgDrawAttributes where
         , _transform        = Nothing
         , _fillRule         = Nothing
         , _attrClass        = Nothing
+        , _attrId           = Nothing
         }
 
     mappend a b = SvgDrawAttributes
@@ -542,5 +544,6 @@ instance Monoid SvgDrawAttributes where
         , _transform = (mayMerge `on` _transform) a b
         , _fillRule = (mayRight `on` _fillRule) a b
         , _attrClass = (mayRight `on` _attrClass) a b
+        , _attrId = _attrId b
         }
 

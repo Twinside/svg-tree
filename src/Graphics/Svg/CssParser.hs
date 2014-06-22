@@ -6,6 +6,7 @@ module Graphics.Svg.CssParser
     , declaration
     , unitNumber
     , ruleSet
+    , styleString
     , num
     )
     where
@@ -137,12 +138,14 @@ combinator = parse <* cleanSpace where
 ruleSet :: Parser CssRule
 ruleSet = cleanSpace *> rule where
   commaWsp = skipSpace *> char ',' <* skipSpace
-  semiWsp = skipSpace *> char ';' <* skipSpace
   rule = CssRule
       <$> selector `sepBy1` commaWsp
-      <*> between '{' '}'
-            (declaration `sepBy` semiWsp )
+      <*> between '{' '}' styleString
       <?> "cssrule"
+
+styleString :: Parser [CssDeclaration]
+styleString = declaration `sepBy` semiWsp 
+  where semiWsp = skipSpace *> char ';' <* skipSpace
 
 selector :: Parser [CssSelector]
 selector = (:)

@@ -21,8 +21,11 @@ import Codec.Picture( PixelRGBA8( .. ) )
 import Graphics.Svg.Types
 import Graphics.Svg.PathParser
 import Graphics.Svg.ColorParser
+import Graphics.Svg.CssTypes( CssDeclaration( .. )
+                            , CssElement( .. ) )
 import Graphics.Svg.CssParser( complexNumber
                              , num
+                             , styleString
                              , unitNumber )
 
 {-import Debug.Trace-}
@@ -146,24 +149,101 @@ class SvgXMLUpdatable a where
   svgAttributes :: [(String, Updater a)]
   defaultSvg :: a
 
+type CssUpdater =
+    SvgDrawAttributes -> [[CssElement]] -> SvgDrawAttributes
+
+cssUniqueNumber :: ASetter SvgDrawAttributes SvgDrawAttributes
+                   a (Maybe SvgNumber)
+                -> CssUpdater
+cssUniqueNumber setter attr ((CssNumber n:_):_) = attr & setter .~ Just n
+cssUniqueNumber _ attr _ = attr
+
+cssUniqueFloat :: ASetter SvgDrawAttributes SvgDrawAttributes a Float
+               -> CssUpdater
+cssUniqueFloat setter attr ((CssNumber (SvgNum n):_):_) =
+    attr & setter .~ n
+cssUniqueFloat _ attr _ = attr
+
+cssUniqueMayFloat :: ASetter SvgDrawAttributes SvgDrawAttributes a (Maybe Float)
+               -> CssUpdater
+cssUniqueMayFloat setter attr ((CssNumber (SvgNum n):_):_) =
+    attr & setter .~ Just n
+cssUniqueMayFloat _ attr _ = attr
+
+cssIdentParser :: ASetter SvgDrawAttributes SvgDrawAttributes a b
+               -> Parser b
+               -> CssUpdater
+cssIdentParser setter parser attr ((CssIdent i:_):_) =
+  case parseOnly parser i of
+    Left _ -> attr
+    Right v -> attr & setter .~ v
+cssIdentParser _ _ attr _ = attr
+
+cssIdentStringParser :: ASetter SvgDrawAttributes SvgDrawAttributes a b
+                     -> (String -> b) -> CssUpdater
+cssIdentStringParser setter f attr ((CssIdent i:_):_) =
+    attr & setter .~ f (T.unpack i)
+cssIdentStringParser _ _ attr _ = attr
+
+cssUniqueTexture :: ASetter SvgDrawAttributes SvgDrawAttributes
+                    a (Maybe SvgTexture)
+                 -> CssUpdater
+cssUniqueTexture setter attr ((CssColor c:_):_) =
+    attr & setter .~ Just (ColorRef c)
+cssUniqueTexture _ attr _ = attr
+
+cssMayStringSetter :: ASetter SvgDrawAttributes SvgDrawAttributes a (Maybe String)
+                   -> CssUpdater
+cssMayStringSetter setter attr ((CssIdent i:_):_) =
+    attr & setter .~ Just (T.unpack i)
+cssMayStringSetter setter attr ((CssString i:_):_) =
+    attr & setter .~ Just (T.unpack i)
+cssMayStringSetter _ attr _ = attr
+
+drawAttributesList :: [(String, Updater SvgDrawAttributes, CssUpdater)]
+drawAttributesList =
+    [("stroke-width", numericMaySetter strokeWidth, cssUniqueNumber strokeWidth)
+    ,("stroke", parserSetter strokeColor textureParser,
+        cssUniqueTexture strokeColor)
+    ,("stroke-linecap",
+        \e s -> e & strokeLineCap .~ parseSvgCap s,
+        cssIdentStringParser strokeLineCap parseSvgCap)
+    ,("stroke-linejoin", 
+        \e s -> e & strokeLineJoin .~ parseSvgLineJoin s,
+        cssIdentStringParser strokeLineJoin parseSvgLineJoin)
+    ,("stroke-miterlimit", numMaySetter strokeMiterLimit,
+        cssUniqueMayFloat strokeMiterLimit)
+    ,("fill", parserSetter fillColor textureParser,
+        cssUniqueTexture fillColor)
+     -- TODO: fix this incompletness
+    ,("transform", parserMaySetter transform (many transformParser), const)
+    ,("opacity", numSetter fillOpacity, cssUniqueFloat fillOpacity)
+    ,("stroke-opacity", numSetter strokeOpacity, cssUniqueFloat strokeOpacity)
+    ,("font-size", numMaySetter fontSize, cssUniqueMayFloat fontSize)
+    ,("fill-rule", \e s -> e & fillRule .~ parseFillRule s,
+        cssIdentStringParser fillRule parseFillRule)
+    ,("class", \e s -> e & attrClass .~ Just s, cssMayStringSetter attrClass)
+    ,("id", \e s -> e & attrId .~ Just s, cssMayStringSetter attrId)
+    ]
+
 instance SvgXMLUpdatable SvgDrawAttributes where
   defaultSvg = mempty
   svgAttributes =
-    [("stroke-width", numericMaySetter strokeWidth)
-    ,("stroke", parserSetter strokeColor textureParser)
-    ,("stroke-linecap",
-        \e s -> e & strokeLineCap .~ parseSvgCap s)
-    ,("stroke-linejoin", 
-        \e s -> e & strokeLineJoin .~ parseSvgLineJoin s)
-    ,("stroke-miterlimit", numMaySetter strokeMiterLimit)
-    ,("fill", parserSetter fillColor textureParser)
-    ,("transform", parserMaySetter transform (many transformParser))
-    ,("opacity", numSetter fillOpacity)
-    ,("stroke-opacity", numSetter strokeOpacity)
-    ,("font-size", numMaySetter fontSize)
-    ,("fill-rule", \e s -> e & fillRule .~ parseFillRule s)
-    ,("class", \e s -> e & attrClass .~ Just s)
-    ]
+    stylePrepend [(attrName, updater)
+                    | (attrName, updater, _) <- drawAttributesList]
+    where stylePrepend lst = ("style", styleUpdater) : lst
+
+styleUpdater :: SvgDrawAttributes -> String
+             -> SvgDrawAttributes 
+styleUpdater attrs style = case parse styleString style of
+    Nothing -> attrs
+    Just decls -> foldl' applyer attrs decls
+  where
+    cssUpdaters = [(T.pack n, u) | (n, _, u) <- drawAttributesList]
+    applyer value (CssDeclaration txt elems) =
+        case lookup txt cssUpdaters of
+          Nothing -> value
+          Just f -> f value elems
 
 instance SvgXMLUpdatable SvgRectangle where
   defaultSvg = defaultRectangle
