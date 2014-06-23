@@ -1,4 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Graphics.Svg.Types
     ( Coord
     , Origin( .. )
@@ -78,13 +79,16 @@ module Graphics.Svg.Types
     , WithSvgDrawAttributes( .. )
     , isPathArc
     , isPathWithArc
+    , nameOfTree
     ) where
 
 import Data.Function( on )
+import Data.List( inits )
 import qualified Data.Map as M
 import Data.Monoid( Monoid( .. ) )
 import Data.Foldable( Foldable )
 import qualified Data.Foldable as F
+import qualified Data.Text as T
 import Codec.Picture( PixelRGBA8( .. ) )
 import Graphics.Rasterific.Transformations
 import Graphics.Rasterific hiding (Path, Line)
@@ -383,6 +387,51 @@ data SvgTree
     | Line !SvgLine
     | Rectangle !SvgRectangle
     deriving (Eq, Show)
+
+appNode :: [[a]] -> a -> [[a]]
+appNode [] e = [[e]]
+appNode (curr:above) e = (e:curr) : above
+
+zipSvgTree :: ([[SvgTree]] -> SvgTree) -> SvgTree -> SvgTree
+zipSvgTree f = dig [] where
+  dig :: [[SvgTree]] -> SvgTree -> SvgTree
+  dig prev e@SvgNone = f $ appNode prev e
+  dig prev e@(Use u sub) = f . appNode prev . Use u $ dig c sub
+    where c = [] : appNode prev e
+  dig prev e@(Group g) =
+      f . appNode prev . Group $ zipGroup (appNode prev e) g
+  dig prev e@(Symbol g) =
+      f . appNode prev . Symbol $ zipGroup (appNode prev e) g
+  dig prev e@(Path _) = f $ appNode prev e
+  dig prev e@(Circle _) = f $ appNode prev e
+  dig prev e@(PolyLine _) = f $ appNode prev e
+  dig prev e@(Polygon _) = f $ appNode prev e
+  dig prev e@(Ellipse _) = f $ appNode prev e
+  dig prev e@(Line _) = f $ appNode prev e
+  dig prev e@(Rectangle _) = f $ appNode prev e
+
+  zipGroup prev g = g { _svgGroupChildren = updatedChildren }
+    where
+      groupChild = _svgGroupChildren g
+      updatedChildren = 
+        [dig (c:prev) child
+            | (child, c) <- zip groupChild $ inits groupChild]
+
+
+nameOfTree :: SvgTree -> T.Text
+nameOfTree v =
+  case v of
+   SvgNone     -> ""
+   Use _ _     -> "use"
+   Group _     -> "g"
+   Symbol _    -> "symbol"
+   Path _      -> "path"
+   Circle _    -> "circle"
+   PolyLine _  -> "polyline"
+   Polygon _   -> "polygon"
+   Ellipse _   -> "ellipse"
+   Line _      -> "line"
+   Rectangle _ -> "rectangle"
 
 drawAttrOfTree :: SvgTree -> SvgDrawAttributes
 drawAttrOfTree v = case v of

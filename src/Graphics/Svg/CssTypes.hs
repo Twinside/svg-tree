@@ -13,6 +13,8 @@ module Graphics.Svg.CssTypes
 
 import Codec.Picture( PixelRGBA8 )
 import Data.Text( Text )
+import Control.Lens( view )
+import qualified Data.Text as T
 import Graphics.Svg.Types
 
 data CssDescriptor
@@ -37,10 +39,16 @@ data CssRule = CssRule
     deriving (Eq, Show)
 
 class CssMatcheable a where
-  cssIdOf     :: a -> Text
-  cssClassOf  :: a -> Text
+  cssIdOf     :: a -> Maybe Text
+  cssClassOf  :: a -> Maybe Text
   cssNameOf   :: a -> Text
   cssAttribOf :: a -> Text -> Maybe Text
+
+instance CssMatcheable SvgTree where
+  cssAttribOf _ _ = Nothing
+  cssClassOf = fmap T.pack . view (drawAttr . attrClass)
+  cssIdOf = fmap T.pack . view (drawAttr . attrId)
+  cssNameOf = nameOfTree
 
 type CssContext a = [[a]]
 
@@ -48,9 +56,9 @@ isDescribedBy :: CssMatcheable a
               => a -> [CssDescriptor] -> Bool
 isDescribedBy e = all tryMatch
   where
-    tryMatch (OfClass t) = cssClassOf e == t
+    tryMatch (OfClass t) = cssClassOf e == Just t
+    tryMatch (OfId    i) = cssIdOf e == Just i
     tryMatch (OfName  n) = cssNameOf e == n
-    tryMatch (OfId    i) = cssIdOf e == i
     tryMatch (OfPseudoClass _) = False
     tryMatch (WithAttrib a v) = cssAttribOf e a == Just v
     tryMatch AnyElem = True
@@ -70,8 +78,8 @@ isMatching = go where
   go (_:upper) selector = go upper selector
 
 findMatchingDeclarations :: CssMatcheable a
-                         => CssContext a -> [CssRule] -> [CssDeclaration]
-findMatchingDeclarations context rules =
+                         => [CssRule] -> CssContext a -> [CssDeclaration]
+findMatchingDeclarations rules context =
     concat [cssDeclarations rule
                     | rule <- rules
                     , selector <- cssRuleSelector rule
