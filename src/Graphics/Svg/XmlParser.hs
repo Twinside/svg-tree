@@ -11,7 +11,7 @@ import Control.Lens hiding( transform )
 import Control.Monad.State.Strict( State, runState, modify, gets )
 import Data.Monoid( mempty )
 import Data.List( foldl' )
-import Text.XML.Light.Proc( findAttrBy, elChildren )
+import Text.XML.Light.Proc( findAttrBy, elChildren, strContent )
 import Text.XML.Light.Types( Element( .. )
                            , QName( .. ) )
 import qualified Data.Text as T
@@ -22,9 +22,13 @@ import Graphics.Svg.Types
 import Graphics.Svg.PathParser
 import Graphics.Svg.ColorParser
 import Graphics.Svg.CssTypes( CssDeclaration( .. )
-                            , CssElement( .. ) )
+                            , CssElement( .. )
+                            , CssRule
+                            , findMatchingDeclarations
+                            )
 import Graphics.Svg.CssParser( complexNumber
                              , num
+                             , ruleSet
                              , styleString
                              , unitNumber )
 
@@ -367,7 +371,13 @@ instance SvgXMLUpdatable SvgGradientStop where
         ,("stop-color", parserSetter gradientColor colorParser)]
             
 
-type SvgSymbols = M.Map String SvgElement
+data SvgSymbols = SvgSymbols
+    { svgSymbols :: !(M.Map String SvgElement)
+    , cssStyle   :: [CssRule]
+    }
+
+emptyState :: SvgSymbols
+emptyState = SvgSymbols mempty mempty
  
 parseGradientStops :: Element -> [SvgGradientStop]
 parseGradientStops = concatMap unStop . elChildren
@@ -375,12 +385,13 @@ parseGradientStops = concatMap unStop . elChildren
     unStop e@(nodeName -> "stop") = [xmlUnparse e]
     unStop _ = []
 
-withId :: Element -> (Element -> a)
-       -> State (M.Map String a) SvgTree
+withId :: Element -> (Element -> SvgElement)
+       -> State SvgSymbols SvgTree
 withId el f = case attributeFinder "id" el of
   Nothing -> return SvgNone
   Just elemId -> do
-      modify $ M.insert elemId (f el)
+      modify $ \s ->
+        s { svgSymbols = M.insert elemId (f el) $ svgSymbols s }
       return SvgNone
 
 unparseDefs :: Element -> State SvgSymbols SvgTree
@@ -417,6 +428,12 @@ svgTreeModify f v = case v of
 
 
 unparse :: Element -> State SvgSymbols SvgTree
+unparse e@(nodeName -> "style") = do
+  case parseOnly (many1 ruleSet) . T.pack $ strContent e of
+    Left _ -> return ()
+    Right rules ->
+      modify $ \s -> s { cssStyle = cssStyle s ++ rules }
+  return SvgNone
 unparse e@(nodeName -> "defs") = do
     mapM_ unparseDefs $ elChildren e
     return SvgNone
@@ -453,7 +470,7 @@ unparse e@(nodeName -> "path") =
   pure . Path $ xmlUnparseWithDrawAttr e
 unparse e@(nodeName -> "use") = do
   let useInfo = xmlUnparse e
-  svgElem <- gets . M.lookup $ _svgUseName useInfo
+  svgElem <- gets $ M.lookup (_svgUseName useInfo) . svgSymbols
   case svgElem of
     Nothing -> pure SvgNone
     Just (ElementLinearGradient _) -> pure SvgNone
@@ -463,18 +480,39 @@ unparse e@(nodeName -> "use") = do
 
 unparse _ = pure SvgNone
 
+cssDeclApplyer :: SvgDrawAttributes -> CssDeclaration
+             -> SvgDrawAttributes 
+cssDeclApplyer value (CssDeclaration txt elems) = 
+   case lookup txt cssUpdaters of
+     Nothing -> value
+     Just f -> f value elems
+  where
+    cssUpdaters = [(T.pack n, u) | (n, _, u) <- drawAttributesList]
+
+cssApply :: [CssRule] -> SvgTree -> SvgTree
+cssApply rules = zipSvgTree go where
+  go [] = SvgNone
+  go ([]:_) = SvgNone
+  go context@((t:_):_) = t & drawAttr .~ attr'
+   where
+     matchingDeclarations =
+         findMatchingDeclarations rules context
+     attr = view drawAttr t
+     attr' = foldl' cssDeclApplyer attr matchingDeclarations
+   
+
 unparseDocument :: Element -> Maybe SvgDocument
 unparseDocument e@(nodeName -> "svg") = Just $ SvgDocument 
     { _svgViewBox =
         attributeFinder "viewBox" e >>= parse viewBox
-    , _svgElements = svgElements
+    , _svgElements = cssApply (cssStyle named) <$> svgElements
     , _svgWidth = floor <$> lengthFind "width"
     , _svgHeight = floor <$> lengthFind "height"
-    , _svgDefinitions = named
+    , _svgDefinitions = svgSymbols named
     }
   where
     (svgElements, named) =
-        runState (mapM unparse $ elChildren e) mempty
+        runState (mapM unparse $ elChildren e) emptyState
     lengthFind n =
         attributeFinder n e >>= parse unitNumber
 unparseDocument _ = Nothing   

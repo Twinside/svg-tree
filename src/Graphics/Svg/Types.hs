@@ -80,6 +80,7 @@ module Graphics.Svg.Types
     , isPathArc
     , isPathWithArc
     , nameOfTree
+    , zipSvgTree
     ) where
 
 import Data.Function( on )
@@ -394,7 +395,6 @@ appNode (curr:above) e = (e:curr) : above
 
 zipSvgTree :: ([[SvgTree]] -> SvgTree) -> SvgTree -> SvgTree
 zipSvgTree f = dig [] where
-  dig :: [[SvgTree]] -> SvgTree -> SvgTree
   dig prev e@SvgNone = f $ appNode prev e
   dig prev e@(Use u sub) = f . appNode prev . Use u $ dig c sub
     where c = [] : appNode prev e
