@@ -186,10 +186,12 @@ data SvgDrawAttributes = SvgDrawAttributes
     , _fillColor        :: !(Maybe SvgTexture)
     , _fillOpacity      :: !Float
     , _fontSize         :: !(Maybe Float)
-    , _transform        :: (Maybe [SvgTransformation])
+    , _transform        :: !(Maybe [SvgTransformation])
     , _fillRule         :: !(Maybe SvgFillRule)
-    , _attrClass        :: Maybe String
-    , _attrId           :: Maybe String
+    , _attrClass        :: !(Maybe String)
+    , _attrId           :: !(Maybe String)
+    , _strokeOffset     :: !(Maybe SvgNumber)
+    , _strokeDashArray  :: !(Maybe [SvgNumber])
     }
     deriving (Eq, Show)
 
@@ -583,6 +585,8 @@ instance Monoid SvgDrawAttributes where
         , _fillRule         = Nothing
         , _attrClass        = Nothing
         , _attrId           = Nothing
+        , _strokeOffset     = Nothing
+        , _strokeDashArray  = Nothing
         }
 
     mappend a b = SvgDrawAttributes
@@ -599,5 +603,7 @@ instance Monoid SvgDrawAttributes where
         , _fillRule = (mayRight `on` _fillRule) a b
         , _attrClass = (mayRight `on` _attrClass) a b
         , _attrId = _attrId b
+        , _strokeOffset = (mayRight `on` _strokeOffset) a b
+        , _strokeDashArray = (mayRight `on` _strokeDashArray) a b
         }
 

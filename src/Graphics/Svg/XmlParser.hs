@@ -30,6 +30,7 @@ import Graphics.Svg.CssTypes( CssDeclaration( .. )
 import Graphics.Svg.CssParser( complexNumber
                              , num
                              , ruleSet
+                             , dashArray
                              , styleString
                              , unitNumber )
 
@@ -207,6 +208,15 @@ cssMayStringSetter setter attr ((CssString i:_):_) =
     attr & setter .~ Just (T.unpack i)
 cssMayStringSetter _ attr _ = attr
 
+
+cssDashArray :: ASetter SvgDrawAttributes SvgDrawAttributes a (Maybe [SvgNumber])
+             -> CssUpdater
+cssDashArray setter attr (lst:_) =
+  case [n | CssNumber n <- lst ] of
+    [] -> attr
+    v -> attr & setter .~ Just v
+cssDashArray _ attr _ = attr
+
 drawAttributesList :: [(String, Updater SvgDrawAttributes, CssUpdater)]
 drawAttributesList =
     [("stroke-width", numericMaySetter strokeWidth, cssUniqueNumber strokeWidth)
@@ -232,6 +242,10 @@ drawAttributesList =
         cssIdentStringParser fillRule parseFillRule)
     ,("class", \e s -> e & attrClass .~ Just s, cssMayStringSetter attrClass)
     ,("id", \e s -> e & attrId .~ Just s, cssMayStringSetter attrId)
+    ,("stroke-dashoffset",numericMaySetter strokeWidth,
+        cssUniqueNumber strokeWidth)
+    ,("stroke-dasharray", parserMaySetter strokeDashArray  dashArray,
+        cssDashArray strokeDashArray)
     ]
 
 instance SvgXMLUpdatable SvgDrawAttributes where

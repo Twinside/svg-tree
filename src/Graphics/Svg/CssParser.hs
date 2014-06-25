@@ -7,6 +7,7 @@ module Graphics.Svg.CssParser
     , unitNumber
     , ruleSet
     , styleString
+    , dashArray
     , num
     )
     where
@@ -135,9 +136,11 @@ combinator = parse <* cleanSpace where
 
 -- unary_operator : '-' | '+' ;
 
+commaWsp :: Parser Char
+commaWsp = skipSpace *> char ',' <* skipSpace
+
 ruleSet :: Parser CssRule
 ruleSet = cleanSpace *> rule where
-  commaWsp = skipSpace *> char ',' <* skipSpace
   rule = CssRule
       <$> selector `sepBy1` commaWsp
       <*> between '{' '}' styleString
@@ -223,6 +226,9 @@ unitNumber = do
   n <- num
   f <- unitParser
   return $ f n
+
+dashArray :: Parser [SvgNumber]
+dashArray = skipSpace *> (complexNumber `sepBy1` commaWsp)
 
 complexNumber :: Parser SvgNumber
 complexNumber = do

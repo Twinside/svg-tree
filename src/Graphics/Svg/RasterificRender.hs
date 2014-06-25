@@ -340,10 +340,17 @@ stroker :: RenderContext -> SvgDrawAttributes -> [Primitive]
 stroker ctxt info primitives =
   withInfo _strokeWidth info $ \swidth ->
     withInfo _strokeColor info $ \svgTexture ->
-      withSvgTexture ctxt info svgTexture (_strokeOpacity info) $
-        let realWidth = lineariseLength ctxt info swidth in
-        strokize realWidth (joinOfSvg info) (capOfSvg info)
-                 primitives
+      let toFloat = lineariseLength ctxt info
+          realWidth = toFloat swidth
+          dashOffsetStart = maybe 0 toFloat $ _strokeOffset info
+          primsList = case _strokeDashArray info of
+            Just pattern ->
+                dashedStrokize dashOffsetStart (toFloat <$> pattern)
+                  realWidth (joinOfSvg info) (capOfSvg info) primitives
+            Nothing ->
+              [strokize realWidth (joinOfSvg info) (capOfSvg info) primitives]
+      in
+      mapM_ (withSvgTexture ctxt info svgTexture (_strokeOpacity info)) primsList
 
 mergeContext :: RenderContext -> SvgDrawAttributes -> RenderContext
 mergeContext ctxt _attr = ctxt
