@@ -144,7 +144,7 @@ ruleSet = cleanSpace *> rule where
       <?> "cssrule"
 
 styleString :: Parser [CssDeclaration]
-styleString = declaration `sepBy` semiWsp 
+styleString = (cleanSpace *> declaration) `sepBy` semiWsp 
   where semiWsp = skipSpace *> char ';' <* skipSpace
 
 selector :: Parser [CssSelector]

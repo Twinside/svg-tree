@@ -362,10 +362,14 @@ data SvgUse = SvgUse
   , _svgUseName   :: String
   , _svgUseWidth  :: Maybe SvgNumber
   , _svgUseHeight :: Maybe SvgNumber
+  , _svgUseDrawAttributes :: SvgDrawAttributes
   }
   deriving (Eq, Show)
 
 makeClassy ''SvgUse
+
+instance WithSvgDrawAttributes SvgUse where
+  drawAttr = svgUseDrawAttributes
 
 defaultSvgUse :: SvgUse
 defaultSvgUse = SvgUse
@@ -373,6 +377,7 @@ defaultSvgUse = SvgUse
   , _svgUseName   = ""
   , _svgUseWidth  = Nothing
   , _svgUseHeight = Nothing
+  , _svgUseDrawAttributes = mempty
   }
 
 data SvgTree
@@ -396,8 +401,8 @@ appNode (curr:above) e = (e:curr) : above
 zipSvgTree :: ([[SvgTree]] -> SvgTree) -> SvgTree -> SvgTree
 zipSvgTree f = dig [] where
   dig prev e@SvgNone = f $ appNode prev e
-  dig prev e@(Use u sub) = f . appNode prev . Use u $ dig c sub
-    where c = [] : appNode prev e
+  dig prev e@(Use u sub) =
+      f . appNode prev . Use u $ dig ([] : appNode prev e) sub
   dig prev e@(Group g) =
       f . appNode prev . Group $ zipGroup (appNode prev e) g
   dig prev e@(Symbol g) =
@@ -436,7 +441,7 @@ nameOfTree v =
 drawAttrOfTree :: SvgTree -> SvgDrawAttributes
 drawAttrOfTree v = case v of
   SvgNone -> mempty
-  Use _ t -> drawAttrOfTree t
+  Use e _ -> e ^. drawAttr
   Group e -> e ^. drawAttr
   Symbol e -> e ^. drawAttr
   Path e -> e ^. drawAttr
@@ -450,7 +455,7 @@ drawAttrOfTree v = case v of
 setDrawAttrOfTree :: SvgTree -> SvgDrawAttributes -> SvgTree
 setDrawAttrOfTree v attr = case v of
   SvgNone -> SvgNone
-  Use n t -> Use n $ setDrawAttrOfTree t attr
+  Use e t -> Use (e & drawAttr .~ attr) t
   Group e -> Group $ e & drawAttr .~ attr
   Symbol e -> Symbol $ e & drawAttr .~ attr
   Path e -> Path $ e & drawAttr .~ attr

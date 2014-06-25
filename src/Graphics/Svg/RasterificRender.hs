@@ -6,7 +6,12 @@ import qualified Data.Foldable as F
 import qualified Data.Map as M
 import Data.Monoid( mempty, (<>) )
 import Data.List( mapAccumL )
-import Graphics.Rasterific.Linear( (^+^), (^-^), (^*), zero )
+import Graphics.Rasterific.Linear( (^+^)
+                                 , (^-^)
+                                 , (^*)
+                                 , norm
+                                 , nearZero
+                                 , zero )
 import Graphics.Rasterific hiding ( Path, Line )
 import Graphics.Rasterific.Outline
 import Graphics.Rasterific.Texture
@@ -50,14 +55,18 @@ singularize = concatMap go
    go (ElipticalArc o lst) = ElipticalArc o . pure <$> lst
    go EndPath = [EndPath]
 
-svgPathToPrimitives :: [SvgPath] -> [Primitive]
-svgPathToPrimitives lst | isPathWithArc lst = []
-svgPathToPrimitives lst =
-    concat . snd . mapAccumL go (zero, zero, zero)
-           $ singularize lst
+svgPathToPrimitives :: Bool -> [SvgPath] -> [Primitive]
+svgPathToPrimitives _ lst | isPathWithArc lst = []
+svgPathToPrimitives shouldClose lst
+    | shouldClose && not (nearZero $ norm (lastPoint ^-^ firstPoint)) =
+        concat $ prims ++ [line lastPoint firstPoint]
+    | otherwise = concat prims
   where
-    go o@(lastPoint, _, firstPoint) EndPath =
-        (o, line lastPoint firstPoint)
+    ((lastPoint, _, firstPoint), prims) =
+        mapAccumL go (zero, zero, zero) $ singularize lst
+
+    go (latest, p, first) EndPath =
+        ((first, p, first), line latest first)
 
     go o (HorizontalTo _ []) = (o, [])
     go o (VerticalTo _ []) = (o, [])
@@ -160,7 +169,7 @@ renderSvgDocument sizes doc = case sizes of
             sizeFitter (zero, V2 (xEnd - xs) (yEnd - ys)) actualSize
 
     renderAtSize (w, h) =
-        renderDrawing w h white 
+        renderDrawing w h white
             {-. (\a -> trace (dumpDrawing a) a)-}
             . sizeFitter box (w, h)
             . mapM_ (renderSvg emptyContext)
@@ -206,7 +215,7 @@ type ViewBox = (Point, Point)
 fillAlphaCombine :: Float -> PixelRGBA8 -> PixelRGBA8
 fillAlphaCombine opacity (PixelRGBA8 r g b a) =
     PixelRGBA8 r g b alpha
-  where 
+  where
     a' = fromIntegral a / 255.0
     alpha = floor . max 0 . min 255 $ opacity * a' * 255
 
@@ -274,7 +283,7 @@ prepareRadialGradientTexture ctxt attr grad opa prims =
       center = lineariser $ _radialGradientCenter grad
       radius = lengthLinearise $ _radialGradientRadius grad
   in
-  case (_radialGradientFocusX grad, 
+  case (_radialGradientFocusX grad,
             _radialGradientFocusY grad) of
     (Nothing, Nothing) ->
       radialGradientTexture gradient center radius
@@ -308,7 +317,7 @@ withSvgTexture ctxt attr (TextureRef ref) opacity prims =
     Nothing -> return ()
     Just (ElementGeometry _) -> return ()
     Just (ElementLinearGradient grad) ->
-        let tex = prepareLinearGradientTexture ctxt attr 
+        let tex = prepareLinearGradientTexture ctxt attr
                     grad opacity prims
             method = fillMethodOfSvg attr in
         withTexture tex $ fillWithMethod method prims
@@ -333,7 +342,7 @@ stroker ctxt info primitives =
     withInfo _strokeColor info $ \svgTexture ->
       withSvgTexture ctxt info svgTexture (_strokeOpacity info) $
         let realWidth = lineariseLength ctxt info swidth in
-        strokize realWidth (joinOfSvg info) (capOfSvg info) 
+        strokize realWidth (joinOfSvg info) (capOfSvg info)
                  primitives
 
 mergeContext :: RenderContext -> SvgDrawAttributes -> RenderContext
@@ -359,7 +368,7 @@ lineariseYLength _ attr (SvgEm n) = emTransform attr n
 lineariseYLength ctxt _ (SvgPercent p) = abs (ye - ys) * p
   where
     (V2 _ ys, V2 _ ye) = _renderViewBox ctxt
-    
+
 
 linearisePoint :: RenderContext -> SvgDrawAttributes -> SvgPoint
                -> Point
@@ -425,7 +434,12 @@ renderSvg initialContext = go initialContext initialAttr
 
     go _ _ SvgNone = return ()
     go ctxt attr (Use useData subTree) =
-        fitUse ctxt attr useData subTree $ go ctxt attr subTree
+        fitUse ctxt attr useData subTree $
+            withTransform pAttr $
+                go ctxt attr' subTree
+      where
+        pAttr = _svgUseDrawAttributes useData
+        attr' = attr <> pAttr
 
     go ctxt attr (Symbol g) = go ctxt attr $ Group g
     go ctxt attr (Group (SvgGroup groupAttr subTrees _)) =
@@ -505,8 +519,9 @@ renderSvg initialContext = go initialContext initialAttr
 
     go ctxt attr (Path (SvgPathPrim pAttr path)) = do
       let info = attr <> pAttr
-          primitives = svgPathToPrimitives path
+          strokePrimitives = svgPathToPrimitives False path
+          fillPrimitives = svgPathToPrimitives True path
       withTransform pAttr $ do
-        filler ctxt info primitives
-        stroker ctxt info primitives
+        filler ctxt info fillPrimitives
+        stroker ctxt info strokePrimitives
 

@@ -1,5 +1,6 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Graphics.Svg.XmlParser where
 
 import Control.Applicative( (<$>)
@@ -192,6 +193,8 @@ cssIdentStringParser _ _ attr _ = attr
 cssUniqueTexture :: ASetter SvgDrawAttributes SvgDrawAttributes
                     a (Maybe SvgTexture)
                  -> CssUpdater
+cssUniqueTexture setter attr ((CssIdent "none":_):_) =
+    attr & setter .~ Just FillNone
 cssUniqueTexture setter attr ((CssColor c:_):_) =
     attr & setter .~ Just (ColorRef c)
 cssUniqueTexture _ attr _ = attr
@@ -222,6 +225,7 @@ drawAttributesList =
      -- TODO: fix this incompletness
     ,("transform", parserMaySetter transform (many transformParser), const)
     ,("opacity", numSetter fillOpacity, cssUniqueFloat fillOpacity)
+    ,("fill-opacity", numSetter fillOpacity, cssUniqueFloat fillOpacity)
     ,("stroke-opacity", numSetter strokeOpacity, cssUniqueFloat strokeOpacity)
     ,("font-size", numMaySetter fontSize, cssUniqueMayFloat fontSize)
     ,("fill-rule", \e s -> e & fillRule .~ parseFillRule s,
@@ -469,15 +473,13 @@ unparse e@(nodeName -> "line") =
 unparse e@(nodeName -> "path") =
   pure . Path $ xmlUnparseWithDrawAttr e
 unparse e@(nodeName -> "use") = do
-  let useInfo = xmlUnparse e
+  let useInfo = xmlUnparseWithDrawAttr e
   svgElem <- gets $ M.lookup (_svgUseName useInfo) . svgSymbols
   case svgElem of
     Nothing -> pure SvgNone
     Just (ElementLinearGradient _) -> pure SvgNone
     Just (ElementRadialGradient _) -> pure SvgNone
-    Just (ElementGeometry g) ->
-      pure . Use useInfo $ xmlUpdateDrawAttr e g
-
+    Just (ElementGeometry g) -> pure $ Use useInfo g
 unparse _ = pure SvgNone
 
 cssDeclApplyer :: SvgDrawAttributes -> CssDeclaration

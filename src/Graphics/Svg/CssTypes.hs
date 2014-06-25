@@ -16,6 +16,7 @@ import Data.Text( Text )
 import Control.Lens( view )
 import qualified Data.Text as T
 import Graphics.Svg.Types
+{-import Debug.Trace-}
 
 data CssDescriptor
   = OfClass Text    -- ^ .IDENT
@@ -80,10 +81,10 @@ isMatching = go where
 findMatchingDeclarations :: CssMatcheable a
                          => [CssRule] -> CssContext a -> [CssDeclaration]
 findMatchingDeclarations rules context =
-    concat [cssDeclarations rule
+    concat [cssDeclarations $ rule
                     | rule <- rules
                     , selector <- cssRuleSelector rule
-                    , isMatching context selector ]
+                    , isMatching context $ reverse selector ]
 
 data CssDeclaration
     = CssDeclaration Text [[CssElement]]
