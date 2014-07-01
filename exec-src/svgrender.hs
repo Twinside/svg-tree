@@ -1,17 +1,49 @@
 import Control.Applicative( (<$>), many )
 import Control.Monad( forM_ )
-import Graphics.Svg
-import Data.List( isSuffixOf, sort )
-import System.Environment( getArgs )
-import System.Directory( createDirectoryIfMissing, getDirectoryContents )
 import Data.Attoparsec.Text( parseOnly )
-import System.FilePath( dropExtension, (</>), (<.>), splitFileName )
-import Codec.Picture( writePng )
-import Graphics.Svg.CssParser
+import Data.Binary( encodeFile, decodeOrFail  )
+import qualified Data.ByteString.Lazy as B
+import Data.List( isSuffixOf, sort )
 import qualified Data.Text as T
+import System.Environment( getArgs )
+import System.Directory( createDirectoryIfMissing
+                       , getDirectoryContents
+                       , doesFileExist
+                       )
+import System.FilePath( dropExtension, (</>), (<.>), splitFileName )
+
+import Codec.Picture( writePng )
+
+import Graphics.Text.TrueType( FontCache, buildCache )
+import Graphics.Svg.CssParser
+import Graphics.Svg
 {-import Debug.Trace-}
 import Text.Printf
 
+loadCreateFontCache :: IO FontCache
+loadCreateFontCache = do
+  exist <- doesFileExist filename
+  if exist then loadCache else createWrite
+  where
+    filename =  "fonty-texture-cache"
+    loadCache = do
+      putStrLn "Loading pre-existing font cache"
+      bstr <- B.readFile filename
+      case decodeOrFail bstr of
+        Left _ -> do
+          putStrLn "Failed to load cache, recreate"
+          createWrite
+        Right (_, _, v) -> do
+          putStrLn "Done"
+          return v
+      
+    createWrite = do
+      putStrLn "Building font cache..."
+      cache <- buildCache
+      putStrLn "Saving font cache..."
+      encodeFile filename cache
+      putStrLn "Done"
+      return cache
 
 loadRender :: [String] -> IO ()
 loadRender [] = putStrLn "not enough arguments"
@@ -20,8 +52,10 @@ loadRender (svgfilename:pngfilename:_) = do
   f <- loadSvgFile svgfilename
   case f of
      Nothing -> putStrLn "Error while loading SVG"
-     Just doc -> 
-        writePng pngfilename $ renderSvgDocument Nothing doc
+     Just doc -> do
+        cache <- loadCreateFontCache
+        (finalImage, _) <- renderSvgDocument cache Nothing doc
+        writePng pngfilename finalImage
 
 type Html = String
 
@@ -54,8 +88,8 @@ toHtmlDocument :: Html -> String
 toHtmlDocument html =
     "<html><head><title>Test results</title></head><body>" ++ html ++ "</body></html"
 
-analyzeFolder :: FilePath -> IO ()
-analyzeFolder folder = do
+analyzeFolder :: FontCache -> FilePath -> IO ()
+analyzeFolder cache folder = do
   createDirectoryIfMissing True testOutputFolder
   fileList <- sort . filter (".svg" `isSuffixOf`) <$> getDirectoryContents folder
   let all_table = table ["name", "W3C Svg", "W3C ref PNG", "mine"] 
@@ -75,13 +109,15 @@ analyzeFolder folder = do
       Nothing -> putStrLn $ "Failed to load " ++ p
       Just d -> do
         putStrLn $ "   => Rendering " ++ show (svgDocumentSize d)
-        writePng (testFileOfPath p) $ renderSvgDocument Nothing d
+        (finalImage, _) <- renderSvgDocument cache Nothing d
+        writePng (testFileOfPath p) finalImage
 
 
 testSuite :: IO ()
 testSuite = do
-    analyzeFolder "w3csvg"
-    analyzeFolder "test"
+    cache <- loadCreateFontCache
+    analyzeFolder cache "w3csvg"
+    analyzeFolder cache "test"
 
 baseTest :: String
 baseTest = 
@@ -98,6 +134,7 @@ baseTest =
 
 cssParseTest :: String -> IO ()
 cssParseTest css = do
+  print .  parseOnly styleString $ T.pack "/* rule 10 */ stroke-dasharray:300,100"
   case parseOnly (many ruleSet) (T.pack css) of
     Left err -> putStrLn $ "Fail to parse " ++ err
     Right r -> mapM_ print r

@@ -16,6 +16,7 @@ module Graphics.Svg.Types
     , SvgTexture( .. )
     , SvgElement( .. )
     , SvgFillRule( .. )
+    , SvgFontStyle( .. )
     , toSvgPoint
     , svgDocumentSize
 
@@ -190,6 +191,12 @@ data SvgTransformation
 class WithSvgDrawAttributes a where
     drawAttr :: Lens' a SvgDrawAttributes
 
+data SvgFontStyle
+    = FontStyleNormal
+    | FontStyleItalic
+    | FontStyleOblique
+    deriving (Eq, Show)
+
 data SvgDrawAttributes = SvgDrawAttributes
     { _strokeWidth      :: !(Maybe SvgNumber)
     , _strokeColor      :: !(Maybe SvgTexture)
@@ -199,13 +206,16 @@ data SvgDrawAttributes = SvgDrawAttributes
     , _strokeMiterLimit :: !(Maybe Float)
     , _fillColor        :: !(Maybe SvgTexture)
     , _fillOpacity      :: !Float
-    , _fontSize         :: !(Maybe Float)
     , _transform        :: !(Maybe [SvgTransformation])
     , _fillRule         :: !(Maybe SvgFillRule)
     , _attrClass        :: !(Maybe String)
     , _attrId           :: !(Maybe String)
     , _strokeOffset     :: !(Maybe SvgNumber)
     , _strokeDashArray  :: !(Maybe [SvgNumber])
+
+    , _fontSize         :: !(Maybe Float)
+    , _fontFamily       :: !(Maybe [String])
+    , _fontStyle        :: !(Maybe SvgFontStyle)
     }
     deriving (Eq, Show)
 

@@ -1,5 +1,7 @@
+{-# LANGUAGE ScopedTypeVariables     #-}
 module Graphics.Svg.RasterificRender where
 
+import Control.Monad.Trans.State.Strict
 import Control.Applicative( (<$>), pure )
 import Codec.Picture( Image, PixelRGBA8( .. ) )
 import qualified Data.Foldable as F
@@ -16,6 +18,7 @@ import Graphics.Rasterific hiding ( Path, Line )
 import Graphics.Rasterific.Outline
 import Graphics.Rasterific.Texture
 import Graphics.Rasterific.Transformations
+import Graphics.Text.TrueType
 import Graphics.Svg.Types
 {-import Graphics.Svg.XmlParser-}
 
@@ -138,8 +141,9 @@ svgPathToPrimitives shouldClose lst
     go _ (ElipticalArc _ _) = error "Unimplemented"
 
 
-renderSvgDocument :: Maybe (Int, Int) -> SvgDocument -> Image PixelRGBA8
-renderSvgDocument sizes doc = case sizes of
+renderSvgDocument :: FontCache -> Maybe (Int, Int) -> SvgDocument
+                  -> IO (Image PixelRGBA8, LoadedFonts)
+renderSvgDocument cache sizes doc = case sizes of
     Just s -> renderAtSize s
     Nothing -> renderAtSize $ svgDocumentSize doc
   where
@@ -154,6 +158,7 @@ renderSvgDocument sizes doc = case sizes of
         { _renderViewBox = box
         , _initialViewBox = box
         , _definitions = _svgDefinitions doc
+        , _fontCache = cache
         }
     white = PixelRGBA8 255 255 255 255
 
@@ -168,12 +173,13 @@ renderSvgDocument sizes doc = case sizes of
         withTransformation (translate (negate p)) .
             sizeFitter (zero, V2 (xEnd - xs) (yEnd - ys)) actualSize
 
-    renderAtSize (w, h) =
-        renderDrawing w h white
-            {-. (\a -> trace (dumpDrawing a) a)-}
-            . sizeFitter box (w, h)
-            . mapM_ (renderSvg emptyContext)
-            $ _svgElements doc
+    elements = _svgElements doc
+    renderAtSize (w, h) = do
+      let stateDraw = mapM (renderSvg emptyContext) elements
+      (elems, s) <- runStateT stateDraw mempty
+      let drawing = sizeFitter box (w, h) $ sequence_ elems
+          img = renderDrawing w h white drawing
+      return (img, s)
 
 withInfo :: Monad m => (a -> Maybe b) -> a -> (b -> m ()) -> m ()
 withInfo accessor val action =
@@ -208,7 +214,14 @@ data RenderContext = RenderContext
     { _initialViewBox :: (Point, Point)
     , _renderViewBox  :: (Point, Point)
     , _definitions    :: M.Map String SvgElement
+    , _fontCache      :: FontCache
     }
+
+
+type LoadedFonts =
+    M.Map (String, FontDescriptor) Font
+
+type IODraw = StateT LoadedFonts IO
 
 type ViewBox = (Point, Point)
 
@@ -402,8 +415,8 @@ viewBoxOfTree :: SvgTree -> Maybe (Int, Int, Int, Int)
 viewBoxOfTree (Symbol g) = _svgGroupViewBox g
 viewBoxOfTree _ = Nothing
 
-renderSvg :: RenderContext -> SvgTree -> Drawing PixelRGBA8 ()
-renderSvg initialContext = go initialContext initialAttr
+renderSvg :: RenderContext -> SvgTree -> IODraw (Drawing PixelRGBA8 ())
+renderSvg initialContext t = go initialContext initialAttr t
   where
     initialAttr =
       mempty { _strokeWidth = Just (SvgNum 1.0)
@@ -439,18 +452,21 @@ renderSvg initialContext = go initialContext initialAttr
                             <> translate (negate boxOrigin)
 
 
-    go _ _ SvgNone = return ()
-    go ctxt attr (Use useData subTree) =
-        fitUse ctxt attr useData subTree $
-            withTransform pAttr $
-                go ctxt attr' subTree
+    go _ _ SvgNone = return mempty
+    -- not handled yet
+    go _ _ (Text _) = return mempty
+    go ctxt attr (Use useData subTree) = do
+      sub <- go ctxt attr' subTree
+      return . fitUse ctxt attr useData subTree
+             $ withTransform pAttr sub
       where
         pAttr = _svgUseDrawAttributes useData
         attr' = attr <> pAttr
 
     go ctxt attr (Symbol g) = go ctxt attr $ Group g
-    go ctxt attr (Group (SvgGroup groupAttr subTrees _)) =
-        withTransform groupAttr $ mapM_ (go context' attr') subTrees
+    go ctxt attr (Group (SvgGroup groupAttr subTrees _)) = do
+        subTrees' <- mapM (go context' attr') subTrees
+        return . withTransform groupAttr $ sequence_ subTrees'
       where attr' = attr <> groupAttr
             context' = mergeContext ctxt groupAttr
 
@@ -469,7 +485,7 @@ renderSvg initialContext = go initialContext initialAttr
             (0, v) -> roundedRectangle p' w' h' v v
             (vx, vy) -> roundedRectangle p' w' h' vx vy
 
-      withTransform pAttr $ do
+      return . withTransform pAttr $ do
         filler context' info rect
         stroker context' info rect
 
@@ -479,7 +495,7 @@ renderSvg initialContext = go initialContext initialAttr
           p' = linearisePoint context' info p
           r' = lineariseLength context' info r
           c = circle p' r'
-      withTransform pAttr $ do
+      return . withTransform pAttr $ do
         filler context' info c
         stroker context' info c
 
@@ -490,7 +506,7 @@ renderSvg initialContext = go initialContext initialAttr
           rx' = lineariseXLength context' info rx
           ry' = lineariseYLength context' info ry
           c = ellipse p' rx' ry'
-      withTransform pAttr $ do
+      return . withTransform pAttr $ do
         filler context' info c
         stroker context' info c
 
@@ -522,13 +538,13 @@ renderSvg initialContext = go initialContext initialAttr
           context' = mergeContext ctxt pAttr
           p1' = linearisePoint context' info p1
           p2' = linearisePoint context' info p2
-      withTransform pAttr . stroker context' info $ line p1' p2'
+      return . withTransform pAttr . stroker context' info $ line p1' p2'
 
     go ctxt attr (Path (SvgPathPrim pAttr path)) = do
       let info = attr <> pAttr
           strokePrimitives = svgPathToPrimitives False path
           fillPrimitives = svgPathToPrimitives True path
-      withTransform pAttr $ do
+      return . withTransform pAttr $ do
         filler ctxt info fillPrimitives
         stroker ctxt info strokePrimitives
 
