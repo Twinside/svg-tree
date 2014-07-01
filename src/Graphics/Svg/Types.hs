@@ -76,6 +76,20 @@ module Graphics.Svg.Types
     , defaultSvgUse
     , HasSvgUse( .. )
 
+    , SvgText( .. )
+    , defaultSvgText
+    , HasSvgText( .. )
+
+    , SvgTextSpan( .. )
+    , defaultSvgTextSpan
+    , HasSvgTextSpan( .. )
+
+    , SvgTextInfo( .. )
+    , defaultSvgTextInfo
+    , HasSvgTextInfo( .. )
+
+    , SvgTextAdjust( .. )
+
     , WithSvgDrawAttributes( .. )
     , isPathArc
     , isPathWithArc
@@ -382,18 +396,81 @@ defaultSvgUse = SvgUse
   , _svgUseDrawAttributes = mempty
   }
 
+data SvgTextInfo = SvgTextInfo
+  { _svgTextInfoX      :: ![SvgNumber]
+  , _svgTextInfoY      :: ![SvgNumber]
+  , _svgTextInfoDX     :: ![SvgNumber]
+  , _svgTextInfoDY     :: ![SvgNumber]
+  , _svgTextInfoRotate :: ![Float]
+  , _svgTextInfoLength :: !(Maybe SvgNumber)
+  }
+  deriving (Eq, Show)
+
+makeClassy ''SvgTextInfo
+
+defaultSvgTextInfo :: SvgTextInfo
+defaultSvgTextInfo = SvgTextInfo
+  { _svgTextInfoX      = mempty
+  , _svgTextInfoY      = mempty
+  , _svgTextInfoDX     = mempty
+  , _svgTextInfoDY     = mempty
+  , _svgTextInfoRotate = mempty
+  , _svgTextInfoLength = Nothing
+  }
+
+data SvgTextSpan = SvgTextSpan
+  { _svgSpanText :: !T.Text
+  , _svgSpanInfo :: !SvgTextInfo
+  }
+  deriving (Eq, Show)
+
+makeClassy ''SvgTextSpan
+
+defaultSvgTextSpan :: SvgTextSpan
+defaultSvgTextSpan = SvgTextSpan
+  { _svgSpanText = mempty
+  , _svgSpanInfo = defaultSvgTextInfo
+  }
+
+data SvgTextAdjust
+  = SvgTextAdjustSpacing
+  | SvgTextAdjustSpacingAndGlyphs
+  deriving (Eq, Show)
+
+data SvgText = SvgText
+  { _svgTextDrawAttributes :: !SvgDrawAttributes
+  , _svgTextInfos          :: !SvgTextInfo
+  , _svgTextAdjust         :: !SvgTextAdjust
+  , _svgTextSpans          :: ![SvgTextSpan]
+  }
+  deriving (Eq, Show)
+
+makeClassy ''SvgText
+
+instance WithSvgDrawAttributes SvgText where
+  drawAttr = svgTextDrawAttributes
+
+defaultSvgText :: SvgText
+defaultSvgText = SvgText
+  { _svgTextDrawAttributes = mempty
+  , _svgTextInfos = defaultSvgTextInfo
+  , _svgTextSpans = mempty
+  , _svgTextAdjust = SvgTextAdjustSpacing
+  }
+
 data SvgTree
     = SvgNone
-    | Use !SvgUse !SvgTree
-    | Group !(SvgGroup SvgTree)
-    | Symbol !(SvgGroup SvgTree)
-    | Path !SvgPathPrim
-    | Circle !SvgCircle
-    | PolyLine !SvgPolyLine
-    | Polygon !SvgPolygon
-    | Ellipse !SvgEllipse
-    | Line !SvgLine
+    | Use       !SvgUse             !SvgTree
+    | Group     !(SvgGroup SvgTree)
+    | Symbol    !(SvgGroup SvgTree)
+    | Path      !SvgPathPrim
+    | Circle    !SvgCircle
+    | PolyLine  !SvgPolyLine
+    | Polygon   !SvgPolygon
+    | Ellipse   !SvgEllipse
+    | Line      !SvgLine
     | Rectangle !SvgRectangle
+    | Text      !SvgText
     deriving (Eq, Show)
 
 appNode :: [[a]] -> a -> [[a]]
@@ -416,6 +493,7 @@ zipSvgTree f = dig [] where
   dig prev e@(Ellipse _) = f $ appNode prev e
   dig prev e@(Line _) = f $ appNode prev e
   dig prev e@(Rectangle _) = f $ appNode prev e
+  dig prev e@(Text _) = f $ appNode prev e
 
   zipGroup prev g = g { _svgGroupChildren = updatedChildren }
     where
@@ -439,6 +517,7 @@ nameOfTree v =
    Ellipse _   -> "ellipse"
    Line _      -> "line"
    Rectangle _ -> "rectangle"
+   Text _      -> "text"
 
 drawAttrOfTree :: SvgTree -> SvgDrawAttributes
 drawAttrOfTree v = case v of
@@ -453,6 +532,7 @@ drawAttrOfTree v = case v of
   Ellipse e -> e ^. drawAttr
   Line e -> e ^. drawAttr
   Rectangle e -> e ^. drawAttr
+  Text e -> e ^. drawAttr
 
 setDrawAttrOfTree :: SvgTree -> SvgDrawAttributes -> SvgTree
 setDrawAttrOfTree v attr = case v of
@@ -467,6 +547,7 @@ setDrawAttrOfTree v attr = case v of
   Ellipse e -> Ellipse $ e & drawAttr .~ attr
   Line e -> Line $ e & drawAttr .~ attr
   Rectangle e -> Rectangle $ e & drawAttr .~ attr
+  Text e -> Text $ e & drawAttr .~ attr
 
 instance WithSvgDrawAttributes SvgTree where
     drawAttr = lens drawAttrOfTree setDrawAttrOfTree

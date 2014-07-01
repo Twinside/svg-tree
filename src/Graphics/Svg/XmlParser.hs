@@ -32,6 +32,7 @@ import Graphics.Svg.CssParser( complexNumber
                              , ruleSet
                              , dashArray
                              , styleString
+                             , numberList
                              , unitNumber )
 
 {-import Debug.Trace-}
@@ -70,6 +71,11 @@ parseFillRule :: String -> Maybe SvgFillRule
 parseFillRule "nonzero" = Just SvgFillNonZero
 parseFillRule "evenodd" = Just SvgFillEvenOdd
 parseFillRule _ = Nothing
+
+parseTextAdjust :: String -> SvgTextAdjust
+parseTextAdjust "spacing" = SvgTextAdjustSpacing
+parseTextAdjust "spacingAndGlyphs" = SvgTextAdjustSpacingAndGlyphs
+parseTextAdjust _ = SvgTextAdjustSpacing
 
 parse :: Parser a -> String -> Maybe a
 parse p str = case parseOnly p (T.pack str) of
@@ -373,6 +379,30 @@ instance SvgXMLUpdatable SvgUse where
       dropSharp ('#':rest) = rest
       dropSharp a = a
 
+textInfo :: [(String, Updater SvgTextInfo)]
+textInfo =
+  [("x", parserSetter svgTextInfoX dashArray)
+  ,("y", parserSetter svgTextInfoY dashArray)
+  ,("dx", parserSetter svgTextInfoDX dashArray)
+  ,("dy", parserSetter svgTextInfoDY dashArray)
+  ,("rotate", parserSetter svgTextInfoRotate numberList )
+  ,("textLength", numericMaySetter svgTextInfoLength)
+  ]
+
+instance SvgXMLUpdatable SvgText where
+  defaultSvg = defaultSvgText
+  svgAttributes =
+     lengthAdjuster : [(s, infoAdapter l) | (s, l) <- textInfo]
+    where
+      infoAdapter f e s = over svgTextInfos (flip f s) e
+      lengthAdjuster = 
+        ("lengthAdjust", \e s -> e & svgTextAdjust .~ parseTextAdjust s)
+
+instance SvgXMLUpdatable SvgTextSpan where
+  defaultSvg = defaultSvgTextSpan
+  svgAttributes = [(s, infoAdapter l) | (s, l) <- textInfo]
+    where infoAdapter f e s = over svgSpanInfo (flip f s) e
+
 gradientOffsetSetter :: SvgGradientStop -> String -> SvgGradientStop
 gradientOffsetSetter el str = el & gradientOffset .~ val
   where
@@ -443,6 +473,7 @@ svgTreeModify f v = case v of
   Ellipse e -> Ellipse $ f e
   Line e -> Line $ f e
   Rectangle e -> Rectangle $ f e
+  Text e -> Text $ f e
 
 
 unparse :: Element -> State SvgSymbols SvgTree

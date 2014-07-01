@@ -8,6 +8,7 @@ module Graphics.Svg.CssParser
     , ruleSet
     , styleString
     , dashArray
+    , numberList
     , num
     )
     where
@@ -229,6 +230,9 @@ unitNumber = do
 
 dashArray :: Parser [SvgNumber]
 dashArray = skipSpace *> (complexNumber `sepBy1` commaWsp)
+
+numberList :: Parser [Float]
+numberList = skipSpace *> (num `sepBy1` commaWsp)
 
 complexNumber :: Parser SvgNumber
 complexNumber = do
