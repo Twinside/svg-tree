@@ -15,6 +15,7 @@ cabal-version:       >=1.8
 library
   hs-source-dirs: src
   Ghc-options: -O3 -Wall
+  ghc-prof-options: -rtsopts -Wall -prof -auto-all
   exposed-modules: Graphics.Svg
                  , Graphics.Svg.Types
                  , Graphics.Svg.CssParser
@@ -56,4 +57,16 @@ Executable svgrender
                , FontyFruity
                , binary
                , bytestring
+
+Executable bench
+  hs-source-dirs: exec-src
+  Main-Is: benching.hs
+  Ghc-options: -O3 -Wall
+  ghc-prof-options: -rtsopts -Wall -prof -auto-all
+  Build-Depends: base >= 4.6
+               , rasterific-svg
+               , Rasterific
+               , JuicyPixels
+               , FontyFruity
+               , criterion
 

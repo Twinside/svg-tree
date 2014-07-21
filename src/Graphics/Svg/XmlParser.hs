@@ -243,7 +243,7 @@ drawAttributesList =
     ,("opacity", numSetter fillOpacity, cssUniqueFloat fillOpacity)
     ,("fill-opacity", numSetter fillOpacity, cssUniqueFloat fillOpacity)
     ,("stroke-opacity", numSetter strokeOpacity, cssUniqueFloat strokeOpacity)
-    ,("font-size", numMaySetter fontSize, cssUniqueMayFloat fontSize)
+    ,("font-size", numericMaySetter fontSize, cssUniqueNumber fontSize)
     ,("fill-rule", \e s -> e & fillRule .~ parseFillRule s,
         cssIdentStringParser fillRule parseFillRule)
     ,("class", \e s -> e & attrClass .~ Just s, cssMayStringSetter attrClass)

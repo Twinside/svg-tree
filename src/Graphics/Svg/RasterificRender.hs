@@ -371,7 +371,8 @@ mergeContext ctxt _attr = ctxt
 emTransform :: SvgDrawAttributes -> Float -> Float
 emTransform attr n = case _fontSize attr of
     Nothing -> 16 * n
-    Just v -> v * n
+    Just (SvgNum v) -> v * n
+    Just _ -> 16 * n
 
 lineariseXLength :: RenderContext -> SvgDrawAttributes -> SvgNumber
                  -> Coord

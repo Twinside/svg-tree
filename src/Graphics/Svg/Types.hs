@@ -213,7 +213,7 @@ data SvgDrawAttributes = SvgDrawAttributes
     , _strokeOffset     :: !(Maybe SvgNumber)
     , _strokeDashArray  :: !(Maybe [SvgNumber])
 
-    , _fontSize         :: !(Maybe Float)
+    , _fontSize         :: !(Maybe SvgNumber)
     , _fontFamily       :: !(Maybe [String])
     , _fontStyle        :: !(Maybe SvgFontStyle)
     }
@@ -672,6 +672,8 @@ instance Monoid SvgDrawAttributes where
         , _fillColor        = Nothing
         , _fillOpacity      = 1.0
         , _fontSize         = Nothing
+        , _fontFamily       = Nothing
+        , _fontStyle        = Nothing
         , _transform        = Nothing
         , _fillRule         = Nothing
         , _attrClass        = Nothing
@@ -696,5 +698,7 @@ instance Monoid SvgDrawAttributes where
         , _attrId = _attrId b
         , _strokeOffset = (mayRight `on` _strokeOffset) a b
         , _strokeDashArray = (mayRight `on` _strokeDashArray) a b
+        , _fontFamily = (mayRight `on` _fontFamily) a b
+        , _fontStyle = (mayRight `on` _fontStyle) a b
         }
 
