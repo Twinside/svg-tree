@@ -1,5 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
 module Graphics.Svg.Types
     ( Coord
     , Origin( .. )
@@ -81,11 +82,17 @@ module Graphics.Svg.Types
     , defaultSvgText
     , HasSvgText( .. )
 
+    , SvgTextSpanContent( .. )
+
     , SvgTextSpan( .. )
     , defaultSvgTextSpan
     , HasSvgTextSpan( .. )
 
     , SvgTextInfo( .. )
+    , CharInfo( .. )
+    , infinitizeTextInfo
+    , unconsTextInfo
+    , textInfoRests
     , defaultSvgTextInfo
     , HasSvgTextInfo( .. )
 
@@ -101,14 +108,21 @@ module Graphics.Svg.Types
 import Data.Function( on )
 import Data.List( inits )
 import qualified Data.Map as M
-import Data.Monoid( Monoid( .. ) )
+import Data.Monoid( Monoid( .. ), Last( .. ), (<>) )
 import Data.Foldable( Foldable )
 import qualified Data.Foldable as F
 import qualified Data.Text as T
 import Codec.Picture( PixelRGBA8( .. ) )
-import Graphics.Rasterific.Transformations
-import Graphics.Rasterific hiding (Path, Line)
-import Control.Lens
+import Graphics.Rasterific.Transformations( Transformation )
+import Graphics.Rasterific( Point ) 
+import Control.Lens( Lens'
+                   , lens
+                   , makeClassy
+                   , makeLenses
+                   , (^.)
+                   , (&)
+                   , (.~)
+                   )
 
 type Coord = Float
 
@@ -198,24 +212,24 @@ data SvgFontStyle
     deriving (Eq, Show)
 
 data SvgDrawAttributes = SvgDrawAttributes
-    { _strokeWidth      :: !(Maybe SvgNumber)
-    , _strokeColor      :: !(Maybe SvgTexture)
+    { _strokeWidth      :: !(Last SvgNumber)
+    , _strokeColor      :: !(Last SvgTexture)
     , _strokeOpacity    :: !Float
-    , _strokeLineCap    :: !(Maybe SvgCap)
-    , _strokeLineJoin   :: !(Maybe SvgLineJoin)
-    , _strokeMiterLimit :: !(Maybe Float)
-    , _fillColor        :: !(Maybe SvgTexture)
+    , _strokeLineCap    :: !(Last SvgCap)
+    , _strokeLineJoin   :: !(Last SvgLineJoin)
+    , _strokeMiterLimit :: !(Last Float)
+    , _fillColor        :: !(Last SvgTexture)
     , _fillOpacity      :: !Float
     , _transform        :: !(Maybe [SvgTransformation])
-    , _fillRule         :: !(Maybe SvgFillRule)
-    , _attrClass        :: !(Maybe String)
+    , _fillRule         :: !(Last SvgFillRule)
+    , _attrClass        :: !(Last String)
     , _attrId           :: !(Maybe String)
-    , _strokeOffset     :: !(Maybe SvgNumber)
-    , _strokeDashArray  :: !(Maybe [SvgNumber])
+    , _strokeOffset     :: !(Last SvgNumber)
+    , _strokeDashArray  :: !(Last [SvgNumber])
 
-    , _fontSize         :: !(Maybe SvgNumber)
-    , _fontFamily       :: !(Maybe [String])
-    , _fontStyle        :: !(Maybe SvgFontStyle)
+    , _fontSize         :: !(Last SvgNumber)
+    , _fontFamily       :: !(Last [String])
+    , _fontStyle        :: !(Last SvgFontStyle)
     }
     deriving (Eq, Show)
 
@@ -416,21 +430,114 @@ data SvgTextInfo = SvgTextInfo
   }
   deriving (Eq, Show)
 
+instance Monoid SvgTextInfo where
+  mempty = SvgTextInfo [] [] [] [] [] Nothing
+  mappend (SvgTextInfo x1 y1 dx1 dy1 r1 l1)
+          (SvgTextInfo x2 y2 dx2 dy2 r2 l2) =
+    SvgTextInfo (x1 <> x2)   (y1 <> y2)
+                (dx1 <> dx2) (dy1 <> dy2)
+                (r1 <> r2)
+                (getLast $ Last l1 <> Last l2)
+
 makeClassy ''SvgTextInfo
 
 defaultSvgTextInfo :: SvgTextInfo
-defaultSvgTextInfo = SvgTextInfo
-  { _svgTextInfoX      = mempty
-  , _svgTextInfoY      = mempty
-  , _svgTextInfoDX     = mempty
-  , _svgTextInfoDY     = mempty
-  , _svgTextInfoRotate = mempty
-  , _svgTextInfoLength = Nothing
+defaultSvgTextInfo = mempty
+
+data CharInfo = CharInfo
+  { _svgCharX  :: Maybe SvgNumber
+  , _svgCharY  :: Maybe SvgNumber
+  , _svgCharDx :: Maybe SvgNumber
+  , _svgCharDy :: Maybe SvgNumber
+  , _svgCharRotate :: Maybe Float
   }
 
+repeatLast :: [a] -> [a]
+repeatLast = go where
+  go lst = case lst of
+    [] -> []
+    [x] -> repeat x
+    (x:xs) -> x : go xs
+
+infinitizeTextInfo :: SvgTextInfo -> SvgTextInfo
+infinitizeTextInfo nfo = SvgTextInfo
+  { _svgTextInfoX = repeatLast $ _svgTextInfoX nfo
+  , _svgTextInfoY = repeatLast $ _svgTextInfoY nfo
+  , _svgTextInfoDX = repeatLast $ _svgTextInfoDX nfo
+  , _svgTextInfoDY = repeatLast $ _svgTextInfoDY nfo
+  , _svgTextInfoRotate = repeatLast $ _svgTextInfoRotate nfo
+  , _svgTextInfoLength = _svgTextInfoLength nfo
+  }
+
+mapTextInfoLists :: (forall a. [a] -> [a]) -> SvgTextInfo -> SvgTextInfo
+mapTextInfoLists f val = SvgTextInfo
+    { _svgTextInfoX      = f $ _svgTextInfoX val
+    , _svgTextInfoY      = f $ _svgTextInfoY val
+    , _svgTextInfoDX     = f $ _svgTextInfoDX val
+    , _svgTextInfoDY     = f $ _svgTextInfoDY val
+    , _svgTextInfoRotate = f $ _svgTextInfoRotate val
+    , _svgTextInfoLength = _svgTextInfoLength val
+    }
+
+textInfoRests :: SvgTextInfo -> SvgTextInfo -> SvgTextInfo
+              -> SvgTextInfo
+textInfoRests this parent sub = SvgTextInfo
+    { _svgTextInfoX      = decideWith _svgTextInfoX
+    , _svgTextInfoY      = decideWith _svgTextInfoY
+    , _svgTextInfoDX     = decideWith _svgTextInfoDX
+    , _svgTextInfoDY     = decideWith _svgTextInfoDY
+    , _svgTextInfoRotate = decideWith _svgTextInfoRotate
+    , _svgTextInfoLength = _svgTextInfoLength parent
+    }
+  where
+    decideWith f =
+        decide (f this) (f parent) (f sub)
+
+    decide that top ssub = case that of
+       [] -> ssub
+       [_] -> top
+       _ -> ssub
+
+
+unconsTextInfo :: SvgTextInfo -> (CharInfo, SvgTextInfo)
+unconsTextInfo nfo = (charInfo, restText) where
+  unconsInf lst = case lst of
+     []     -> (Nothing, [])
+     (x:xs) -> (Just x, xs)
+
+  (xC, xRest) = unconsInf $ _svgTextInfoX nfo
+  (yC, yRest) = unconsInf $ _svgTextInfoY nfo
+  (dxC, dxRest) = unconsInf $ _svgTextInfoDX nfo
+  (dyC, dyRest) = unconsInf $ _svgTextInfoDY nfo
+  (rotateC, rotateRest) = unconsInf $ _svgTextInfoRotate nfo
+
+  restText = SvgTextInfo
+    { _svgTextInfoX      = xRest
+    , _svgTextInfoY      = yRest
+    , _svgTextInfoDX     = dxRest
+    , _svgTextInfoDY     = dyRest
+    , _svgTextInfoRotate = rotateRest
+    , _svgTextInfoLength = _svgTextInfoLength nfo
+    }
+
+  charInfo = CharInfo
+    { _svgCharX = xC
+    , _svgCharY = yC
+    , _svgCharDx = dxC
+    , _svgCharDy = dyC
+    , _svgCharRotate = rotateC
+    }
+
+data SvgTextSpanContent
+    = SvgSpanText    !T.Text
+    | SvgSpanTextRef !String
+    | SvgSpanSub     !SvgTextSpan
+    deriving (Eq, Show)
+
 data SvgTextSpan = SvgTextSpan
-  { _svgSpanText :: !T.Text
-  , _svgSpanInfo :: !SvgTextInfo
+  { _svgSpanInfo           :: !SvgTextInfo
+  , _svgSpanDrawAttributes :: !SvgDrawAttributes
+  , _svgSpanContent        :: ![SvgTextSpanContent]
   }
   deriving (Eq, Show)
 
@@ -438,9 +545,28 @@ makeClassy ''SvgTextSpan
 
 defaultSvgTextSpan :: SvgTextSpan
 defaultSvgTextSpan = SvgTextSpan
-  { _svgSpanText = mempty
-  , _svgSpanInfo = defaultSvgTextInfo
+  { _svgSpanInfo = defaultSvgTextInfo
+  , _svgSpanDrawAttributes = mempty
+  , _svgSpanContent        = mempty
   }
+
+data SvgTextPathMethod
+  = SvgTextPathAlign
+  | SvgTextPathStretch
+  deriving (Eq, Show)
+
+data SvgTextPathSpacing
+  = SvgTextPathSpacingExact
+  | SvgTextPathSpacingAuto
+  deriving (Eq, Show)
+
+data SvgTextPath = SvgTextPath
+  { _svgTextPathStartOffset :: !SvgNumber
+  , _svgTextPathName        :: !String
+  , _svgTextPathMethod      :: !SvgTextPathMethod
+  , _svgTextPathSpacing     :: !SvgTextPathSpacing
+  }
+  deriving (Eq, Show)
 
 data SvgTextAdjust
   = SvgTextAdjustSpacing
@@ -448,23 +574,19 @@ data SvgTextAdjust
   deriving (Eq, Show)
 
 data SvgText = SvgText
-  { _svgTextDrawAttributes :: !SvgDrawAttributes
-  , _svgTextInfos          :: !SvgTextInfo
-  , _svgTextAdjust         :: !SvgTextAdjust
-  , _svgTextSpans          :: ![SvgTextSpan]
+  { _svgTextAdjust :: !SvgTextAdjust
+  , _svgTextRoot   :: !SvgTextSpan
   }
   deriving (Eq, Show)
 
 makeClassy ''SvgText
 
 instance WithSvgDrawAttributes SvgText where
-  drawAttr = svgTextDrawAttributes
+  drawAttr = svgTextRoot . svgSpanDrawAttributes
 
 defaultSvgText :: SvgText
 defaultSvgText = SvgText
-  { _svgTextDrawAttributes = mempty
-  , _svgTextInfos = defaultSvgTextInfo
-  , _svgTextSpans = mempty
+  { _svgTextRoot = defaultSvgTextSpan
   , _svgTextAdjust = SvgTextAdjustSpacing
   }
 
@@ -480,7 +602,7 @@ data SvgTree
     | Ellipse   !SvgEllipse
     | Line      !SvgLine
     | Rectangle !SvgRectangle
-    | Text      !SvgText
+    | TextArea  !SvgText
     deriving (Eq, Show)
 
 appNode :: [[a]] -> a -> [[a]]
@@ -503,7 +625,7 @@ zipSvgTree f = dig [] where
   dig prev e@(Ellipse _) = f $ appNode prev e
   dig prev e@(Line _) = f $ appNode prev e
   dig prev e@(Rectangle _) = f $ appNode prev e
-  dig prev e@(Text _) = f $ appNode prev e
+  dig prev e@(TextArea _) = f $ appNode prev e
 
   zipGroup prev g = g { _svgGroupChildren = updatedChildren }
     where
@@ -527,7 +649,7 @@ nameOfTree v =
    Ellipse _   -> "ellipse"
    Line _      -> "line"
    Rectangle _ -> "rectangle"
-   Text _      -> "text"
+   TextArea _      -> "text"
 
 drawAttrOfTree :: SvgTree -> SvgDrawAttributes
 drawAttrOfTree v = case v of
@@ -542,7 +664,7 @@ drawAttrOfTree v = case v of
   Ellipse e -> e ^. drawAttr
   Line e -> e ^. drawAttr
   Rectangle e -> e ^. drawAttr
-  Text e -> e ^. drawAttr
+  TextArea e -> e ^. drawAttr
 
 setDrawAttrOfTree :: SvgTree -> SvgDrawAttributes -> SvgTree
 setDrawAttrOfTree v attr = case v of
@@ -557,7 +679,7 @@ setDrawAttrOfTree v attr = case v of
   Ellipse e -> Ellipse $ e & drawAttr .~ attr
   Line e -> Line $ e & drawAttr .~ attr
   Rectangle e -> Rectangle $ e & drawAttr .~ attr
-  Text e -> Text $ e & drawAttr .~ attr
+  TextArea e -> TextArea $ e & drawAttr .~ attr
 
 instance WithSvgDrawAttributes SvgTree where
     drawAttr = lens drawAttrOfTree setDrawAttrOfTree
@@ -652,10 +774,6 @@ svgDocumentSize SvgDocument { _svgViewBox = Just (x1, y1, x2, y2) } =
     (abs $ x2 - x1, abs $ y2 - y1)
 svgDocumentSize _ = (1, 1)
 
-mayRight :: Maybe a -> Maybe a -> Maybe a
-mayRight _ b@(Just _) = b
-mayRight a Nothing = a
-
 mayMerge :: Monoid a => Maybe a -> Maybe a -> Maybe a
 mayMerge (Just a) (Just b) = Just $ mappend a b
 mayMerge _ b@(Just _) = b
@@ -663,42 +781,42 @@ mayMerge a Nothing = a
 
 instance Monoid SvgDrawAttributes where
     mempty = SvgDrawAttributes 
-        { _strokeWidth      = Nothing
-        , _strokeColor      = Nothing
+        { _strokeWidth      = Last Nothing
+        , _strokeColor      = Last Nothing
         , _strokeOpacity    = 1.0
-        , _strokeLineCap    = Nothing
-        , _strokeLineJoin   = Nothing
-        , _strokeMiterLimit = Nothing
-        , _fillColor        = Nothing
+        , _strokeLineCap    = Last Nothing
+        , _strokeLineJoin   = Last Nothing
+        , _strokeMiterLimit = Last Nothing
+        , _fillColor        = Last Nothing
         , _fillOpacity      = 1.0
-        , _fontSize         = Nothing
-        , _fontFamily       = Nothing
-        , _fontStyle        = Nothing
+        , _fontSize         = Last Nothing
+        , _fontFamily       = Last Nothing
+        , _fontStyle        = Last Nothing
         , _transform        = Nothing
-        , _fillRule         = Nothing
-        , _attrClass        = Nothing
+        , _fillRule         = Last Nothing
+        , _attrClass        = Last Nothing
         , _attrId           = Nothing
-        , _strokeOffset     = Nothing
-        , _strokeDashArray  = Nothing
+        , _strokeOffset     = Last Nothing
+        , _strokeDashArray  = Last Nothing
         }
 
     mappend a b = SvgDrawAttributes
-        { _strokeWidth = (mayRight `on` _strokeWidth) a b
-        , _strokeColor =  (mayRight `on` _strokeColor) a b
-        , _strokeLineCap = (mayRight `on` _strokeLineCap) a b
+        { _strokeWidth = (mappend `on` _strokeWidth) a b
+        , _strokeColor =  (mappend `on` _strokeColor) a b
+        , _strokeLineCap = (mappend `on` _strokeLineCap) a b
         , _strokeOpacity = ((*) `on` _strokeOpacity) a b
-        , _strokeLineJoin = (mayRight `on` _strokeLineJoin) a b
-        , _strokeMiterLimit = (mayRight `on` _strokeMiterLimit) a b
-        , _fillColor =  (mayRight `on` _fillColor) a b
+        , _strokeLineJoin = (mappend `on` _strokeLineJoin) a b
+        , _strokeMiterLimit = (mappend `on` _strokeMiterLimit) a b
+        , _fillColor =  (mappend `on` _fillColor) a b
         , _fillOpacity = ((*) `on` _fillOpacity) a b
-        , _fontSize = (mayRight `on` _fontSize) a b
+        , _fontSize = (mappend `on` _fontSize) a b
         , _transform = (mayMerge `on` _transform) a b
-        , _fillRule = (mayRight `on` _fillRule) a b
-        , _attrClass = (mayRight `on` _attrClass) a b
+        , _fillRule = (mappend `on` _fillRule) a b
+        , _attrClass = (mappend `on` _attrClass) a b
         , _attrId = _attrId b
-        , _strokeOffset = (mayRight `on` _strokeOffset) a b
-        , _strokeDashArray = (mayRight `on` _strokeDashArray) a b
-        , _fontFamily = (mayRight `on` _fontFamily) a b
-        , _fontStyle = (mayRight `on` _fontStyle) a b
+        , _strokeOffset = (mappend `on` _strokeOffset) a b
+        , _strokeDashArray = (mappend `on` _strokeDashArray) a b
+        , _fontFamily = (mappend `on` _fontFamily) a b
+        , _fontStyle = (mappend `on` _fontStyle) a b
         }
 

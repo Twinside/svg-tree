@@ -10,11 +10,15 @@ import Control.Applicative( (<$>)
 
 import Control.Lens hiding( transform )
 import Control.Monad.State.Strict( State, runState, modify, gets )
-import Data.Monoid( mempty )
+import Data.Monoid( mempty, Last( Last ) )
 import Data.List( foldl' )
 import Text.XML.Light.Proc( findAttrBy, elChildren, strContent )
 import Text.XML.Light.Types( Element( .. )
-                           , QName( .. ) )
+                           , QName( .. )
+                           , Content( Elem, Text, CRef )
+                           , cdData
+                           )
+
 import qualified Data.Text as T
 import qualified Data.Map as M
 import Data.Attoparsec.Text( Parser, parseOnly, many1 )
@@ -44,17 +48,17 @@ attributeFinder :: String -> Element -> Maybe String
 attributeFinder str =
     findAttrBy (\a -> qName a == str)
 
-parseSvgCap :: String -> Maybe SvgCap
-parseSvgCap "butt" = Just SvgCapButt
-parseSvgCap "round" = Just SvgCapRound
-parseSvgCap "square" = Just SvgCapSquare
-parseSvgCap _ = Nothing
+parseSvgCap :: String -> Last SvgCap
+parseSvgCap "butt" = Last $ Just SvgCapButt
+parseSvgCap "round" = Last $ Just SvgCapRound
+parseSvgCap "square" = Last $ Just SvgCapSquare
+parseSvgCap _ = Last Nothing
 
-parseSvgLineJoin :: String -> Maybe SvgLineJoin
-parseSvgLineJoin "miter" = Just SvgJoinMiter
-parseSvgLineJoin "round" = Just SvgJoinRound
-parseSvgLineJoin "bevel" = Just SvgJoinBevel
-parseSvgLineJoin _ = Nothing
+parseSvgLineJoin :: String -> Last SvgLineJoin
+parseSvgLineJoin "miter" = Last $ Just SvgJoinMiter
+parseSvgLineJoin "round" = Last $ Just SvgJoinRound
+parseSvgLineJoin "bevel" = Last $ Just SvgJoinBevel
+parseSvgLineJoin _ = Last Nothing
 
 parseGradientUnit :: String -> GradientUnits
 parseGradientUnit "userSpaceOnUse" = GradientUserSpace
@@ -67,10 +71,10 @@ parseGradientSpread "reflect" = SpreadReflect
 parseGradientSpread "repeat" = SpreadRepeat
 parseGradientSpread _ = SpreadPad
 
-parseFillRule :: String -> Maybe SvgFillRule
-parseFillRule "nonzero" = Just SvgFillNonZero
-parseFillRule "evenodd" = Just SvgFillEvenOdd
-parseFillRule _ = Nothing
+parseFillRule :: String -> Last SvgFillRule
+parseFillRule "nonzero" = Last $ Just SvgFillNonZero
+parseFillRule "evenodd" = Last $ Just SvgFillEvenOdd
+parseFillRule _ = Last Nothing
 
 parseTextAdjust :: String -> SvgTextAdjust
 parseTextAdjust "spacing" = SvgTextAdjustSpacing
@@ -133,11 +137,18 @@ numericMaySetter setter el str =
     Nothing -> el
     Just v -> el & setter .~ Just v
 
-numMaySetter :: ASetter a a b (Maybe Float) -> Updater a
+numericLastSetter :: ASetter a a b (Last SvgNumber) -> Updater a
+numericLastSetter setter el str =
+  case parseMayStartDot complexNumber str of
+    Nothing -> el
+    Just v -> el & setter .~ Last (Just v)
+
+
+numMaySetter :: ASetter a a b (Last Float) -> Updater a
 numMaySetter setter el str =
   case parseMayStartDot num str of
     Nothing -> el
-    Just v -> el & setter .~ Just v
+    Just v -> el & setter .~ Last (Just v)
 
 numSetter :: ASetter a a b Float -> Updater a
 numSetter setter el str =
@@ -157,6 +168,12 @@ parserMaySetter setter parser el str =
     Nothing -> el
     Just v -> el & setter .~ Just v
 
+parserLastSetter :: ASetter a a b (Last e) -> Parser e -> Updater a
+parserLastSetter setter parser el str =
+  case parse parser str of
+    Nothing -> el
+    Just v -> el & setter .~ Last (Just v)
+
 class SvgXMLUpdatable a where
   svgAttributes :: [(String, Updater a)]
   defaultSvg :: a
@@ -165,9 +182,9 @@ type CssUpdater =
     SvgDrawAttributes -> [[CssElement]] -> SvgDrawAttributes
 
 cssUniqueNumber :: ASetter SvgDrawAttributes SvgDrawAttributes
-                   a (Maybe SvgNumber)
+                   a (Last SvgNumber)
                 -> CssUpdater
-cssUniqueNumber setter attr ((CssNumber n:_):_) = attr & setter .~ Just n
+cssUniqueNumber setter attr ((CssNumber n:_):_) = attr & setter .~ Last (Just n)
 cssUniqueNumber _ attr _ = attr
 
 cssUniqueFloat :: ASetter SvgDrawAttributes SvgDrawAttributes a Float
@@ -176,10 +193,10 @@ cssUniqueFloat setter attr ((CssNumber (SvgNum n):_):_) =
     attr & setter .~ n
 cssUniqueFloat _ attr _ = attr
 
-cssUniqueMayFloat :: ASetter SvgDrawAttributes SvgDrawAttributes a (Maybe Float)
+cssUniqueMayFloat :: ASetter SvgDrawAttributes SvgDrawAttributes a (Last Float)
                -> CssUpdater
 cssUniqueMayFloat setter attr ((CssNumber (SvgNum n):_):_) =
-    attr & setter .~ Just n
+    attr & setter .~ Last (Just n)
 cssUniqueMayFloat _ attr _ = attr
 
 cssIdentParser :: ASetter SvgDrawAttributes SvgDrawAttributes a b
@@ -198,12 +215,12 @@ cssIdentStringParser setter f attr ((CssIdent i:_):_) =
 cssIdentStringParser _ _ attr _ = attr
 
 cssUniqueTexture :: ASetter SvgDrawAttributes SvgDrawAttributes
-                    a (Maybe SvgTexture)
+                    a (Last SvgTexture)
                  -> CssUpdater
 cssUniqueTexture setter attr ((CssIdent "none":_):_) =
-    attr & setter .~ Just FillNone
+    attr & setter .~ Last (Just FillNone)
 cssUniqueTexture setter attr ((CssColor c:_):_) =
-    attr & setter .~ Just (ColorRef c)
+    attr & setter .~ Last (Just $ ColorRef c)
 cssUniqueTexture _ attr _ = attr
 
 cssMayStringSetter :: ASetter SvgDrawAttributes SvgDrawAttributes a (Maybe String)
@@ -214,19 +231,26 @@ cssMayStringSetter setter attr ((CssString i:_):_) =
     attr & setter .~ Just (T.unpack i)
 cssMayStringSetter _ attr _ = attr
 
+cssLastStringSetter :: ASetter SvgDrawAttributes SvgDrawAttributes a (Last String)
+                   -> CssUpdater
+cssLastStringSetter setter attr ((CssIdent i:_):_) =
+    attr & setter .~ Last (Just $ T.unpack i)
+cssLastStringSetter setter attr ((CssString i:_):_) =
+    attr & setter .~ Last (Just $ T.unpack i)
+cssLastStringSetter _ attr _ = attr
 
-cssDashArray :: ASetter SvgDrawAttributes SvgDrawAttributes a (Maybe [SvgNumber])
+cssDashArray :: ASetter SvgDrawAttributes SvgDrawAttributes a (Last [SvgNumber])
              -> CssUpdater
 cssDashArray setter attr (lst:_) =
   case [n | CssNumber n <- lst ] of
     [] -> attr
-    v -> attr & setter .~ Just v
+    v -> attr & setter .~ Last (Just v)
 cssDashArray _ attr _ = attr
 
 drawAttributesList :: [(String, Updater SvgDrawAttributes, CssUpdater)]
 drawAttributesList =
-    [("stroke-width", numericMaySetter strokeWidth, cssUniqueNumber strokeWidth)
-    ,("stroke", parserSetter strokeColor textureParser,
+    [("stroke-width", numericLastSetter strokeWidth, cssUniqueNumber strokeWidth)
+    ,("stroke", parserSetter strokeColor (Last <$> textureParser),
         cssUniqueTexture strokeColor)
     ,("stroke-linecap",
         \e s -> e & strokeLineCap .~ parseSvgCap s,
@@ -236,21 +260,21 @@ drawAttributesList =
         cssIdentStringParser strokeLineJoin parseSvgLineJoin)
     ,("stroke-miterlimit", numMaySetter strokeMiterLimit,
         cssUniqueMayFloat strokeMiterLimit)
-    ,("fill", parserSetter fillColor textureParser,
+    ,("fill", parserSetter fillColor (Last <$> textureParser),
         cssUniqueTexture fillColor)
      -- TODO: fix this incompletness
     ,("transform", parserMaySetter transform (many transformParser), const)
     ,("opacity", numSetter fillOpacity, cssUniqueFloat fillOpacity)
     ,("fill-opacity", numSetter fillOpacity, cssUniqueFloat fillOpacity)
     ,("stroke-opacity", numSetter strokeOpacity, cssUniqueFloat strokeOpacity)
-    ,("font-size", numericMaySetter fontSize, cssUniqueNumber fontSize)
+    ,("font-size", numericLastSetter fontSize, cssUniqueNumber fontSize)
     ,("fill-rule", \e s -> e & fillRule .~ parseFillRule s,
         cssIdentStringParser fillRule parseFillRule)
-    ,("class", \e s -> e & attrClass .~ Just s, cssMayStringSetter attrClass)
+    ,("class", \e s -> e & attrClass .~ Last (Just s), cssLastStringSetter attrClass)
     ,("id", \e s -> e & attrId .~ Just s, cssMayStringSetter attrId)
-    ,("stroke-dashoffset",numericMaySetter strokeWidth,
+    ,("stroke-dashoffset",numericLastSetter strokeWidth,
         cssUniqueNumber strokeWidth)
-    ,("stroke-dasharray", parserMaySetter strokeDashArray  dashArray,
+    ,("stroke-dasharray", parserLastSetter strokeDashArray  dashArray,
         cssDashArray strokeDashArray)
     ]
 
@@ -379,29 +403,39 @@ instance SvgXMLUpdatable SvgUse where
       dropSharp ('#':rest) = rest
       dropSharp a = a
 
-textInfo :: [(String, Updater SvgTextInfo)]
-textInfo =
-  [("x", parserSetter svgTextInfoX dashArray)
-  ,("y", parserSetter svgTextInfoY dashArray)
-  ,("dx", parserSetter svgTextInfoDX dashArray)
-  ,("dy", parserSetter svgTextInfoDY dashArray)
-  ,("rotate", parserSetter svgTextInfoRotate numberList )
-  ,("textLength", numericMaySetter svgTextInfoLength)
-  ]
+instance SvgXMLUpdatable SvgTextInfo where
+  defaultSvg = defaultSvgTextInfo
+  svgAttributes =
+    [("x", parserSetter svgTextInfoX dashArray)
+    ,("y", parserSetter svgTextInfoY dashArray)
+    ,("dx", parserSetter svgTextInfoDX dashArray)
+    ,("dy", parserSetter svgTextInfoDY dashArray)
+    ,("rotate", parserSetter svgTextInfoRotate numberList )
+    ,("textLength", numericMaySetter svgTextInfoLength)
+    ]
 
 instance SvgXMLUpdatable SvgText where
   defaultSvg = defaultSvgText
   svgAttributes =
-     lengthAdjuster : [(s, infoAdapter l) | (s, l) <- textInfo]
-    where
-      infoAdapter f e s = over svgTextInfos (flip f s) e
-      lengthAdjuster = 
-        ("lengthAdjust", \e s -> e & svgTextAdjust .~ parseTextAdjust s)
-
-instance SvgXMLUpdatable SvgTextSpan where
-  defaultSvg = defaultSvgTextSpan
-  svgAttributes = [(s, infoAdapter l) | (s, l) <- textInfo]
-    where infoAdapter f e s = over svgSpanInfo (flip f s) e
+      [("lengthAdjust", \e s -> e & svgTextAdjust .~ parseTextAdjust s)]
+        
+unparseText :: [Content] -> [SvgTextSpanContent]
+unparseText = go
+  where
+    go [] = []
+    go (CRef _:rest) = go rest
+    go (Elem e@(nodeName -> "tspan"):rest) = SvgSpanSub spans : go rest
+      where spans = SvgTextSpan (xmlUnparse e) (xmlUnparse e) (go $ elContent e)
+    go (Elem e@(nodeName -> "tref"):rest) = 
+        case attributeFinder "href" e of
+          Nothing -> go rest
+          Just v -> SvgSpanTextRef v : go rest
+    go (Elem e@(nodeName -> "textPath"):rest) = 
+        case attributeFinder "href" e of
+          Nothing -> go rest
+          Just v -> SvgSpanTextRef v : go rest
+    go (Elem _:rest) = go rest
+    go (Text t:rest) = SvgSpanText (T.strip . T.pack $ cdData t) : go rest
 
 gradientOffsetSetter :: SvgGradientStop -> String -> SvgGradientStop
 gradientOffsetSetter el str = el & gradientOffset .~ val
@@ -473,7 +507,7 @@ svgTreeModify f v = case v of
   Ellipse e -> Ellipse $ f e
   Line e -> Line $ f e
   Rectangle e -> Rectangle $ f e
-  Text e -> Text $ f e
+  TextArea e -> TextArea $ f e
 
 
 unparse :: Element -> State SvgSymbols SvgTree
@@ -502,6 +536,15 @@ unparse e@(nodeName -> "g") = do
   where
     isNotNone SvgNone = False
     isNotNone _ = True
+
+unparse e@(nodeName -> "text") =
+  pure . TextArea $ xmlUnparse e & svgTextRoot .~ root
+    where
+      root = SvgTextSpan
+           { _svgSpanInfo = xmlUnparse e
+           , _svgSpanDrawAttributes = xmlUnparse e
+           , _svgSpanContent = unparseText $ elContent e
+           }
 
 unparse e@(nodeName -> "ellipse") =
   pure . Ellipse $ xmlUnparseWithDrawAttr e

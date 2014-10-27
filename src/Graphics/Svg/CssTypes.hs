@@ -12,6 +12,7 @@ module Graphics.Svg.CssTypes
     ) where
 
 import Codec.Picture( PixelRGBA8 )
+import Data.Monoid( Last( .. ) )
 import Data.Text( Text )
 import Control.Lens( view )
 import qualified Data.Text as T
@@ -47,7 +48,7 @@ class CssMatcheable a where
 
 instance CssMatcheable SvgTree where
   cssAttribOf _ _ = Nothing
-  cssClassOf = fmap T.pack . view (drawAttr . attrClass)
+  cssClassOf = fmap T.pack . getLast . view (drawAttr . attrClass)
   cssIdOf = fmap T.pack . view (drawAttr . attrId)
   cssNameOf = nameOfTree
 

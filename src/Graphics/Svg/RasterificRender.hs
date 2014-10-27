@@ -1,13 +1,17 @@
 {-# LANGUAGE ScopedTypeVariables     #-}
+{-# LANGUAGE TupleSections #-}
 module Graphics.Svg.RasterificRender where
 
+import Control.Monad( foldM )
+import Control.Monad.IO.Class( liftIO )
 import Control.Monad.Trans.State.Strict
 import Control.Applicative( (<$>), pure )
 import Codec.Picture( Image, PixelRGBA8( .. ) )
 import qualified Data.Foldable as F
 import qualified Data.Map as M
-import Data.Monoid( mempty, (<>) )
+import Data.Monoid( mempty, (<>), Last( .. ), First( .. ) )
 import Data.List( mapAccumL )
+import qualified Data.Text as T
 import Graphics.Rasterific.Linear( (^+^)
                                  , (^-^)
                                  , (^*)
@@ -27,7 +31,7 @@ import Graphics.Svg.Types
 
 capOfSvg :: SvgDrawAttributes -> (Cap, Cap)
 capOfSvg attrs =
-  case _strokeLineCap attrs of
+  case getLast $ _strokeLineCap attrs of
     Nothing -> (CapStraight 1, CapStraight 1)
     Just SvgCapSquare -> (CapStraight 1, CapStraight 1)
     Just SvgCapButt -> (CapStraight 0, CapStraight 0)
@@ -35,7 +39,7 @@ capOfSvg attrs =
 
 joinOfSvg :: SvgDrawAttributes -> Join
 joinOfSvg attrs =
-  case (_strokeLineJoin attrs,_strokeMiterLimit attrs) of
+  case (getLast $ _strokeLineJoin attrs, getLast $ _strokeMiterLimit attrs) of
     (Nothing, _) -> JoinRound
     (Just SvgJoinMiter, Just _) -> JoinMiter 0
     (Just SvgJoinMiter, Nothing) -> JoinMiter 0
@@ -218,8 +222,7 @@ data RenderContext = RenderContext
     }
 
 
-type LoadedFonts =
-    M.Map (String, FontDescriptor) Font
+type LoadedFonts = M.Map FilePath Font
 
 type IODraw = StateT LoadedFonts IO
 
@@ -311,7 +314,7 @@ prepareRadialGradientTexture ctxt attr grad opa prims =
         $ lineariser (fx, fy)
 
 fillMethodOfSvg :: SvgDrawAttributes -> FillMethod
-fillMethodOfSvg attr = case _fillRule attr of
+fillMethodOfSvg attr = case getLast $ _fillRule attr of
     Nothing -> FillWinding
     Just SvgFillNonZero -> FillWinding
     Just SvgFillEvenOdd -> FillEvenOdd
@@ -345,18 +348,19 @@ filler :: RenderContext
        -> [Primitive]
        -> Drawing PixelRGBA8 ()
 filler ctxt info primitives =
-  withInfo _fillColor info $ \svgTexture ->
+  withInfo (getLast . _fillColor) info $ \svgTexture ->
     withSvgTexture ctxt info svgTexture (_fillOpacity info) primitives
 
 stroker :: RenderContext -> SvgDrawAttributes -> [Primitive]
         -> Drawing PixelRGBA8 ()
 stroker ctxt info primitives =
-  withInfo _strokeWidth info $ \swidth ->
-    withInfo _strokeColor info $ \svgTexture ->
+  withInfo (getLast . _strokeWidth) info $ \swidth ->
+    withInfo (getLast . _strokeColor) info $ \svgTexture ->
       let toFloat = lineariseLength ctxt info
           realWidth = toFloat swidth
-          dashOffsetStart = maybe 0 toFloat $ _strokeOffset info
-          primsList = case _strokeDashArray info of
+          dashOffsetStart =
+              maybe 0 toFloat . getLast $ _strokeOffset info
+          primsList = case getLast $ _strokeDashArray info of
             Just pattern ->
                 dashedStrokize dashOffsetStart (toFloat <$> pattern)
                   realWidth (joinOfSvg info) (capOfSvg info) primitives
@@ -369,7 +373,7 @@ mergeContext :: RenderContext -> SvgDrawAttributes -> RenderContext
 mergeContext ctxt _attr = ctxt
 
 emTransform :: SvgDrawAttributes -> Float -> Float
-emTransform attr n = case _fontSize attr of
+emTransform attr n = case getLast $ _fontSize attr of
     Nothing -> 16 * n
     Just (SvgNum v) -> v * n
     Just _ -> 16 * n
@@ -416,18 +420,95 @@ viewBoxOfTree :: SvgTree -> Maybe (Int, Int, Int, Int)
 viewBoxOfTree (Symbol g) = _svgGroupViewBox g
 viewBoxOfTree _ = Nothing
 
+loadFont :: FilePath -> IODraw (Maybe Font)
+loadFont path = do
+  loaded <- get
+  case M.lookup path loaded of
+    Just v -> return $ Just v
+    Nothing -> do
+      file <- liftIO $ loadFontFile path
+      case file of
+        Left _ -> return Nothing
+        Right f -> do
+          put $ M.insert path f loaded
+          return $ Just f
+
+data RenderableString = RenderableString
+    { _renderableAttributes :: !SvgDrawAttributes
+    , _renderableSize       :: !Float
+    , _renderableFont       :: !Font
+    , _renderableString     :: ![(Char, CharInfo)]
+    }
+
+mixWithRenderInfo :: SvgTextInfo -> String
+                  -> (SvgTextInfo, [(Char, CharInfo)])
+mixWithRenderInfo = mapAccumL go where
+  go info c = (rest, (c, thisInfo))
+    where
+      (thisInfo, rest) = unconsTextInfo info
+
+renderText :: RenderContext -> SvgDrawAttributes -> SvgText
+           -> IODraw (Drawing PixelRGBA8 ())
+renderText ctxt ini_attr txt =
+    fst <$> everySpan ini_attr mempty (_svgTextRoot txt) where
+
+  everySpan attr originalInfo tspan =
+      foldM (everyContent subAttr) (mempty, nfo) $ _svgSpanContent tspan
+    where
+      subAttr = attr <> _svgSpanDrawAttributes tspan
+      nfo = infinitizeTextInfo $ _svgSpanInfo tspan
+
+  everyContent attr (acc, info) (SvgSpanTextRef _) = return (acc, info)
+  everyContent attr (acc, info) (SvgSpanSub span) = do
+      let thisTextInfo = _svgSpanInfo span
+      (drawn, newInfo) <- everySpan attr info span
+      return (acc <> drawn, textInfoRests thisTextInfo info newInfo)
+  everyContent attr (acc, info) (SvgSpanText txt) = do
+    let fontFamilies = maybe [] id . getLast $ _fontFamily attr
+        fontFilename = getFirst $ F.foldMap fontFinder fontFamilies
+    font <- loadFont $ maybe "" id fontFilename
+    case font of
+      Nothing -> return (acc, info)
+      Just f ->
+        let (acc', str) = mixWithRenderInfo info $ T.unpack txt
+            finalStr = RenderableString attr size f str
+        in
+        return ([finalStr], acc')
+     
+     where
+       size = case getLast $ _fontSize attr of
+          Just v -> lineariseLength ctxt attr v
+          Nothing -> 16
+
+       noStyle = FontStyle
+               { _fontStyleBold = False
+               , _fontStyleItalic = False }
+       italic = noStyle { _fontStyleItalic = True }
+
+       style = case getLast $ _fontStyle attr of
+         Nothing -> noStyle
+         Just FontStyleNormal -> noStyle
+         Just FontStyleItalic -> italic
+         Just FontStyleOblique -> italic
+
+       fontFinder fontFamily =
+            First $ findFontInCache (_fontCache ctxt) descriptor
+         where descriptor = FontDescriptor	 
+                    { _descriptorFamilyName = T.pack fontFamily
+                    , _descriptorStyle = style }
+
 renderSvg :: RenderContext -> SvgTree -> IODraw (Drawing PixelRGBA8 ())
 renderSvg initialContext t = go initialContext initialAttr t
   where
     initialAttr =
-      mempty { _strokeWidth = Just (SvgNum 1.0)
-             , _strokeLineCap = Just SvgCapButt
-             , _strokeLineJoin = Just SvgJoinMiter
-             , _strokeMiterLimit = Just 4.0
+      mempty { _strokeWidth = Last $ Just (SvgNum 1.0)
+             , _strokeLineCap = Last $ Just SvgCapButt
+             , _strokeLineJoin = Last $ Just SvgJoinMiter
+             , _strokeMiterLimit = Last $ Just 4.0
              , _strokeOpacity = 1.0
-             , _fillColor = Just . ColorRef $ PixelRGBA8 0 0 0 255
+             , _fillColor = Last . Just . ColorRef $ PixelRGBA8 0 0 0 255
              , _fillOpacity = 1.0
-             , _fillRule = Just SvgFillNonZero
+             , _fillRule = Last $ Just SvgFillNonZero
              }
 
     fitUse ctxt attr use subTree =
@@ -455,7 +536,7 @@ renderSvg initialContext t = go initialContext initialAttr t
 
     go _ _ SvgNone = return mempty
     -- not handled yet
-    go _ _ (Text _) = return mempty
+    go ctxt attr (TextArea stext) = renderText ctxt attr stext
     go ctxt attr (Use useData subTree) = do
       sub <- go ctxt attr' subTree
       return . fitUse ctxt attr useData subTree
@@ -516,7 +597,7 @@ renderSvg initialContext t = go initialContext initialAttr t
             . Path . SvgPathPrim (dropFillColor pAttr)
             $ toPath points
       where
-        dropFillColor v = v { _fillColor = Nothing }
+        dropFillColor v = v { _fillColor = Last Nothing }
         toPath [] = []
         toPath (x:xs) =
             [ MoveTo OriginAbsolute [x]
