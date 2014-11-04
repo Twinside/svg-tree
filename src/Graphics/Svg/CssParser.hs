@@ -76,7 +76,7 @@ ident =
         <$> trailingSub
         <*> nmstart <*> nmchar
   where
-    trailingSub = option id $ (T.cons '-') <$ char '-'
+    trailingSub = option id $ T.cons '-' <$ char '-'
     underscore = char '_'
     nmstart = letter <|> underscore
     nmchar = many (letter <|> digit <|> underscore <|> char '-')
@@ -159,7 +159,7 @@ selector = (:)
   where
     combOpt :: Parser ([CssSelector] -> [CssSelector])
 
-    combOpt = cleanSpace *> (option id $ (:) <$> combinator)
+    combOpt = cleanSpace *> option id ((:) <$> combinator)
     next :: Parser [CssSelector]
     next = id <$> combOpt <*> selector
 
@@ -181,9 +181,9 @@ simpleSelector = (:) <$> elementName <*> many whole
     where el = (OfName <$> ident)
             <|> AnyElem <$ char '*'
 
-  attrib = (bracket $
-    WithAttrib <$> ident <*> (char '=' *> skipSpace *> (ident <|> str)))
-           <?> "attrib"
+  attrib = bracket
+    (WithAttrib <$> ident <*> (char '=' *> skipSpace *> (ident <|> str))
+           <?> "attrib")
 
 declaration :: Parser CssDeclaration
 declaration =

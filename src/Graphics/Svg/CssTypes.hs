@@ -82,7 +82,7 @@ isMatching = go where
 findMatchingDeclarations :: CssMatcheable a
                          => [CssRule] -> CssContext a -> [CssDeclaration]
 findMatchingDeclarations rules context =
-    concat [cssDeclarations $ rule
+    concat [cssDeclarations rule
                     | rule <- rules
                     , selector <- cssRuleSelector rule
                     , isMatching context $ reverse selector ]

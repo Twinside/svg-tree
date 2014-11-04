@@ -82,6 +82,13 @@ module Graphics.Svg.Types
     , defaultSvgText
     , HasSvgText( .. )
 
+    , SvgTextPath( .. )
+    , defaultSvgTextPath 
+    , HasSvgTextPath( .. )
+
+    , SvgTextPathSpacing( .. )
+    , SvgTextPathMethod( .. )
+
     , SvgTextSpanContent( .. )
 
     , SvgTextSpan( .. )
@@ -93,6 +100,7 @@ module Graphics.Svg.Types
     , infinitizeTextInfo
     , unconsTextInfo
     , textInfoRests
+    , mapTextInfoLists
     , defaultSvgTextInfo
     , HasSvgTextInfo( .. )
 
@@ -563,10 +571,22 @@ data SvgTextPathSpacing
 data SvgTextPath = SvgTextPath
   { _svgTextPathStartOffset :: !SvgNumber
   , _svgTextPathName        :: !String
+  , _svgTextPathData        :: ![SvgPath]
   , _svgTextPathMethod      :: !SvgTextPathMethod
   , _svgTextPathSpacing     :: !SvgTextPathSpacing
   }
   deriving (Eq, Show)
+
+makeClassy ''SvgTextPath
+
+defaultSvgTextPath :: SvgTextPath
+defaultSvgTextPath = SvgTextPath
+  { _svgTextPathStartOffset = SvgNum 0
+  , _svgTextPathName        = mempty
+  , _svgTextPathMethod      = SvgTextPathAlign
+  , _svgTextPathSpacing     = SvgTextPathSpacingExact
+  , _svgTextPathData        = []
+  }
 
 data SvgTextAdjust
   = SvgTextAdjustSpacing
@@ -574,8 +594,9 @@ data SvgTextAdjust
   deriving (Eq, Show)
 
 data SvgText = SvgText
-  { _svgTextAdjust :: !SvgTextAdjust
-  , _svgTextRoot   :: !SvgTextSpan
+  { _svgTextAdjust   :: !SvgTextAdjust
+  , _svgTextRoot     :: !SvgTextSpan
+  , _svgTextPathLine :: !(Maybe SvgTextPath)
   }
   deriving (Eq, Show)
 
@@ -588,6 +609,7 @@ defaultSvgText :: SvgText
 defaultSvgText = SvgText
   { _svgTextRoot = defaultSvgTextSpan
   , _svgTextAdjust = SvgTextAdjustSpacing
+  , _svgTextPathLine = Nothing
   }
 
 data SvgTree
@@ -602,7 +624,7 @@ data SvgTree
     | Ellipse   !SvgEllipse
     | Line      !SvgLine
     | Rectangle !SvgRectangle
-    | TextArea  !SvgText
+    | TextArea  !(Maybe SvgTextPath) !SvgText
     deriving (Eq, Show)
 
 appNode :: [[a]] -> a -> [[a]]
@@ -625,7 +647,7 @@ zipSvgTree f = dig [] where
   dig prev e@(Ellipse _) = f $ appNode prev e
   dig prev e@(Line _) = f $ appNode prev e
   dig prev e@(Rectangle _) = f $ appNode prev e
-  dig prev e@(TextArea _) = f $ appNode prev e
+  dig prev e@(TextArea _ _) = f $ appNode prev e
 
   zipGroup prev g = g { _svgGroupChildren = updatedChildren }
     where
@@ -649,7 +671,7 @@ nameOfTree v =
    Ellipse _   -> "ellipse"
    Line _      -> "line"
    Rectangle _ -> "rectangle"
-   TextArea _      -> "text"
+   TextArea _ _ -> "text"
 
 drawAttrOfTree :: SvgTree -> SvgDrawAttributes
 drawAttrOfTree v = case v of
@@ -664,7 +686,7 @@ drawAttrOfTree v = case v of
   Ellipse e -> e ^. drawAttr
   Line e -> e ^. drawAttr
   Rectangle e -> e ^. drawAttr
-  TextArea e -> e ^. drawAttr
+  TextArea _ e -> e ^. drawAttr
 
 setDrawAttrOfTree :: SvgTree -> SvgDrawAttributes -> SvgTree
 setDrawAttrOfTree v attr = case v of
@@ -679,7 +701,7 @@ setDrawAttrOfTree v attr = case v of
   Ellipse e -> Ellipse $ e & drawAttr .~ attr
   Line e -> Line $ e & drawAttr .~ attr
   Rectangle e -> Rectangle $ e & drawAttr .~ attr
-  TextArea e -> TextArea $ e & drawAttr .~ attr
+  TextArea a e -> TextArea a $ e & drawAttr .~ attr
 
 instance WithSvgDrawAttributes SvgTree where
     drawAttr = lens drawAttrOfTree setDrawAttrOfTree

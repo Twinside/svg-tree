@@ -10,6 +10,7 @@ import Codec.Picture( Image, PixelRGBA8( .. ) )
 import qualified Data.Foldable as F
 import qualified Data.Map as M
 import Data.Monoid( mempty, (<>), Last( .. ), First( .. ) )
+import Data.Maybe( fromMaybe )
 import Data.List( mapAccumL )
 import qualified Data.Text as T
 import Graphics.Rasterific.Linear( (^+^)
@@ -186,10 +187,7 @@ renderSvgDocument cache sizes doc = case sizes of
       return (img, s)
 
 withInfo :: Monad m => (a -> Maybe b) -> a -> (b -> m ()) -> m ()
-withInfo accessor val action =
-  case accessor val of
-    Nothing -> return ()
-    Just v -> action v
+withInfo accessor val action = F.forM_ (accessor val) action
 
 toTransformationMatrix :: SvgTransformation -> Transformation
 toTransformationMatrix = go where
@@ -211,7 +209,7 @@ withTransform :: SvgDrawAttributes -> Drawing a () -> Drawing a ()
 withTransform trans draw =
     case _transform trans of
        Nothing -> draw
-       Just t -> withTransformation fullTrans $ draw
+       Just t -> withTransformation fullTrans draw
          where fullTrans = F.foldMap toTransformationMatrix t
 
 data RenderContext = RenderContext
@@ -464,9 +462,9 @@ renderText ctxt ini_attr txt =
       (drawn, newInfo) <- everySpan attr info span
       return (acc <> drawn, textInfoRests thisTextInfo info newInfo)
   everyContent attr (acc, info) (SvgSpanText txt) = do
-    let fontFamilies = maybe [] id . getLast $ _fontFamily attr
+    let fontFamilies = fromMaybe [] . getLast $ _fontFamily attr
         fontFilename = getFirst $ F.foldMap fontFinder fontFamilies
-    font <- loadFont $ maybe "" id fontFilename
+    font <- loadFont $ fromMaybe "" fontFilename
     case font of
       Nothing -> return (acc, info)
       Just f ->
@@ -498,7 +496,7 @@ renderText ctxt ini_attr txt =
                     , _descriptorStyle = style }
 
 renderSvg :: RenderContext -> SvgTree -> IODraw (Drawing PixelRGBA8 ())
-renderSvg initialContext t = go initialContext initialAttr t
+renderSvg initialContext = go initialContext initialAttr
   where
     initialAttr =
       mempty { _strokeWidth = Last $ Just (SvgNum 1.0)
@@ -536,7 +534,7 @@ renderSvg initialContext t = go initialContext initialAttr t
 
     go _ _ SvgNone = return mempty
     -- not handled yet
-    go ctxt attr (TextArea stext) = renderText ctxt attr stext
+    go ctxt attr (TextArea _ stext) = renderText ctxt attr stext
     go ctxt attr (Use useData subTree) = do
       sub <- go ctxt attr' subTree
       return . fitUse ctxt attr useData subTree

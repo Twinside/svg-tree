@@ -399,9 +399,10 @@ instance SvgXMLUpdatable SvgUse where
     ,("height", numericMaySetter svgUseHeight)
     ,("href", \e s -> e & svgUseName .~ dropSharp s)
     ]
-    where
-      dropSharp ('#':rest) = rest
-      dropSharp a = a
+
+dropSharp :: String -> String
+dropSharp ('#':rest) = rest
+dropSharp a = a
 
 instance SvgXMLUpdatable SvgTextInfo where
   defaultSvg = defaultSvgTextInfo
@@ -414,28 +415,64 @@ instance SvgXMLUpdatable SvgTextInfo where
     ,("textLength", numericMaySetter svgTextInfoLength)
     ]
 
+parseTextPathMethod :: String -> SvgTextPathMethod
+parseTextPathMethod s = case s of
+  "align" -> SvgTextPathAlign
+  "stretch" -> SvgTextPathStretch
+  _ -> _svgTextPathMethod defaultSvgTextPath
+
+parseTextPathSpacing :: String -> SvgTextPathSpacing
+parseTextPathSpacing s = case s of
+  "auto" -> SvgTextPathSpacingAuto
+  "exact" -> SvgTextPathSpacingExact
+  _ -> _svgTextPathSpacing defaultSvgTextPath
+
+instance SvgXMLUpdatable SvgTextPath where
+  defaultSvg = defaultSvgTextPath
+  svgAttributes =
+    [("startOffset", numericSetter svgTextPathStartOffset)
+    ,("method",
+        \e s -> e & svgTextPathMethod .~ parseTextPathMethod s)
+    ,("spacing",
+        \e s -> e & svgTextPathSpacing .~ parseTextPathSpacing s)
+    ,("href", \e s -> e & svgTextPathName .~ dropSharp s)
+    ]
+
 instance SvgXMLUpdatable SvgText where
   defaultSvg = defaultSvgText
   svgAttributes =
       [("lengthAdjust", \e s -> e & svgTextAdjust .~ parseTextAdjust s)]
         
-unparseText :: [Content] -> [SvgTextSpanContent]
+unparseText :: [Content] -> ([SvgTextSpanContent], Maybe SvgTextPath)
 unparseText = go
   where
-    go [] = []
+    go [] = ([], Nothing)
     go (CRef _:rest) = go rest
-    go (Elem e@(nodeName -> "tspan"):rest) = SvgSpanSub spans : go rest
-      where spans = SvgTextSpan (xmlUnparse e) (xmlUnparse e) (go $ elContent e)
+    go (Elem e@(nodeName -> "tspan"):rest) = (SvgSpanSub spans : trest, mpath)
+      where
+        (trest, mpath) = go rest
+        spans = SvgTextSpan (xmlUnparse e) (xmlUnparse e)
+                                (fst . go $ elContent e)
+
     go (Elem e@(nodeName -> "tref"):rest) = 
         case attributeFinder "href" e of
           Nothing -> go rest
-          Just v -> SvgSpanTextRef v : go rest
+          Just v -> (SvgSpanTextRef v : trest, mpath)
+            where (trest, mpath) = go rest
+
     go (Elem e@(nodeName -> "textPath"):rest) = 
         case attributeFinder "href" e of
           Nothing -> go rest
-          Just v -> SvgSpanTextRef v : go rest
+          Just v -> (tsub ++ trest, pure path)
+            where
+              path = (xmlUnparse e) { _svgTextPathName = v }
+              (trest, _) = go rest
+              (tsub, _) = go $ elContent e
+
     go (Elem _:rest) = go rest
-    go (Text t:rest) = SvgSpanText (T.strip . T.pack $ cdData t) : go rest
+    go (Text t:rest) =
+        (SvgSpanText (T.strip . T.pack $ cdData t) : trest, mpath)
+       where (trest, mpath) = go rest
 
 gradientOffsetSetter :: SvgGradientStop -> String -> SvgGradientStop
 gradientOffsetSetter el str = el & gradientOffset .~ val
@@ -507,7 +544,7 @@ svgTreeModify f v = case v of
   Ellipse e -> Ellipse $ f e
   Line e -> Line $ f e
   Rectangle e -> Rectangle $ f e
-  TextArea e -> TextArea $ f e
+  TextArea a e -> TextArea a $ f e
 
 
 unparse :: Element -> State SvgSymbols SvgTree
@@ -537,13 +574,27 @@ unparse e@(nodeName -> "g") = do
     isNotNone SvgNone = False
     isNotNone _ = True
 
-unparse e@(nodeName -> "text") =
-  pure . TextArea $ xmlUnparse e & svgTextRoot .~ root
+unparse e@(nodeName -> "text") = do
+  pathWithGeometry <- pathGeomtryOf path
+  pure . TextArea pathWithGeometry $ xmlUnparse e & svgTextRoot .~ root
     where
+      (textContent, path) = unparseText $ elContent e
+      
+      pathGeomtryOf Nothing = pure Nothing
+      pathGeomtryOf (Just pathInfo) = do
+        svgElem <- gets $ M.lookup (_svgTextPathName pathInfo) . svgSymbols
+        case svgElem of
+          Nothing -> pure Nothing
+          Just (ElementLinearGradient _) -> pure Nothing
+          Just (ElementRadialGradient _) -> pure Nothing
+          Just (ElementGeometry (Path p)) ->
+              pure . Just $ pathInfo { _svgTextPathData = _svgPathDefinition p }
+          Just (ElementGeometry _) -> pure Nothing
+
       root = SvgTextSpan
            { _svgSpanInfo = xmlUnparse e
            , _svgSpanDrawAttributes = xmlUnparse e
-           , _svgSpanContent = unparseText $ elContent e
+           , _svgSpanContent = textContent
            }
 
 unparse e@(nodeName -> "ellipse") =
