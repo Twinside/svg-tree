@@ -97,6 +97,7 @@ module Graphics.Svg.Types
 
     , SvgTextInfo( .. )
     , CharInfo( .. )
+    , emptyCharInfo
     , infinitizeTextInfo
     , unconsTextInfo
     , textInfoRests
@@ -460,6 +461,15 @@ data CharInfo = CharInfo
   , _svgCharRotate :: Maybe Float
   }
 
+emptyCharInfo :: CharInfo
+emptyCharInfo = CharInfo
+  { _svgCharX      = Nothing
+  , _svgCharY      = Nothing
+  , _svgCharDx     = Nothing
+  , _svgCharDy     = Nothing
+  , _svgCharRotate = Nothing
+  }
+
 repeatLast :: [a] -> [a]
 repeatLast = go where
   go lst = case lst of
@@ -471,8 +481,8 @@ infinitizeTextInfo :: SvgTextInfo -> SvgTextInfo
 infinitizeTextInfo nfo = SvgTextInfo
   { _svgTextInfoX = repeatLast $ _svgTextInfoX nfo
   , _svgTextInfoY = repeatLast $ _svgTextInfoY nfo
-  , _svgTextInfoDX = repeatLast $ _svgTextInfoDX nfo
-  , _svgTextInfoDY = repeatLast $ _svgTextInfoDY nfo
+  , _svgTextInfoDX = _svgTextInfoDX nfo ++ repeat (SvgNum 0)
+  , _svgTextInfoDY = _svgTextInfoDY nfo ++ repeat (SvgNum 0)
   , _svgTextInfoRotate = repeatLast $ _svgTextInfoRotate nfo
   , _svgTextInfoLength = _svgTextInfoLength nfo
   }

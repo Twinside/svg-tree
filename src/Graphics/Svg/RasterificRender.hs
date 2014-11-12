@@ -2,10 +2,18 @@
 {-# LANGUAGE TupleSections #-}
 module Graphics.Svg.RasterificRender where
 
+import Data.Monoid( mappend )
 import Control.Monad( foldM )
 import Control.Monad.IO.Class( liftIO )
-import Control.Monad.Trans.State.Strict
-import Control.Applicative( (<$>), pure )
+import Control.Monad.Identity( Identity )
+import Control.Monad.Trans.Class( lift )
+import Control.Monad.Trans.State.Strict( runStateT
+                                       , StateT
+                                       , modify
+                                       , get
+                                       , put
+                                       , gets )
+import Control.Applicative( (<$>), (<*>), pure )
 import Codec.Picture( Image, PixelRGBA8( .. ) )
 import qualified Data.Foldable as F
 import qualified Data.Map as M
@@ -20,9 +28,11 @@ import Graphics.Rasterific.Linear( (^+^)
                                  , nearZero
                                  , zero )
 import Graphics.Rasterific hiding ( Path, Line )
+import qualified Graphics.Rasterific as R
 import Graphics.Rasterific.Outline
 import Graphics.Rasterific.Texture
 import Graphics.Rasterific.Transformations
+import Graphics.Rasterific.PathWalker
 import Graphics.Text.TrueType
 import Graphics.Svg.Types
 {-import Graphics.Svg.XmlParser-}
@@ -189,10 +199,11 @@ renderSvgDocument cache sizes doc = case sizes of
 withInfo :: Monad m => (a -> Maybe b) -> a -> (b -> m ()) -> m ()
 withInfo accessor val action = F.forM_ (accessor val) action
 
+toRadian :: Float -> Float
+toRadian v = v / 180 * pi
+
 toTransformationMatrix :: SvgTransformation -> Transformation
 toTransformationMatrix = go where
-  toRadian v = v / 180 * pi
-
   go (SvgTransformMatrix t) = t
   go (SvgTranslate x y) = translate $ V2 x y
   go (SvgScale xs Nothing) = scale xs xs
@@ -317,29 +328,34 @@ fillMethodOfSvg attr = case getLast $ _fillRule attr of
     Just SvgFillNonZero -> FillWinding
     Just SvgFillEvenOdd -> FillEvenOdd
 
+prepareTexture :: RenderContext -> SvgDrawAttributes
+               -> SvgTexture -> Float
+               -> [Primitive]
+               -> Maybe (Texture PixelRGBA8)
+prepareTexture _ _ FillNone _opacity _ = Nothing
+prepareTexture _ _ (ColorRef color) opacity _ =
+  pure . uniformTexture $ fillAlphaCombine opacity color
+prepareTexture ctxt attr (TextureRef ref) opacity prims =
+    M.lookup ref (_definitions ctxt) >>= prepare 
+  where
+    prepare (ElementGeometry _) = Nothing
+    prepare (ElementLinearGradient grad) =
+        pure $ prepareLinearGradientTexture ctxt 
+                        attr grad opacity prims
+    prepare (ElementRadialGradient grad) =
+        pure $ prepareRadialGradientTexture ctxt
+                        attr grad opacity prims
+
 withSvgTexture :: RenderContext -> SvgDrawAttributes
                -> SvgTexture -> Float
                -> [Primitive]
                -> Drawing PixelRGBA8 ()
-withSvgTexture _ _ FillNone _opacity _ = return ()
-withSvgTexture _ attr (ColorRef color) opacity prims =
-  let realColor = fillAlphaCombine opacity color
-      method = fillMethodOfSvg attr in
-  withTexture (uniformTexture realColor) $ fillWithMethod method prims
-withSvgTexture ctxt attr (TextureRef ref) opacity prims =
-  case M.lookup ref $ _definitions ctxt of
+withSvgTexture ctxt attr texture opacity prims =
+  case prepareTexture ctxt attr texture opacity prims of
     Nothing -> return ()
-    Just (ElementGeometry _) -> return ()
-    Just (ElementLinearGradient grad) ->
-        let tex = prepareLinearGradientTexture ctxt attr
-                    grad opacity prims
-            method = fillMethodOfSvg attr in
-        withTexture tex $ fillWithMethod method prims
-    Just (ElementRadialGradient grad) ->
-        let tex = prepareRadialGradientTexture ctxt attr
-                    grad opacity prims
-            method = fillMethodOfSvg attr in
-        withTexture tex $ fillWithMethod method prims
+    Just tex ->
+      let method = fillMethodOfSvg attr in
+      withTexture tex $ fillWithMethod method prims
 
 filler :: RenderContext
        -> SvgDrawAttributes
@@ -445,10 +461,90 @@ mixWithRenderInfo = mapAccumL go where
     where
       (thisInfo, rest) = unconsTextInfo info
 
-renderText :: RenderContext -> SvgDrawAttributes -> SvgText
-           -> IODraw (Drawing PixelRGBA8 ())
-renderText ctxt ini_attr txt =
-    fst <$> everySpan ini_attr mempty (_svgTextRoot txt) where
+
+data LetterTransformerState = LetterTransformerState 
+    { _charactersInfos  :: ![CharInfo]
+    , _characterCurrent :: !CharInfo
+    , _currentCharDelta  :: !Point
+    }
+
+type GlyphPlacer = StateT LetterTransformerState Identity
+
+type PathLetterTransformer = PathWalkerT GlyphPlacer
+
+unconsCurrentLetter :: GlyphPlacer ()
+unconsCurrentLetter = modify $ \s ->
+  case _charactersInfos s of
+    [] -> s
+    (x:xs) -> s { _charactersInfos = xs
+                , _characterCurrent = x
+                }
+
+prepareCharRotation :: CharInfo -> PlaneBound -> Transformation
+                    -> Transformation
+prepareCharRotation info bounds = case _svgCharRotate info of
+  Nothing -> id
+  Just angle ->
+    mappend $ rotateCenter (toRadian angle) lowerLeftCorner
+      where
+        lowerLeftCorner = boundLowerLeftCorner bounds
+
+prepareCharTranslation :: RenderContext -> CharInfo -> PlaneBound
+                       -> Point -> Transformation
+                       -> (Point, Transformation)
+prepareCharTranslation ctxt info bounds prevDelta nextTrans = go where
+  lowerLeftCorner = boundLowerLeftCorner bounds
+  toPoint a b = linearisePoint ctxt mempty (a, b)
+  mayForcedPoint = toPoint <$> _svgCharX info <*> _svgCharY info
+  mayDelta = toPoint <$> _svgCharDx info <*> _svgCharDy info
+  mergeNext = mappend nextTrans
+  go = case (mayForcedPoint, mayDelta) of
+    (Nothing, Nothing) -> (prevDelta, nextTrans <> translate prevDelta)
+    (Just p, Nothing) ->
+        (prevDelta, mergeNext $ translate (p ^-^ lowerLeftCorner))
+    (Nothing, Just delta) ->
+        let newDelta = prevDelta ^+^ delta in
+        (newDelta, mergeNext $ translate newDelta)
+    (Just p, Just delta) ->
+        let newDelta = prevDelta ^+^ delta
+            trans = translate (p ^-^ lowerLeftCorner ^+^ newDelta) in
+        (newDelta, mergeNext trans)
+
+transformPlaceGlyph :: RenderContext -> Transformation -> [Primitive]
+                    -> GlyphPlacer Transformation
+transformPlaceGlyph ctxt trans prims = do
+  unconsCurrentLetter 
+  info <- gets _characterCurrent
+  delta <- gets _currentCharDelta
+  let bounds = F.foldMap planeBounds prims
+      rotateTrans = prepareCharRotation info bounds trans
+      (newDelta, finalTrans) =
+        prepareCharTranslation ctxt info bounds delta rotateTrans 
+  modify $ \s -> s { _currentCharDelta = newDelta }
+  return finalTrans
+
+renderText :: RenderContext -> R.Path -> [RenderableString]
+           -> PathLetterTransformer ()
+renderText ctxt path str = 
+    runPathWalking
+printTextRanges 0 ranges where
+  ranges = toTextRange <$> str
+  textureOf renderable = do
+    let attr = _renderableAttributes renderable
+    svgTexture <- getLast $ _fillColor attr
+    prepareTexture ctxt attr svgTexture (_fillOpacity attr) []
+
+  toTextRange renderable = TextRange
+    { _textFont = _renderableFont renderable
+    , _textSize = floor $ _renderableSize renderable
+    , _text     = fst <$> _renderableString renderable
+    , _textTexture = textureOf renderable
+    }
+
+prepareRenderableString :: RenderContext -> SvgDrawAttributes -> SvgText
+                        -> IODraw [RenderableString]
+prepareRenderableString ctxt ini_attr textRoot =
+    fst <$> everySpan ini_attr mempty (_svgTextRoot textRoot) where
 
   everySpan attr originalInfo tspan =
       foldM (everyContent subAttr) (mempty, nfo) $ _svgSpanContent tspan
@@ -456,10 +552,10 @@ renderText ctxt ini_attr txt =
       subAttr = attr <> _svgSpanDrawAttributes tspan
       nfo = infinitizeTextInfo $ _svgSpanInfo tspan
 
-  everyContent attr (acc, info) (SvgSpanTextRef _) = return (acc, info)
-  everyContent attr (acc, info) (SvgSpanSub span) = do
-      let thisTextInfo = _svgSpanInfo span
-      (drawn, newInfo) <- everySpan attr info span
+  everyContent _attr (acc, info) (SvgSpanTextRef _) = return (acc, info)
+  everyContent attr (acc, info) (SvgSpanSub thisSpan) = do
+      let thisTextInfo = _svgSpanInfo thisSpan
+      (drawn, newInfo) <- everySpan attr info thisSpan
       return (acc <> drawn, textInfoRests thisTextInfo info newInfo)
   everyContent attr (acc, info) (SvgSpanText txt) = do
     let fontFamilies = fromMaybe [] . getLast $ _fontFamily attr
@@ -534,7 +630,9 @@ renderSvg initialContext = go initialContext initialAttr
 
     go _ _ SvgNone = return mempty
     -- not handled yet
-    go ctxt attr (TextArea _ stext) = renderText ctxt attr stext
+    go ctxt attr (TextArea _ stext) = do
+      _ <- prepareRenderableString ctxt attr stext
+      error "Muh"
     go ctxt attr (Use useData subTree) = do
       sub <- go ctxt attr' subTree
       return . fitUse ctxt attr useData subTree
