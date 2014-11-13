@@ -6,8 +6,8 @@ import Data.Monoid( mappend )
 import Control.Monad( foldM )
 import Control.Monad.IO.Class( liftIO )
 import Control.Monad.Identity( Identity )
-import Control.Monad.Trans.Class( lift )
 import Control.Monad.Trans.State.Strict( runStateT
+                                       , execState
                                        , StateT
                                        , modify
                                        , get
@@ -27,10 +27,11 @@ import Graphics.Rasterific.Linear( (^+^)
                                  , norm
                                  , nearZero
                                  , zero )
-import Graphics.Rasterific hiding ( Path, Line )
+import Graphics.Rasterific hiding ( Path, Line, transform )
 import qualified Graphics.Rasterific as R
 import Graphics.Rasterific.Outline
 import Graphics.Rasterific.Texture
+import Graphics.Rasterific.Immediate
 import Graphics.Rasterific.Transformations
 import Graphics.Rasterific.PathWalker
 import Graphics.Text.TrueType
@@ -463,9 +464,10 @@ mixWithRenderInfo = mapAccumL go where
 
 
 data LetterTransformerState = LetterTransformerState 
-    { _charactersInfos  :: ![CharInfo]
-    , _characterCurrent :: !CharInfo
+    { _charactersInfos   :: ![CharInfo]
+    , _characterCurrent  :: !CharInfo
     , _currentCharDelta  :: !Point
+    , _currentDrawing    :: Drawing PixelRGBA8 ()
     }
 
 type GlyphPlacer = StateT LetterTransformerState Identity
@@ -510,36 +512,59 @@ prepareCharTranslation ctxt info bounds prevDelta nextTrans = go where
             trans = translate (p ^-^ lowerLeftCorner ^+^ newDelta) in
         (newDelta, mergeNext trans)
 
-transformPlaceGlyph :: RenderContext -> Transformation -> [Primitive]
-                    -> GlyphPlacer Transformation
-transformPlaceGlyph ctxt trans prims = do
+transformPlaceGlyph :: RenderContext -> Transformation -> DrawOrder PixelRGBA8
+                    -> GlyphPlacer ()
+transformPlaceGlyph ctxt trans order = do
   unconsCurrentLetter 
   info <- gets _characterCurrent
   delta <- gets _currentCharDelta
-  let bounds = F.foldMap planeBounds prims
+  let bounds = F.foldMap (F.foldMap planeBounds) $ _orderPrimitives order
       rotateTrans = prepareCharRotation info bounds trans
       (newDelta, finalTrans) =
         prepareCharTranslation ctxt info bounds delta rotateTrans 
-  modify $ \s -> s { _currentCharDelta = newDelta }
-  return finalTrans
+      newGeometry =
+          R.transform (applyTransformation finalTrans) $ _orderPrimitives order
+      newOrder = order { _orderPrimitives = newGeometry }
+  modify $ \s -> s
+    { _currentCharDelta = newDelta
+    , _currentDrawing =
+        _currentDrawing s >> orderToDrawing newOrder }
 
 renderText :: RenderContext -> R.Path -> [RenderableString]
-           -> PathLetterTransformer ()
-renderText ctxt path str = 
-    runPathWalking
-printTextRanges 0 ranges where
-  ranges = toTextRange <$> str
-  textureOf renderable = do
-    let attr = _renderableAttributes renderable
-    svgTexture <- getLast $ _fillColor attr
-    prepareTexture ctxt attr svgTexture (_fillOpacity attr) []
+           -> Drawing PixelRGBA8 ()
+renderText ctxt path str =
+  _currentDrawing 
+    . flip execState initialState
+    $ drawOrdersOnPath (transformPlaceGlyph ctxt) 0 path drawOrders
+  where
+    initialState = LetterTransformerState 
+        { _charactersInfos   =
+            fmap snd . concat $ _renderableString <$> str
+        , _characterCurrent  = emptyCharInfo
+        , _currentCharDelta  = V2 0 0
+        , _currentDrawing    = mempty
+        }
 
-  toTextRange renderable = TextRange
-    { _textFont = _renderableFont renderable
-    , _textSize = floor $ _renderableSize renderable
-    , _text     = fst <$> _renderableString renderable
-    , _textTexture = textureOf renderable
-    }
+    drawOrders = drawOrdersOfDrawing width height background
+               . printTextRanges 0
+               $ toTextRange <$> str
+ 
+    (mini, maxi) = _renderViewBox ctxt
+    V2 width height = floor <$> (maxi ^-^ mini)
+    background = PixelRGBA8 0 0 0 0
+ 
+      
+    textureOf renderable = do
+      let attr = _renderableAttributes renderable
+      svgTexture <- getLast $ _fillColor attr
+      prepareTexture ctxt attr svgTexture (_fillOpacity attr) []
+ 
+    toTextRange renderable = TextRange
+      { _textFont = _renderableFont renderable
+      , _textSize = floor $ _renderableSize renderable
+      , _text     = fst <$> _renderableString renderable
+      , _textTexture = textureOf renderable
+      }
 
 prepareRenderableString :: RenderContext -> SvgDrawAttributes -> SvgText
                         -> IODraw [RenderableString]
@@ -585,10 +610,10 @@ prepareRenderableString ctxt ini_attr textRoot =
          Just FontStyleItalic -> italic
          Just FontStyleOblique -> italic
 
-       fontFinder fontFamily =
+       fontFinder ff =
             First $ findFontInCache (_fontCache ctxt) descriptor
          where descriptor = FontDescriptor	 
-                    { _descriptorFamilyName = T.pack fontFamily
+                    { _descriptorFamilyName = T.pack ff
                     , _descriptorStyle = style }
 
 renderSvg :: RenderContext -> SvgTree -> IODraw (Drawing PixelRGBA8 ())
@@ -631,8 +656,8 @@ renderSvg initialContext = go initialContext initialAttr
     go _ _ SvgNone = return mempty
     -- not handled yet
     go ctxt attr (TextArea _ stext) = do
-      _ <- prepareRenderableString ctxt attr stext
-      error "Muh"
+      renderText ctxt undefined <$> prepareRenderableString ctxt attr stext
+
     go ctxt attr (Use useData subTree) = do
       sub <- go ctxt attr' subTree
       return . fitUse ctxt attr useData subTree
