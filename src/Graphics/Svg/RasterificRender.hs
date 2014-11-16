@@ -38,8 +38,8 @@ import Graphics.Text.TrueType
 import Graphics.Svg.Types
 {-import Graphics.Svg.XmlParser-}
 
-{-import Debug.Trace-}
-{-import Text.Printf-}
+import Debug.Trace
+import Text.Printf
 
 capOfSvg :: SvgDrawAttributes -> (Cap, Cap)
 capOfSvg attrs =
@@ -73,6 +73,92 @@ singularize = concatMap go
        SmoothQuadraticBezierCurveTo o . pure <$> lst
    go (ElipticalArc o lst) = ElipticalArc o . pure <$> lst
    go EndPath = [EndPath]
+
+
+-- | Conversion function between svg path to the rasterific one.
+svgPathToRasterificPath :: Bool -> [SvgPath] -> R.Path
+svgPathToRasterificPath shouldClose lst =
+    R.Path firstPoint shouldClose $ concat commands
+ where
+  lineTo p = [PathLineTo p]
+  cubicTo e1 e2 e3 = [PathCubicBezierCurveTo e1 e2 e3]
+  quadTo e1 e2 = [PathQuadraticBezierCurveTo e1 e2]
+
+  ((_, _, firstPoint), commands) =
+     mapAccumL go (zero, zero, zero) $ singularize lst
+    
+  go (_, p, first) EndPath =
+      ((first, p, first), [])
+
+  go o (HorizontalTo _ []) = (o, [])
+  go o (VerticalTo _ []) = (o, [])
+  go o (MoveTo _ []) = (o, [])
+  go o (LineTo _ []) = (o, [])
+  go o (CurveTo _ []) = (o, [])
+  go o (SmoothCurveTo _ []) = (o, [])
+  go o (QuadraticBezier _ []) = (o, [])
+  go o (SmoothQuadraticBezierCurveTo  _ []) = (o, [])
+
+  go (_, _, _) (MoveTo OriginAbsolute (p:_)) = ((p, p, p), [])
+  go (o, _, _) (MoveTo OriginRelative (p:_)) =
+      ((pp, pp, pp), []) where pp = o ^+^ p
+
+  go (V2 _ y, _, fp) (HorizontalTo OriginAbsolute (c:_)) =
+      ((p, p, fp), lineTo p) where p = V2 c y
+  go (V2 x y, _, fp) (HorizontalTo OriginRelative (c:_)) =
+      ((p, p, fp), lineTo p) where p = V2 (x + c) y
+
+  go (V2 x _, _, fp) (VerticalTo OriginAbsolute (c:_)) =
+      ((p, p, fp), lineTo p) where p = V2 x c
+  go (V2 x y, _, fp) (VerticalTo OriginRelative (c:_)) =
+      ((p, p, fp), lineTo p) where p = V2 x (c + y)
+
+  go (o, _, fp) (LineTo OriginRelative (c:_)) =
+      ((p, p, fp), lineTo p) where p = o ^+^ c
+
+  go (_, _, fp) (LineTo OriginAbsolute (p:_)) =
+      ((p, p, fp), lineTo p)
+
+  go (_, _, fp) (CurveTo OriginAbsolute ((c1, c2, e):_)) =
+      ((e, c2, fp), cubicTo c1 c2 e)
+
+  go (o, _, fp) (CurveTo OriginRelative ((c1, c2, e):_)) =
+      ((e', c2', fp), cubicTo c1' c2' e')
+    where c1' = o ^+^ c1
+          c2' = o ^+^ c2
+          e' = o ^+^ e
+
+  go (o, control, fp) (SmoothCurveTo OriginAbsolute ((c2, e):_)) =
+      ((e, c2, fp), cubicTo c1' c2 e)
+    where c1' = o ^* 2 ^-^ control
+
+  go (o, control, fp) (SmoothCurveTo OriginRelative ((c2, e):_)) =
+      ((e', c2', fp), cubicTo c1' c2' e')
+    where c1' = o ^* 2 ^-^ control
+          c2' = o ^+^ c2
+          e' = o ^+^ e
+
+  go (_, _, fp) (QuadraticBezier OriginAbsolute ((c1, e):_)) =
+      ((e, c1, fp), quadTo c1 e)
+
+  go (o, _, fp) (QuadraticBezier OriginRelative ((c1, e):_)) =
+      ((e', c1', fp), quadTo c1' e')
+    where c1' = o ^+^ c1
+          e' = o ^+^ e
+
+  go (o, control, fp)
+     (SmoothQuadraticBezierCurveTo OriginAbsolute (e:_)) =
+     ((e, c1', fp), quadTo c1' e)
+    where c1' = o ^* 2 ^-^ control
+
+  go (o, control, fp)
+     (SmoothQuadraticBezierCurveTo OriginRelative (e:_)) =
+     ((e', c1', fp), quadTo c1' e')
+    where c1' = o ^* 2 ^-^ control
+          e' = o ^+^ e
+
+  go _ (ElipticalArc _ _) = error "Unimplemented"
+
 
 svgPathToPrimitives :: Bool -> [SvgPath] -> [Primitive]
 svgPathToPrimitives _ lst | isPathWithArc lst = []
@@ -439,9 +525,9 @@ loadFont :: FilePath -> IODraw (Maybe Font)
 loadFont path = do
   loaded <- get
   case M.lookup path loaded of
-    Just v -> return $ Just v
+    Just v -> return . trace (printf "fetching cached:%s" path) $ Just v
     Nothing -> do
-      file <- liftIO $ loadFontFile path
+      file <- liftIO . trace (printf "Loading file:%s" path) $ loadFontFile path
       case file of
         Left _ -> return Nothing
         Right f -> do
@@ -454,6 +540,12 @@ data RenderableString = RenderableString
     , _renderableFont       :: !Font
     , _renderableString     :: ![(Char, CharInfo)]
     }
+
+instance Show RenderableString where
+    show rs = "RenderableString { "
+            ++ "_renderableSize = " ++ show (_renderableSize rs)
+            ++ ", _renderableString = " ++ show (_renderableString rs)
+            ++ " }"
 
 mixWithRenderInfo :: SvgTextInfo -> String
                   -> (SvgTextInfo, [(Char, CharInfo)])
@@ -515,6 +607,7 @@ prepareCharTranslation ctxt info bounds prevDelta nextTrans = go where
 transformPlaceGlyph :: RenderContext -> Transformation -> DrawOrder PixelRGBA8
                     -> GlyphPlacer ()
 transformPlaceGlyph ctxt trans order = do
+  {-trace ("GLYPH " ++ show trans) $-}
   unconsCurrentLetter 
   info <- gets _characterCurrent
   delta <- gets _currentCharDelta
@@ -530,12 +623,36 @@ transformPlaceGlyph ctxt trans order = do
     , _currentDrawing =
         _currentDrawing s >> orderToDrawing newOrder }
 
+pathOfTextArea :: RenderContext
+               -> Maybe SvgTextPath
+               -> SvgText
+               -> R.Path
+pathOfTextArea _ (Just path) _ =
+    svgPathToRasterificPath False $ _svgTextPathData path
+pathOfTextArea ctxt Nothing text = (\a -> trace (show a) a) $
+    R.Path startPoint False [PathLineTo $ V2 maxX startY]
+  where
+    (_, V2 maxX _) = _renderViewBox ctxt
+    startPoint@(V2 _ startY) =
+        case _svgSpanInfo $ _svgTextRoot text of
+            SvgTextInfo { _svgTextInfoX = (SvgNum s:_)
+                        , _svgTextInfoY = (SvgNum s2:_)
+                        } -> V2 s s2
+            _ -> V2 0 0
+
+
 renderText :: RenderContext -> R.Path -> [RenderableString]
            -> Drawing PixelRGBA8 ()
 renderText ctxt path str =
+    {-trace (show str) $-}
   _currentDrawing 
     . flip execState initialState
-    $ drawOrdersOnPath (transformPlaceGlyph ctxt) 0 path drawOrders
+    . drawOrdersOnPath (transformPlaceGlyph ctxt) 0 path
+    {-. (\a -> trace (printf "CHAR COUNT: %d" (length a)) a)-}
+    . drawOrdersOfDrawing width height background
+    . printTextRanges 0
+    {-. (\a -> trace (show a) a)-}
+    $ toTextRange <$> str
   where
     initialState = LetterTransformerState 
         { _charactersInfos   =
@@ -544,10 +661,6 @@ renderText ctxt path str =
         , _currentCharDelta  = V2 0 0
         , _currentDrawing    = mempty
         }
-
-    drawOrders = drawOrdersOfDrawing width height background
-               . printTextRanges 0
-               $ toTextRange <$> str
  
     (mini, maxi) = _renderViewBox ctxt
     V2 width height = floor <$> (maxi ^-^ mini)
@@ -584,7 +697,7 @@ prepareRenderableString ctxt ini_attr textRoot =
       return (acc <> drawn, textInfoRests thisTextInfo info newInfo)
   everyContent attr (acc, info) (SvgSpanText txt) = do
     let fontFamilies = fromMaybe [] . getLast $ _fontFamily attr
-        fontFilename = getFirst $ F.foldMap fontFinder fontFamilies
+        fontFilename = trace (show fontFamilies) $ getFirst $ F.foldMap fontFinder fontFamilies
     font <- loadFont $ fromMaybe "" fontFilename
     case font of
       Nothing -> return (acc, info)
@@ -620,7 +733,7 @@ renderSvg :: RenderContext -> SvgTree -> IODraw (Drawing PixelRGBA8 ())
 renderSvg initialContext = go initialContext initialAttr
   where
     initialAttr =
-      mempty { _strokeWidth = Last $ Just (SvgNum 1.0)
+      mempty { _strokeWidth = Last . Just $ SvgNum 1.0
              , _strokeLineCap = Last $ Just SvgCapButt
              , _strokeLineJoin = Last $ Just SvgJoinMiter
              , _strokeMiterLimit = Last $ Just 4.0
@@ -628,6 +741,8 @@ renderSvg initialContext = go initialContext initialAttr
              , _fillColor = Last . Just . ColorRef $ PixelRGBA8 0 0 0 255
              , _fillOpacity = 1.0
              , _fillRule = Last $ Just SvgFillNonZero
+             , _fontSize = Last . Just $ SvgNum 12
+             , _fontFamily = Last $ Just ["Verdana"]
              }
 
     fitUse ctxt attr use subTree =
@@ -655,8 +770,10 @@ renderSvg initialContext = go initialContext initialAttr
 
     go _ _ SvgNone = return mempty
     -- not handled yet
-    go ctxt attr (TextArea _ stext) = do
-      renderText ctxt undefined <$> prepareRenderableString ctxt attr stext
+    go ctxt attr (TextArea tp stext) = do
+      renderText ctxt renderPath <$> prepareRenderableString ctxt attr stext
+        where
+          renderPath = pathOfTextArea ctxt tp stext
 
     go ctxt attr (Use useData subTree) = do
       sub <- go ctxt attr' subTree

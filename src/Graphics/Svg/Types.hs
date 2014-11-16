@@ -460,6 +460,7 @@ data CharInfo = CharInfo
   , _svgCharDy :: Maybe SvgNumber
   , _svgCharRotate :: Maybe Float
   }
+  deriving Show
 
 emptyCharInfo :: CharInfo
 emptyCharInfo = CharInfo
@@ -479,13 +480,17 @@ repeatLast = go where
 
 infinitizeTextInfo :: SvgTextInfo -> SvgTextInfo
 infinitizeTextInfo nfo = SvgTextInfo
-  { _svgTextInfoX = repeatLast $ _svgTextInfoX nfo
-  , _svgTextInfoY = repeatLast $ _svgTextInfoY nfo
+  { _svgTextInfoX = absoluteSet $ _svgTextInfoX nfo
+  , _svgTextInfoY = absoluteSet $ _svgTextInfoY nfo
   , _svgTextInfoDX = _svgTextInfoDX nfo ++ repeat (SvgNum 0)
   , _svgTextInfoDY = _svgTextInfoDY nfo ++ repeat (SvgNum 0)
   , _svgTextInfoRotate = repeatLast $ _svgTextInfoRotate nfo
   , _svgTextInfoLength = _svgTextInfoLength nfo
   }
+  where
+    absoluteSet [] = []
+    absoluteSet [_] = []
+    absoluteSet lst = repeatLast lst
 
 mapTextInfoLists :: (forall a. [a] -> [a]) -> SvgTextInfo -> SvgTextInfo
 mapTextInfoLists f val = SvgTextInfo
@@ -606,7 +611,6 @@ data SvgTextAdjust
 data SvgText = SvgText
   { _svgTextAdjust   :: !SvgTextAdjust
   , _svgTextRoot     :: !SvgTextSpan
-  , _svgTextPathLine :: !(Maybe SvgTextPath)
   }
   deriving (Eq, Show)
 
@@ -619,7 +623,6 @@ defaultSvgText :: SvgText
 defaultSvgText = SvgText
   { _svgTextRoot = defaultSvgTextSpan
   , _svgTextAdjust = SvgTextAdjustSpacing
-  , _svgTextPathLine = Nothing
   }
 
 data SvgTree

@@ -268,6 +268,8 @@ drawAttributesList =
     ,("fill-opacity", numSetter fillOpacity, cssUniqueFloat fillOpacity)
     ,("stroke-opacity", numSetter strokeOpacity, cssUniqueFloat strokeOpacity)
     ,("font-size", numericLastSetter fontSize, cssUniqueNumber fontSize)
+    ,("font-family", \e s -> e & fontFamily .~ Last (Just [s]),
+        cssIdentStringParser fontFamily (\s -> Last $ Just [s]))
     ,("fill-rule", \e s -> e & fillRule .~ parseFillRule s,
         cssIdentStringParser fillRule parseFillRule)
     ,("class", \e s -> e & attrClass .~ Last (Just s), cssLastStringSetter attrClass)
