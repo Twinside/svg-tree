@@ -467,7 +467,7 @@ unparseText = go
           Nothing -> go rest
           Just v -> (tsub ++ trest, pure path)
             where
-              path = (xmlUnparse e) { _svgTextPathName = v }
+              path = (xmlUnparse e) { _svgTextPathName = dropSharp v }
               (trest, _) = go rest
               (tsub, _) = go $ elContent e
 

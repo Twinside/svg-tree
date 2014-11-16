@@ -629,7 +629,7 @@ pathOfTextArea :: RenderContext
                -> R.Path
 pathOfTextArea _ (Just path) _ =
     svgPathToRasterificPath False $ _svgTextPathData path
-pathOfTextArea ctxt Nothing text = (\a -> trace (show a) a) $
+pathOfTextArea ctxt Nothing text =
     R.Path startPoint False [PathLineTo $ V2 maxX startY]
   where
     (_, V2 maxX _) = _renderViewBox ctxt
@@ -644,7 +644,6 @@ pathOfTextArea ctxt Nothing text = (\a -> trace (show a) a) $
 renderText :: RenderContext -> R.Path -> [RenderableString]
            -> Drawing PixelRGBA8 ()
 renderText ctxt path str =
-    {-trace (show str) $-}
   _currentDrawing 
     . flip execState initialState
     . drawOrdersOnPath (transformPlaceGlyph ctxt) 0 path
@@ -702,10 +701,10 @@ prepareRenderableString ctxt ini_attr textRoot =
     case font of
       Nothing -> return (acc, info)
       Just f ->
-        let (acc', str) = mixWithRenderInfo info $ T.unpack txt
+        let (info', str) = mixWithRenderInfo info $ T.unpack txt
             finalStr = RenderableString attr size f str
         in
-        return ([finalStr], acc')
+        return (acc <> [finalStr], info')
      
      where
        size = case getLast $ _fontSize attr of
