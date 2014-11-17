@@ -446,48 +446,60 @@ instance SvgXMLUpdatable SvgText where
       [("lengthAdjust", \e s -> e & svgTextAdjust .~ parseTextAdjust s)]
         
 unparseText :: [Content] -> ([SvgTextSpanContent], Maybe SvgTextPath)
-unparseText = go
+unparseText = extractResult . go True
   where
-    go [] = ([], Nothing)
-    go (CRef _:rest) = go rest
-    go (Elem e@(nodeName -> "tspan"):rest) = (SvgSpanSub spans : trest, mpath)
+    extractResult (a, b, _) = (a, b)
+
+    go startStrip [] = ([], Nothing, startStrip)
+    go startStrip (CRef _:rest) = go startStrip rest
+    go startStrip (Elem e@(nodeName -> "tspan"):rest) =
+        (SvgSpanSub spans : trest, mpath, retStrip)
       where
-        (trest, mpath) = go rest
-        spans = SvgTextSpan (xmlUnparse e) (xmlUnparse e)
-                                (fst . go $ elContent e)
+        (trest, mpath, retStrip) = go restStrip rest
+        (sub, _, restStrip) = go startStrip $ elContent e
+        spans = SvgTextSpan (xmlUnparse e) (xmlUnparse e) sub
 
-    go (Elem e@(nodeName -> "tref"):rest) = 
+    go startStrip (Elem e@(nodeName -> "tref"):rest) = 
         case attributeFinder "href" e of
-          Nothing -> go rest
-          Just v -> (SvgSpanTextRef v : trest, mpath)
-            where (trest, mpath) = go rest
+          Nothing -> go startStrip rest
+          Just v -> (SvgSpanTextRef v : trest, mpath, stripRet)
+            where (trest, mpath, stripRet) = go startStrip rest
 
-    go (Elem e@(nodeName -> "textPath"):rest) = 
+    go startStrip (Elem e@(nodeName -> "textPath"):rest) = 
         case attributeFinder "href" e of
-          Nothing -> go rest
-          Just v -> (tsub ++ trest, pure path)
+          Nothing -> go startStrip rest
+          Just v -> (tsub ++ trest, pure path, retStrp)
             where
               path = (xmlUnparse e) { _svgTextPathName = dropSharp v }
-              (trest, _) = go rest
-              (tsub, _) = go $ elContent e
+              (trest, _, retStrp) = go restStrip rest
+              (tsub, _, restStrip) = go startStrip $ elContent e
 
-    go (Elem _:rest) = go rest
-    go (Text t:rest) =
-        (SvgSpanText (svgFilter . T.pack $ cdData t) : trest, mpath)
+    go startStrip (Elem _:rest) = go startStrip rest
+    go startStrip (Text t:rest)
+      | T.length cleanText == 0 = go startStrip rest
+      | otherwise =
+        (SvgSpanText cleanText : trest, mpath, stripRet)
        where
-         (trest, mpath) = go rest
+         (trest, mpath, stripRet) = go subShouldStrip rest
+
+         subShouldStrip = T.pack " " `T.isSuffixOf` cleanText
 
          space = T.singleton ' '
          singulariseSpaces tt
             | space `T.isPrefixOf` tt = space
             | otherwise = tt
 
-         svgFilter = T.stripStart
+         stripStart | startStrip = T.stripStart
+                    | otherwise = id
+
+         cleanText = stripStart
                    . T.concat
                    . fmap singulariseSpaces
                    . T.groupBy (\a b -> (a /= ' ' && b /= ' ') || a == b)
                    . T.filter (\c -> c /= '\n' && c /= '\r')
                    . T.map (\c -> if c == '\t' then ' ' else c)
+                   . T.pack
+                   $ cdData t
 
 gradientOffsetSetter :: SvgGradientStop -> String -> SvgGradientStop
 gradientOffsetSetter el str = el & gradientOffset .~ val

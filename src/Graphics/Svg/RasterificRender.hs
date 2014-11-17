@@ -560,6 +560,7 @@ data LetterTransformerState = LetterTransformerState
     , _characterCurrent  :: !CharInfo
     , _currentCharDelta  :: !Point
     , _currentDrawing    :: Drawing PixelRGBA8 ()
+    , _stringBounds      :: !PlaneBound
     }
 
 type GlyphPlacer = StateT LetterTransformerState Identity
@@ -655,15 +656,18 @@ renderText ctxt path str =
   where
     initialState = LetterTransformerState 
         { _charactersInfos   =
-            fmap snd . concat $ _renderableString <$> str
+            fmap snd . filter notWhiteSpace . concat $ _renderableString <$> str
         , _characterCurrent  = emptyCharInfo
         , _currentCharDelta  = V2 0 0
         , _currentDrawing    = mempty
+        , _stringBounds = mempty
         }
  
     (mini, maxi) = _renderViewBox ctxt
     V2 width height = floor <$> (maxi ^-^ mini)
     background = PixelRGBA8 0 0 0 0
+
+    notWhiteSpace (c, _) = c /= ' ' && c /= '\t'
  
       
     textureOf renderable = do
