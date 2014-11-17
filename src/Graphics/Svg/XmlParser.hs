@@ -473,8 +473,21 @@ unparseText = go
 
     go (Elem _:rest) = go rest
     go (Text t:rest) =
-        (SvgSpanText (T.strip . T.pack $ cdData t) : trest, mpath)
-       where (trest, mpath) = go rest
+        (SvgSpanText (svgFilter . T.pack $ cdData t) : trest, mpath)
+       where
+         (trest, mpath) = go rest
+
+         space = T.singleton ' '
+         singulariseSpaces tt
+            | space `T.isPrefixOf` tt = space
+            | otherwise = tt
+
+         svgFilter = T.stripStart
+                   . T.concat
+                   . fmap singulariseSpaces
+                   . T.groupBy (\a b -> (a /= ' ' && b /= ' ') || a == b)
+                   . T.filter (\c -> c /= '\n' && c /= '\r')
+                   . T.map (\c -> if c == '\t' then ' ' else c)
 
 gradientOffsetSetter :: SvgGradientStop -> String -> SvgGradientStop
 gradientOffsetSetter el str = el & gradientOffset .~ val
