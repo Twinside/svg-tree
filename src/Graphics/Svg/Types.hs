@@ -480,17 +480,20 @@ repeatLast = go where
 
 infinitizeTextInfo :: SvgTextInfo -> SvgTextInfo
 infinitizeTextInfo nfo = SvgTextInfo
-  { _svgTextInfoX = absoluteSet $ _svgTextInfoX nfo
-  , _svgTextInfoY = absoluteSet $ _svgTextInfoY nfo
+  { _svgTextInfoX = xInfo
+  , _svgTextInfoY = yInfo
   , _svgTextInfoDX = _svgTextInfoDX nfo ++ repeat (SvgNum 0)
   , _svgTextInfoDY = _svgTextInfoDY nfo ++ repeat (SvgNum 0)
   , _svgTextInfoRotate = repeatLast $ _svgTextInfoRotate nfo
   , _svgTextInfoLength = _svgTextInfoLength nfo
   }
   where
-    absoluteSet [] = []
-    absoluteSet [_] = []
-    absoluteSet lst = repeatLast lst
+    (xInfo, yInfo) = case (_svgTextInfoX nfo, _svgTextInfoY nfo) of
+        ( [],  []) -> ([], [])
+        ([_], [_]) -> ([], [])
+        ([x],  ys) -> (repeat x, repeatLast ys)
+        ( xs, [y]) -> (repeatLast xs, repeat y)
+        ( xs,  ys) -> (repeatLast xs, repeatLast ys)
 
 mapTextInfoLists :: (forall a. [a] -> [a]) -> SvgTextInfo -> SvgTextInfo
 mapTextInfoLists f val = SvgTextInfo

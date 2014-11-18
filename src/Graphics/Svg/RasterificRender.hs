@@ -621,6 +621,7 @@ transformPlaceGlyph ctxt trans order = do
       newOrder = order { _orderPrimitives = newGeometry }
   modify $ \s -> s
     { _currentCharDelta = newDelta
+    , _stringBounds = _stringBounds s <> bounds
     , _currentDrawing =
         _currentDrawing s >> orderToDrawing newOrder }
 

@@ -138,7 +138,7 @@ combinator = parse <* cleanSpace where
 -- unary_operator : '-' | '+' ;
 
 commaWsp :: Parser Char
-commaWsp = skipSpace *> char ',' <* skipSpace
+commaWsp = skipSpace *> option ',' (char ',') <* skipSpace
 
 ruleSet :: Parser CssRule
 ruleSet = cleanSpace *> rule where
