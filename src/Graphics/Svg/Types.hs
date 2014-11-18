@@ -88,6 +88,7 @@ module Graphics.Svg.Types
 
     , SvgTextPathSpacing( .. )
     , SvgTextPathMethod( .. )
+    , SvgTextAnchor( .. )
 
     , SvgTextSpanContent( .. )
 
@@ -611,8 +612,15 @@ data SvgTextAdjust
   | SvgTextAdjustSpacingAndGlyphs
   deriving (Eq, Show)
 
+data SvgTextAnchor
+  = SvgTextAnchorStart
+  | SvgTextAnchorMiddle
+  | SvgTextAnchorEnd
+  deriving (Eq, Show)
+
 data SvgText = SvgText
   { _svgTextAdjust   :: !SvgTextAdjust
+  , _svgTextAnchor   :: !SvgTextAnchor
   , _svgTextRoot     :: !SvgTextSpan
   }
   deriving (Eq, Show)
