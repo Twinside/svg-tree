@@ -608,7 +608,6 @@ prepareCharTranslation ctxt info bounds prevDelta nextTrans = go where
 transformPlaceGlyph :: RenderContext -> Transformation -> DrawOrder PixelRGBA8
                     -> GlyphPlacer ()
 transformPlaceGlyph ctxt trans order = do
-  {-trace ("GLYPH " ++ show trans) $-}
   unconsCurrentLetter 
   info <- gets _characterCurrent
   delta <- gets _currentCharDelta
@@ -632,7 +631,7 @@ pathOfTextArea :: RenderContext
 pathOfTextArea _ (Just path) _ =
     svgPathToRasterificPath False $ _svgTextPathData path
 pathOfTextArea ctxt Nothing text =
-    R.Path startPoint False [PathLineTo $ V2 maxX startY]
+    R.Path startPoint False [PathLineTo $ V2 (maxX * 300) startY]
   where
     (_, V2 maxX _) = _renderViewBox ctxt
     startPoint@(V2 _ startY) =
@@ -640,21 +639,34 @@ pathOfTextArea ctxt Nothing text =
             SvgTextInfo { _svgTextInfoX = (SvgNum s:_)
                         , _svgTextInfoY = (SvgNum s2:_)
                         } -> V2 s s2
+            SvgTextInfo { _svgTextInfoX = []
+                        , _svgTextInfoY = [SvgNum s2]
+                        } -> V2 0 s2
+            SvgTextInfo { _svgTextInfoX = [SvgNum s]
+                        , _svgTextInfoY = []
+                        } -> V2 s 0
             _ -> V2 0 0
 
 
-renderText :: RenderContext -> R.Path -> [RenderableString]
+renderText :: RenderContext -> R.Path -> SvgTextAnchor -> [RenderableString]
            -> Drawing PixelRGBA8 ()
-renderText ctxt path str =
-  _currentDrawing 
+renderText ctxt path anchor str =
+  finalPlace
     . flip execState initialState
     . drawOrdersOnPath (transformPlaceGlyph ctxt) 0 path
-    {-. (\a -> trace (printf "CHAR COUNT: %d" (length a)) a)-}
     . drawOrdersOfDrawing width height background
     . printTextRanges 0
-    {-. (\a -> trace (show a) a)-}
     $ toTextRange <$> str
   where
+    finalPlace st = case anchor of
+        SvgTextAnchorStart -> _currentDrawing st
+        SvgTextAnchorMiddle ->
+            withTransformation (translate $ V2 (negate $ stringWidth / 2) 0) $ _currentDrawing st
+        SvgTextAnchorEnd ->
+            withTransformation (translate $ V2 (- stringWidth) 0) $ _currentDrawing st
+      where
+        stringWidth = boundWidth $ _stringBounds st
+
     initialState = LetterTransformerState 
         { _charactersInfos   =
             fmap snd . filter notWhiteSpace . concat $ _renderableString <$> str
@@ -747,6 +759,7 @@ renderSvg initialContext = go initialContext initialAttr
              , _fillRule = Last $ Just SvgFillNonZero
              , _fontSize = Last . Just $ SvgNum 12
              , _fontFamily = Last $ Just ["Verdana"]
+             , _textAnchor = Last $ Just SvgTextAnchorStart
              }
 
     fitUse ctxt attr use subTree =
@@ -775,9 +788,15 @@ renderSvg initialContext = go initialContext initialAttr
     go _ _ SvgNone = return mempty
     -- not handled yet
     go ctxt attr (TextArea tp stext) = do
-      renderText ctxt renderPath <$> prepareRenderableString ctxt attr stext
+      renderText ctxt renderPath anchor
+            <$> prepareRenderableString ctxt attr stext
         where
           renderPath = pathOfTextArea ctxt tp stext
+          anchor = fromMaybe SvgTextAnchorStart
+                 . getLast
+                 . _textAnchor
+                 . mappend attr
+                 . _svgSpanDrawAttributes $ _svgTextRoot stext
 
     go ctxt attr (Use useData subTree) = do
       sub <- go ctxt attr' subTree

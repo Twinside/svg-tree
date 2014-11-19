@@ -221,6 +221,12 @@ data SvgFontStyle
     | FontStyleOblique
     deriving (Eq, Show)
 
+data SvgTextAnchor
+  = SvgTextAnchorStart
+  | SvgTextAnchorMiddle
+  | SvgTextAnchorEnd
+  deriving (Eq, Show)
+
 data SvgDrawAttributes = SvgDrawAttributes
     { _strokeWidth      :: !(Last SvgNumber)
     , _strokeColor      :: !(Last SvgTexture)
@@ -240,6 +246,7 @@ data SvgDrawAttributes = SvgDrawAttributes
     , _fontSize         :: !(Last SvgNumber)
     , _fontFamily       :: !(Last [String])
     , _fontStyle        :: !(Last SvgFontStyle)
+    , _textAnchor       :: !(Last SvgTextAnchor)
     }
     deriving (Eq, Show)
 
@@ -612,15 +619,8 @@ data SvgTextAdjust
   | SvgTextAdjustSpacingAndGlyphs
   deriving (Eq, Show)
 
-data SvgTextAnchor
-  = SvgTextAnchorStart
-  | SvgTextAnchorMiddle
-  | SvgTextAnchorEnd
-  deriving (Eq, Show)
-
 data SvgText = SvgText
   { _svgTextAdjust   :: !SvgTextAdjust
-  , _svgTextAnchor   :: !SvgTextAnchor
   , _svgTextRoot     :: !SvgTextSpan
   }
   deriving (Eq, Show)
@@ -844,6 +844,7 @@ instance Monoid SvgDrawAttributes where
         , _attrId           = Nothing
         , _strokeOffset     = Last Nothing
         , _strokeDashArray  = Last Nothing
+        , _textAnchor       = Last Nothing
         }
 
     mappend a b = SvgDrawAttributes
@@ -864,5 +865,6 @@ instance Monoid SvgDrawAttributes where
         , _strokeDashArray = (mappend `on` _strokeDashArray) a b
         , _fontFamily = (mappend `on` _fontFamily) a b
         , _fontStyle = (mappend `on` _fontStyle) a b
+        , _textAnchor = (mappend `on` _textAnchor) a b
         }
 

@@ -54,6 +54,12 @@ parseSvgCap "round" = Last $ Just SvgCapRound
 parseSvgCap "square" = Last $ Just SvgCapSquare
 parseSvgCap _ = Last Nothing
 
+parseSvgTextAnchor :: String -> Last SvgTextAnchor
+parseSvgTextAnchor "middle" = Last $ Just SvgTextAnchorMiddle
+parseSvgTextAnchor "start" = Last $ Just SvgTextAnchorStart
+parseSvgTextAnchor "end" = Last $ Just SvgTextAnchorEnd
+parseSvgTextAnchor _ = Last Nothing
+
 parseSvgLineJoin :: String -> Last SvgLineJoin
 parseSvgLineJoin "miter" = Last $ Just SvgJoinMiter
 parseSvgLineJoin "round" = Last $ Just SvgJoinRound
@@ -278,6 +284,8 @@ drawAttributesList =
         cssUniqueNumber strokeWidth)
     ,("stroke-dasharray", parserLastSetter strokeDashArray  dashArray,
         cssDashArray strokeDashArray)
+    ,("text-anchor", \e s -> e & textAnchor .~ parseSvgTextAnchor s,
+        cssIdentStringParser textAnchor parseSvgTextAnchor)
     ]
 
 instance SvgXMLUpdatable SvgDrawAttributes where
@@ -443,7 +451,8 @@ instance SvgXMLUpdatable SvgTextPath where
 instance SvgXMLUpdatable SvgText where
   defaultSvg = defaultSvgText
   svgAttributes =
-      [("lengthAdjust", \e s -> e & svgTextAdjust .~ parseTextAdjust s)]
+      [("lengthAdjust", \e s -> e & svgTextAdjust .~ parseTextAdjust s)
+      ]
         
 unparseText :: [Content] -> ([SvgTextSpanContent], Maybe SvgTextPath)
 unparseText = extractResult . go True
