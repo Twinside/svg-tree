@@ -38,7 +38,8 @@ library
                  vector,
                  text,
                  mtl,
-                 lens
+                 lens,
+                 groom
 
 Executable svgrender
   hs-source-dirs: exec-src

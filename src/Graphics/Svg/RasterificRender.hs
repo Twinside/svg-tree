@@ -13,7 +13,7 @@ import Control.Monad.Trans.State.Strict( runStateT
                                        , get
                                        , put
                                        , gets )
-import Control.Applicative( (<$>), (<*>), pure )
+import Control.Applicative( (<$>), (<*>), (<|>), pure )
 import Codec.Picture( Image, PixelRGBA8( .. ) )
 import qualified Data.Foldable as F
 import qualified Data.Map as M
@@ -40,6 +40,7 @@ import Graphics.Svg.Types
 
 import Debug.Trace
 import Text.Printf
+import Text.Groom
 
 capOfSvg :: SvgDrawAttributes -> (Cap, Cap)
 capOfSvg attrs =
@@ -556,11 +557,12 @@ mixWithRenderInfo = mapAccumL go where
 
 
 data LetterTransformerState = LetterTransformerState 
-    { _charactersInfos   :: ![CharInfo]
-    , _characterCurrent  :: !CharInfo
-    , _currentCharDelta  :: !Point
-    , _currentDrawing    :: Drawing PixelRGBA8 ()
-    , _stringBounds      :: !PlaneBound
+    { _charactersInfos      :: ![CharInfo]
+    , _characterCurrent     :: !CharInfo
+    , _currentCharDelta     :: !Point
+    , _currentAbsoluteDelta :: !Point
+    , _currentDrawing       :: Drawing PixelRGBA8 ()
+    , _stringBounds         :: !PlaneBound
     }
 
 type GlyphPlacer = StateT LetterTransformerState Identity
@@ -583,99 +585,109 @@ prepareCharRotation info bounds = case _svgCharRotate info of
         lowerLeftCorner = boundLowerLeftCorner bounds
 
 prepareCharTranslation :: RenderContext -> CharInfo -> PlaneBound
-                       -> Point -> Transformation
-                       -> (Point, Transformation)
-prepareCharTranslation ctxt info bounds prevDelta nextTrans = go where
+                       -> Point -> Point
+                       -> (Point, Point, Transformation)
+prepareCharTranslation ctxt info bounds prevDelta prevAbsolute = go where
   lowerLeftCorner = boundLowerLeftCorner bounds
   toPoint a b = linearisePoint ctxt mempty (a, b)
-  mayForcedPoint = toPoint <$> _svgCharX info <*> _svgCharY info
-  mayDelta = toPoint <$> _svgCharDx info <*> _svgCharDy info
-  mergeNext = mappend nextTrans
-  go = case (mayForcedPoint, mayDelta) of
-    (Nothing, Nothing) -> (prevDelta, nextTrans <> translate prevDelta)
-    (Just p, Nothing) ->
-        (prevDelta, mergeNext $ translate (p ^-^ lowerLeftCorner))
-    (Nothing, Just delta) ->
-        let newDelta = prevDelta ^+^ delta in
-        (newDelta, mergeNext $ translate newDelta)
-    (Just p, Just delta) ->
-        let newDelta = prevDelta ^+^ delta
-            trans = translate (p ^-^ lowerLeftCorner ^+^ newDelta) in
-        (newDelta, mergeNext trans)
+  mzero = Just $ SvgNum 0
+  V2 pmx pmy = Just . SvgNum <$> prevAbsolute
+
+  mayForcedPoint = case (_svgCharX info, _svgCharY info) of
+    (Nothing, Nothing) -> Nothing
+    (mx, my) -> toPoint <$> (mx <|> pmx) <*> (my <|> pmy)
+
+  delta = fromMaybe 0 $
+    toPoint <$> (_svgCharDx info <|> mzero)
+            <*> (_svgCharDy info <|> mzero)
+
+  go = case mayForcedPoint of
+    Nothing ->
+      let newDelta = prevDelta ^+^ delta
+          trans = translate $ newDelta ^+^ prevAbsolute in
+      (newDelta, prevAbsolute, trans)
+
+    Just p ->
+      let newDelta = prevDelta ^+^ delta
+          positionDelta = p ^-^ lowerLeftCorner
+          trans = translate $ positionDelta ^+^ newDelta in
+      (newDelta, positionDelta, trans)
+
+pixelToPt :: Float -> Float
+pixelToPt a = a / 1.25
 
 transformPlaceGlyph :: RenderContext -> Transformation -> DrawOrder PixelRGBA8
                     -> GlyphPlacer ()
-transformPlaceGlyph ctxt trans order = do
+transformPlaceGlyph ctxt pathTransformation order = do
   unconsCurrentLetter 
   info <- gets _characterCurrent
   delta <- gets _currentCharDelta
+  absoluteDelta <- gets _currentAbsoluteDelta
   let bounds = F.foldMap (F.foldMap planeBounds) $ _orderPrimitives order
       rotateTrans = prepareCharRotation info bounds
-      (newDelta, finalTrans) =
-        prepareCharTranslation ctxt info bounds delta (trans <> rotateTrans)
+      (newDelta, newAbsolute, placement) =
+        prepareCharTranslation ctxt info bounds delta absoluteDelta
+      finalTrans = pathTransformation <> placement <> rotateTrans
       newGeometry =
           R.transform (applyTransformation finalTrans) $ _orderPrimitives order
       newOrder = order { _orderPrimitives = newGeometry }
   modify $ \s -> s
     { _currentCharDelta = newDelta
+    , _currentAbsoluteDelta = newAbsolute
     , _stringBounds = _stringBounds s <> bounds
     , _currentDrawing =
         _currentDrawing s >> orderToDrawing newOrder }
 
 pathOfTextArea :: RenderContext
                -> Maybe SvgTextPath
-               -> SvgText
                -> R.Path
-pathOfTextArea _ (Just path) _ =
+pathOfTextArea _ (Just path) =
     svgPathToRasterificPath False $ _svgTextPathData path
-pathOfTextArea ctxt Nothing text =
+pathOfTextArea ctxt Nothing =
     R.Path startPoint False [PathLineTo $ V2 (maxX * 300) startY]
   where
     (_, V2 maxX _) = _renderViewBox ctxt
-    startPoint@(V2 _ startY) = startFinder $ _svgTextRoot text
-    startFinder currentSpan = case _svgSpanInfo currentSpan of
-            SvgTextInfo { _svgTextInfoX = [SvgNum s]
-                        , _svgTextInfoY = [SvgNum s2]
-                        } -> V2 s s2
-            SvgTextInfo { _svgTextInfoX = []
-                        , _svgTextInfoY = [SvgNum s2]
-                        } -> V2 0 s2
-            SvgTextInfo { _svgTextInfoX = [SvgNum s]
-                        , _svgTextInfoY = []
-                        } -> V2 s 0
-            _ -> subStartFinder currentSpan
-
-    subStartFinder currentSpan = case _svgSpanContent currentSpan of
-        [] -> V2 0 0
-        (SvgSpanSub sub : _) -> startFinder sub
-        (SvgSpanTextRef _:_) -> V2 0 0
-        (SvgSpanText _ : _) -> V2 0 0
-
+    startPoint@(V2 _ startY) = V2 0 0
 
 renderText :: RenderContext -> R.Path -> SvgTextAnchor -> [RenderableString]
            -> Drawing PixelRGBA8 ()
-renderText ctxt path anchor str =
+renderText ctxt path anchor str = trace (groom str) $ 
   finalPlace
     . flip execState initialState
-    . drawOrdersOnPath (transformPlaceGlyph ctxt) 0 path
-    . drawOrdersOfDrawing width height background
-    . printTextRanges 0
-    $ toTextRange <$> str
+    . drawOrdersOnPath (transformPlaceGlyph ctxt)
+                       R.AlignOnMiddle 0 path
+    $ drawOrders
   where
     finalPlace st = case anchor of
-        SvgTextAnchorStart -> _currentDrawing st
+        SvgTextAnchorStart ->
+            withTransformation (translate startingOffset) $ _currentDrawing st
         SvgTextAnchorMiddle ->
-            withTransformation (translate $ V2 (negate $ stringWidth / 2) 0) $ _currentDrawing st
+            withTransformation (translate startingOffset 
+                             <> translate (V2 (negate $ stringWidth / 2) 0)) $
+                _currentDrawing st
         SvgTextAnchorEnd ->
-            withTransformation (translate $ V2 (- stringWidth) 0) $ _currentDrawing st
+            withTransformation (translate startingOffset 
+                             <> translate (V2 (- stringWidth) 0)) $ _currentDrawing st
       where
         stringWidth = boundWidth $ _stringBounds st
+
+    drawOrders = drawOrdersOfDrawing width height background
+               . printTextRanges 0
+               $ toTextRange <$> str
+
+    startingOffset = case drawOrders of
+      [] -> 0
+      (st :_) -> V2 offset 0
+        where
+          PlaneBound (V2 offset _) _ =
+            F.foldMap (F.foldMap planeBounds) $ _orderPrimitives st
 
     initialState = LetterTransformerState 
         { _charactersInfos   =
             fmap snd . filter notWhiteSpace . concat $ _renderableString <$> str
         , _characterCurrent  = emptyCharInfo
         , _currentCharDelta  = V2 0 0
+        , _currentAbsoluteDelta = V2 0 0
         , _currentDrawing    = mempty
         , _stringBounds = mempty
         }
@@ -694,21 +706,23 @@ renderText ctxt path anchor str =
  
     toTextRange renderable = TextRange
       { _textFont = _renderableFont renderable
-      , _textSize = floor $ _renderableSize renderable
+      , _textSize = floor . pixelToPt $ _renderableSize renderable
       , _text     = fst <$> _renderableString renderable
       , _textTexture = textureOf renderable
       }
 
 prepareRenderableString :: RenderContext -> SvgDrawAttributes -> SvgText
                         -> IODraw [RenderableString]
-prepareRenderableString ctxt ini_attr textRoot =
+prepareRenderableString ctxt ini_attr textRoot = trace (groom textRoot) $
     fst <$> everySpan ini_attr mempty (_svgTextRoot textRoot) where
 
   everySpan attr originalInfo tspan =
       foldM (everyContent subAttr) (mempty, nfo) $ _svgSpanContent tspan
     where
       subAttr = attr <> _svgSpanDrawAttributes tspan
-      nfo = infinitizeTextInfo $ _svgSpanInfo tspan
+      nfo = propagateTextInfo originalInfo
+          . infinitizeTextInfo
+          $ _svgSpanInfo tspan
 
   everyContent _attr (acc, info) (SvgSpanTextRef _) = return (acc, info)
   everyContent attr (acc, info) (SvgSpanSub thisSpan) = do
@@ -795,7 +809,7 @@ renderSvg initialContext = go initialContext initialAttr
       renderText ctxt renderPath anchor
             <$> prepareRenderableString ctxt attr stext
         where
-          renderPath = pathOfTextArea ctxt tp stext
+          renderPath = pathOfTextArea ctxt tp
           anchor = fromMaybe SvgTextAnchorStart
                  . getLast
                  . _textAnchor
