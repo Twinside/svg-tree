@@ -36,8 +36,7 @@ import Graphics.Svg.CssParser( complexNumber
                              , ruleSet
                              , dashArray
                              , styleString
-                             , numberList
-                             , unitNumber )
+                             , numberList )
 
 {-import Debug.Trace-}
 
@@ -274,8 +273,9 @@ drawAttributesList =
     ,("fill-opacity", numSetter fillOpacity, cssUniqueFloat fillOpacity)
     ,("stroke-opacity", numSetter strokeOpacity, cssUniqueFloat strokeOpacity)
     ,("font-size", numericLastSetter fontSize, cssUniqueNumber fontSize)
-    ,("font-family", \e s -> e & fontFamily .~ Last (Just [s]),
-        cssIdentStringParser fontFamily (\s -> Last $ Just [s]))
+    ,("font-family", \e s -> e & fontFamily .~ Last (Just $ commaSeparate s),
+        cssIdentStringParser fontFamily (\s -> Last (Just $ commaSeparate s)))
+        
     ,("fill-rule", \e s -> e & fillRule .~ parseFillRule s,
         cssIdentStringParser fillRule parseFillRule)
     ,("class", \e s -> e & attrClass .~ Last (Just s), cssLastStringSetter attrClass)
@@ -287,6 +287,8 @@ drawAttributesList =
     ,("text-anchor", \e s -> e & textAnchor .~ parseSvgTextAnchor s,
         cssIdentStringParser textAnchor parseSvgTextAnchor)
     ]
+  where commaSeparate =
+            fmap (T.unpack . T.strip) . T.split (',' ==) . T.pack
 
 instance SvgXMLUpdatable SvgDrawAttributes where
   defaultSvg = mempty
@@ -683,14 +685,14 @@ unparseDocument e@(nodeName -> "svg") = Just $ SvgDocument
     { _svgViewBox =
         attributeFinder "viewBox" e >>= parse viewBox
     , _svgElements = cssApply (cssStyle named) <$> svgElements
-    , _svgWidth = floor <$> lengthFind "width"
-    , _svgHeight = floor <$> lengthFind "height"
+    , _svgWidth = lengthFind "width"
+    , _svgHeight = lengthFind "height"
     , _svgDefinitions = svgSymbols named
     }
   where
     (svgElements, named) =
         runState (mapM unparse $ elChildren e) emptyState
     lengthFind n =
-        attributeFinder n e >>= parse unitNumber
+        attributeFinder n e >>= parse complexNumber
 unparseDocument _ = Nothing   
 

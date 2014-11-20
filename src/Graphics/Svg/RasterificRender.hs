@@ -251,7 +251,7 @@ renderSvgDocument cache sizes doc = case sizes of
   where
     (x1, y1, x2, y2) = case (_svgViewBox doc, _svgWidth doc, _svgHeight doc) of
         (Just v,      _,      _) -> v
-        (     _, Just w, Just h) -> (0, 0, w, h)
+        (     _, Just (SvgNum w), Just (SvgNum h)) -> (0, 0, floor w, floor h)
         _                        -> (0, 0, 1, 1)
 
     box = (V2 (fromIntegral x1) (fromIntegral y1),
@@ -576,11 +576,9 @@ unconsCurrentLetter = modify $ \s ->
                 }
 
 prepareCharRotation :: CharInfo -> PlaneBound -> Transformation
-                    -> Transformation
 prepareCharRotation info bounds = case _svgCharRotate info of
-  Nothing -> id
-  Just angle ->
-    mappend $ rotateCenter (toRadian angle) lowerLeftCorner
+  Nothing -> mempty
+  Just angle -> rotateCenter (toRadian angle) lowerLeftCorner
       where
         lowerLeftCorner = boundLowerLeftCorner bounds
 
@@ -612,9 +610,9 @@ transformPlaceGlyph ctxt trans order = do
   info <- gets _characterCurrent
   delta <- gets _currentCharDelta
   let bounds = F.foldMap (F.foldMap planeBounds) $ _orderPrimitives order
-      rotateTrans = prepareCharRotation info bounds trans
+      rotateTrans = prepareCharRotation info bounds
       (newDelta, finalTrans) =
-        prepareCharTranslation ctxt info bounds delta rotateTrans 
+        prepareCharTranslation ctxt info bounds delta (trans <> rotateTrans)
       newGeometry =
           R.transform (applyTransformation finalTrans) $ _orderPrimitives order
       newOrder = order { _orderPrimitives = newGeometry }
@@ -634,10 +632,10 @@ pathOfTextArea ctxt Nothing text =
     R.Path startPoint False [PathLineTo $ V2 (maxX * 300) startY]
   where
     (_, V2 maxX _) = _renderViewBox ctxt
-    startPoint@(V2 _ startY) =
-        case _svgSpanInfo $ _svgTextRoot text of
-            SvgTextInfo { _svgTextInfoX = (SvgNum s:_)
-                        , _svgTextInfoY = (SvgNum s2:_)
+    startPoint@(V2 _ startY) = startFinder $ _svgTextRoot text
+    startFinder currentSpan = case _svgSpanInfo currentSpan of
+            SvgTextInfo { _svgTextInfoX = [SvgNum s]
+                        , _svgTextInfoY = [SvgNum s2]
                         } -> V2 s s2
             SvgTextInfo { _svgTextInfoX = []
                         , _svgTextInfoY = [SvgNum s2]
@@ -645,7 +643,13 @@ pathOfTextArea ctxt Nothing text =
             SvgTextInfo { _svgTextInfoX = [SvgNum s]
                         , _svgTextInfoY = []
                         } -> V2 s 0
-            _ -> V2 0 0
+            _ -> subStartFinder currentSpan
+
+    subStartFinder currentSpan = case _svgSpanContent currentSpan of
+        [] -> V2 0 0
+        (SvgSpanSub sub : _) -> startFinder sub
+        (SvgSpanTextRef _:_) -> V2 0 0
+        (SvgSpanText _ : _) -> V2 0 0
 
 
 renderText :: RenderContext -> R.Path -> SvgTextAnchor -> [RenderableString]

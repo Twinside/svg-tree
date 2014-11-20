@@ -806,16 +806,24 @@ data SvgElement
 
 data SvgDocument = SvgDocument
     { _svgViewBox     :: Maybe (Int, Int, Int, Int)
-    , _svgWidth       :: Maybe Int
-    , _svgHeight      :: Maybe Int
+    , _svgWidth       :: Maybe SvgNumber
+    , _svgHeight      :: Maybe SvgNumber
     , _svgElements    :: [SvgTree]
     , _svgDefinitions :: M.Map String SvgElement
     }
     deriving (Eq, Show)
 
 svgDocumentSize :: SvgDocument -> (Int, Int)
-svgDocumentSize SvgDocument { _svgWidth = Just w
-                            , _svgHeight = Just h } = (w, h)
+svgDocumentSize SvgDocument { _svgWidth = Just (SvgNum w)
+                            , _svgHeight = Just (SvgNum h) } = (floor w, floor h)
+svgDocumentSize SvgDocument { _svgViewBox = Just (x1, y1, x2, y2)
+                            , _svgWidth = Just (SvgPercent pw)
+                            , _svgHeight = Just (SvgPercent ph)
+                            } =
+    (floor $ dx * pw, floor $ dy * ph)
+      where
+        dx = fromIntegral . abs $ x2 - x1
+        dy = fromIntegral . abs $ y2 - y1
 svgDocumentSize SvgDocument { _svgViewBox = Just (x1, y1, x2, y2) } =
     (abs $ x2 - x1, abs $ y2 - y1)
 svgDocumentSize _ = (1, 1)
