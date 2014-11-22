@@ -24,7 +24,10 @@ library
                , Graphics.Svg.XmlParser
                , Graphics.Svg.PathParser
                , Graphics.Svg.ColorParser
+               , Graphics.Svg.RenderContext
+               , Graphics.Svg.PathConverter
                , Graphics.Svg.RasterificRender
+               , Graphics.Svg.RasterificTextRendering
 
   build-depends: base >= 4.6,
                  attoparsec,

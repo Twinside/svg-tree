@@ -97,12 +97,6 @@ module Graphics.Svg.Types
     , HasSvgTextSpan( .. )
 
     , SvgTextInfo( .. )
-    , CharInfo( .. )
-    , emptyCharInfo
-    , infinitizeTextInfo
-    , unconsTextInfo
-    , textInfoRests
-    , mapTextInfoLists
     , defaultSvgTextInfo
     , HasSvgTextInfo( .. )
 
@@ -460,107 +454,6 @@ makeClassy ''SvgTextInfo
 
 defaultSvgTextInfo :: SvgTextInfo
 defaultSvgTextInfo = mempty
-
-data CharInfo = CharInfo
-  { _svgCharX  :: Maybe SvgNumber
-  , _svgCharY  :: Maybe SvgNumber
-  , _svgCharDx :: Maybe SvgNumber
-  , _svgCharDy :: Maybe SvgNumber
-  , _svgCharRotate :: Maybe Float
-  }
-  deriving Show
-
-emptyCharInfo :: CharInfo
-emptyCharInfo = CharInfo
-  { _svgCharX      = Nothing
-  , _svgCharY      = Nothing
-  , _svgCharDx     = Nothing
-  , _svgCharDy     = Nothing
-  , _svgCharRotate = Nothing
-  }
-
-repeatLast :: [a] -> [a]
-repeatLast = go where
-  go lst = case lst of
-    [] -> []
-    [x] -> repeat x
-    (x:xs) -> x : go xs
-
-infinitizeTextInfo :: SvgTextInfo -> SvgTextInfo
-infinitizeTextInfo nfo = SvgTextInfo
-  { _svgTextInfoX = xInfo
-  , _svgTextInfoY = yInfo
-  , _svgTextInfoDX = _svgTextInfoDX nfo ++ repeat (SvgNum 0)
-  , _svgTextInfoDY = _svgTextInfoDY nfo ++ repeat (SvgNum 0)
-  , _svgTextInfoRotate = repeatLast $ _svgTextInfoRotate nfo
-  , _svgTextInfoLength = _svgTextInfoLength nfo
-  }
-  where
-    (xInfo, yInfo) = case (_svgTextInfoX nfo, _svgTextInfoY nfo) of
-        ( [],  []) -> ([], [])
-        ([_], [_]) -> ([], [])
-        ([x],  ys) -> (repeat x, repeatLast ys)
-        ( xs, [y]) -> (repeatLast xs, repeat y)
-        ( xs,  ys) -> (repeatLast xs, repeatLast ys)
-
-mapTextInfoLists :: (forall a. [a] -> [a]) -> SvgTextInfo -> SvgTextInfo
-mapTextInfoLists f val = SvgTextInfo
-    { _svgTextInfoX      = f $ _svgTextInfoX val
-    , _svgTextInfoY      = f $ _svgTextInfoY val
-    , _svgTextInfoDX     = f $ _svgTextInfoDX val
-    , _svgTextInfoDY     = f $ _svgTextInfoDY val
-    , _svgTextInfoRotate = f $ _svgTextInfoRotate val
-    , _svgTextInfoLength = _svgTextInfoLength val
-    }
-
-textInfoRests :: SvgTextInfo -> SvgTextInfo -> SvgTextInfo
-              -> SvgTextInfo
-textInfoRests this parent sub = SvgTextInfo
-    { _svgTextInfoX      = decideWith _svgTextInfoX
-    , _svgTextInfoY      = decideWith _svgTextInfoY
-    , _svgTextInfoDX     = decideWith _svgTextInfoDX
-    , _svgTextInfoDY     = decideWith _svgTextInfoDY
-    , _svgTextInfoRotate = decideWith _svgTextInfoRotate
-    , _svgTextInfoLength = _svgTextInfoLength parent
-    }
-  where
-    decideWith f =
-        decide (f this) (f parent) (f sub)
-
-    decide that top ssub = case that of
-       [] -> ssub
-       [_] -> top
-       _ -> ssub
-
-
-unconsTextInfo :: SvgTextInfo -> (CharInfo, SvgTextInfo)
-unconsTextInfo nfo = (charInfo, restText) where
-  unconsInf lst = case lst of
-     []     -> (Nothing, [])
-     (x:xs) -> (Just x, xs)
-
-  (xC, xRest) = unconsInf $ _svgTextInfoX nfo
-  (yC, yRest) = unconsInf $ _svgTextInfoY nfo
-  (dxC, dxRest) = unconsInf $ _svgTextInfoDX nfo
-  (dyC, dyRest) = unconsInf $ _svgTextInfoDY nfo
-  (rotateC, rotateRest) = unconsInf $ _svgTextInfoRotate nfo
-
-  restText = SvgTextInfo
-    { _svgTextInfoX      = xRest
-    , _svgTextInfoY      = yRest
-    , _svgTextInfoDX     = dxRest
-    , _svgTextInfoDY     = dyRest
-    , _svgTextInfoRotate = rotateRest
-    , _svgTextInfoLength = _svgTextInfoLength nfo
-    }
-
-  charInfo = CharInfo
-    { _svgCharX = xC
-    , _svgCharY = yC
-    , _svgCharDx = dxC
-    , _svgCharDy = dyC
-    , _svgCharRotate = rotateC
-    }
 
 data SvgTextSpanContent
     = SvgSpanText    !T.Text
