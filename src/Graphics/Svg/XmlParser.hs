@@ -280,8 +280,8 @@ drawAttributesList =
         cssIdentStringParser fillRule parseFillRule)
     ,("class", \e s -> e & attrClass .~ Last (Just s), cssLastStringSetter attrClass)
     ,("id", \e s -> e & attrId .~ Just s, cssMayStringSetter attrId)
-    ,("stroke-dashoffset",numericLastSetter strokeWidth,
-        cssUniqueNumber strokeWidth)
+    ,("stroke-dashoffset",numericLastSetter strokeOffset,
+        cssUniqueNumber strokeOffset)
     ,("stroke-dasharray", parserLastSetter strokeDashArray  dashArray,
         cssDashArray strokeDashArray)
     ,("text-anchor", \e s -> e & textAnchor .~ parseSvgTextAnchor s,
