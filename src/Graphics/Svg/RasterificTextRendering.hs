@@ -354,11 +354,11 @@ textureOf ctxt attr colorAccessor opacityAccessor = do
   svgTexture <- getLast $ colorAccessor attr
   prepareTexture ctxt attr svgTexture (opacityAccessor attr) []
  
-renderString :: RenderContext -> Maybe R.Path -> SvgTextAnchor
+renderString :: RenderContext -> Maybe (Float, R.Path) -> SvgTextAnchor
              -> [RenderableString PixelRGBA8]
              -> Drawing PixelRGBA8 ()
 renderString ctxt mayPath anchor str
-  | Just path <- mayPath = pathPlacer path fillOrders
+  | Just (offset, path) <- mayPath = pathPlacer offset path fillOrders
   | otherwise = linePlacer fillOrders
   where
     fillOrders = drawOrdersOfDrawing width height background
@@ -369,10 +369,10 @@ renderString ctxt mayPath anchor str
     V2 width height = floor <$> (maxi ^-^ mini)
     background = PixelRGBA8 0 0 0 0
 
-    pathPlacer path =
+    pathPlacer offset path =
         anchorStringRendering anchor
             . flip execState (initialLetterTransformerState str)
-            . drawOrdersOnPath (transformPlaceGlyph ctxt) 0 path
+            . drawOrdersOnPath (transformPlaceGlyph ctxt) offset 0 path
 
     linePlacer =
         anchorStringRendering anchor
@@ -390,6 +390,12 @@ renderString ctxt mayPath anchor str
             _fillOpacity 
       }
 
+startOffsetOfPath :: SvgDrawAttributes -> R.Path -> SvgNumber
+                  -> Float
+startOffsetOfPath _ _ (SvgNum i) = i
+startOffsetOfPath attr _ (SvgEm i) = emTransform attr i
+startOffsetOfPath _ path (SvgPercent p) =
+    p * RO.approximatePathLength path
 
 renderText :: RenderContext
            -> SvgDrawAttributes
@@ -397,10 +403,17 @@ renderText :: RenderContext
            -> SvgText
            -> IODraw (Drawing PixelRGBA8 ())
 renderText ctxt attr ppath stext =
-  renderString ctxt renderPath anchor <$> prepareRenderableString ctxt attr stext
+  renderString ctxt pathInfo anchor <$> prepareRenderableString ctxt attr stext
   where
     renderPath =
       svgPathToRasterificPath False . _svgTextPathData <$> ppath
+
+    offset = do
+      rpath <- renderPath
+      mayOffset <- _svgTextPathStartOffset <$> ppath
+      return . (\a -> trace ("OFFSET: " ++ show a) a) $ startOffsetOfPath attr rpath mayOffset
+
+    pathInfo = (,) <$> (offset <|> return 0) <*> renderPath
 
     anchor = fromMaybe SvgTextAnchorStart
            . getLast
