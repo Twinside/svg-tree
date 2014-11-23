@@ -372,8 +372,8 @@ renderString ctxt mayPath anchor str
     pathPlacer path =
         anchorStringRendering anchor
             . flip execState (initialLetterTransformerState str)
-            . drawOrdersOnPath (transformPlaceGlyph ctxt)
-                            R.AlignOnMiddle 0 path
+            . drawOrdersOnPath (transformPlaceGlyph ctxt) 0 path
+
     linePlacer =
         anchorStringRendering anchor
             . flip execState (initialLetterTransformerState str)
