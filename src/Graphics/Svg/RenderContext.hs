@@ -29,6 +29,24 @@ type IODraw = StateT LoadedFonts IO
 
 type ViewBox = (Point, Point)
 
+capOfSvg :: SvgDrawAttributes -> (Cap, Cap)
+capOfSvg attrs =
+  case getLast $ _strokeLineCap attrs of
+    Nothing -> (CapStraight 1, CapStraight 1)
+    Just SvgCapSquare -> (CapStraight 1, CapStraight 1)
+    Just SvgCapButt -> (CapStraight 0, CapStraight 0)
+    Just SvgCapRound -> (CapRound, CapRound)
+
+
+joinOfSvg :: SvgDrawAttributes -> Join
+joinOfSvg attrs =
+  case (getLast $ _strokeLineJoin attrs, getLast $ _strokeMiterLimit attrs) of
+    (Nothing, _) -> JoinRound
+    (Just SvgJoinMiter, Just _) -> JoinMiter 0
+    (Just SvgJoinMiter, Nothing) -> JoinMiter 0
+    (Just SvgJoinBevel, _) -> JoinMiter 5
+    (Just SvgJoinRound, _) -> JoinRound
+
 boundingBoxLength :: SvgDrawAttributes -> PlaneBound -> SvgNumber
                   -> Float
 boundingBoxLength attr (PlaneBound mini maxi) num =

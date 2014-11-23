@@ -1,4 +1,5 @@
 {-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE TupleSections #-}
 module Graphics.Svg.RasterificTextRendering( renderText ) where
 
 import Data.Monoid( mappend )
@@ -61,7 +62,7 @@ data CharInfo px = CharInfo
   , _svgCharDx :: Maybe SvgNumber
   , _svgCharDy :: Maybe SvgNumber
   , _svgCharRotate :: Maybe Float
-  , _svgCharStroke :: Maybe (Float, Texture px)
+  , _svgCharStroke :: Maybe (Float, Texture px, R.Join, (R.Cap, R.Cap))
   }
 
 emptyCharInfo :: CharInfo px
@@ -137,7 +138,7 @@ unconsTextInfo ctxt attr nfo = (charInfo, restText) where
     , _svgCharDy = dyC
     , _svgCharRotate = rotateC
     , _svgCharStroke =
-        (,) <$> width <*> texture
+        (,, joinOfSvg attr, capOfSvg attr) <$> width <*> texture
     }
 
 repeatLast :: [a] -> [a]
@@ -239,14 +240,13 @@ transformPlaceGlyph ctxt pathTransformation bounds order = do
 
         
       stroking Nothing = return ()
-      stroking (Just (w, texture)) =
+      stroking (Just (w, texture, rjoin, cap)) =
           orderToDrawing $ newOrder {
             _orderPrimitives = stroker <$> _orderPrimitives newOrder,
             _orderTexture = texture
           }
          where
-           stroker =
-               RO.strokize w (JoinMiter 0) (CapStraight 0, CapStraight 0)
+           stroker = RO.strokize w rjoin cap
 
   modify $ \s -> s
     { _currentCharDelta = newDelta

@@ -21,24 +21,6 @@ import Graphics.Svg.RasterificTextRendering
 {-import Text.Printf-}
 {-import Text.Groom-}
 
-capOfSvg :: SvgDrawAttributes -> (R.Cap, R.Cap)
-capOfSvg attrs =
-  case getLast $ _strokeLineCap attrs of
-    Nothing -> (R.CapStraight 1, R.CapStraight 1)
-    Just SvgCapSquare -> (R.CapStraight 1, R.CapStraight 1)
-    Just SvgCapButt -> (R.CapStraight 0, R.CapStraight 0)
-    Just SvgCapRound -> (R.CapRound, R.CapRound)
-
-
-joinOfSvg :: SvgDrawAttributes -> R.Join
-joinOfSvg attrs =
-  case (getLast $ _strokeLineJoin attrs, getLast $ _strokeMiterLimit attrs) of
-    (Nothing, _) -> R.JoinRound
-    (Just SvgJoinMiter, Just _) -> R.JoinMiter 0
-    (Just SvgJoinMiter, Nothing) -> R.JoinMiter 0
-    (Just SvgJoinBevel, _) -> R.JoinMiter 5
-    (Just SvgJoinRound, _) -> R.JoinRound
-
 
 renderSvgDocument :: FontCache -> Maybe (Int, Int) -> SvgDocument
                   -> IO (Image PixelRGBA8, LoadedFonts)
