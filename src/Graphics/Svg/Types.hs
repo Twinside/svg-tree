@@ -37,6 +37,10 @@ module Graphics.Svg.Types
     , defaultRadialGradient
     , HasSvgRadialGradient( .. )
 
+    , SvgPattern( .. )
+    , defaultSvgPattern
+    , HasSvgPattern( .. )
+
     , SvgRectangle( .. )
     , defaultRectangle
     , HasSvgRectangle( .. )
@@ -691,11 +695,43 @@ defaultRadialGradient = SvgRadialGradient
   , _radialGradientStops   = []
   }
 
+data SvgPattern = SvgPattern
+    { _svgPatternViewBox  :: Maybe (Int, Int, Int, Int)
+    , _svgPatternWidth    :: SvgNumber
+    , _svgPatternHeight   :: SvgNumber
+    , _svgPatternPos      :: SvgPoint
+    , _svgPatternElements :: [SvgTree]
+    }
+    deriving Show
+
+makeClassy ''SvgPattern
+
+defaultSvgPattern :: SvgPattern
+defaultSvgPattern = SvgPattern
+  { _svgPatternViewBox  = Nothing
+  , _svgPatternWidth    = SvgNum 0
+  , _svgPatternHeight   = SvgNum 0
+  , _svgPatternPos      = (SvgNum 0, SvgNum 0)
+  , _svgPatternElements = []
+  }
+
 data SvgElement
     = ElementLinearGradient SvgLinearGradient
     | ElementRadialGradient SvgRadialGradient
     | ElementGeometry SvgTree
-    deriving (Eq, Show)
+    | ElementPattern  SvgPattern
+    deriving Show
+
+{-
+instance Show SvgElement where
+    show (ElementLinearGradient grad) =
+        "ElementLinearGradient " ++ show grad
+    show (ElementRadialGradient grad) =
+        "ElementRadialGradient  " ++ show grad
+    show (ElementGeometry tree) =
+        "ElementGeometry " ++ show tree
+    show (Pattern ) = "ElementPicture ()"
+    -}
 
 data SvgDocument = SvgDocument
     { _svgViewBox     :: Maybe (Int, Int, Int, Int)
@@ -704,7 +740,7 @@ data SvgDocument = SvgDocument
     , _svgElements    :: [SvgTree]
     , _svgDefinitions :: M.Map String SvgElement
     }
-    deriving (Eq, Show)
+    deriving Show
 
 svgDocumentSize :: SvgDocument -> (Int, Int)
 svgDocumentSize SvgDocument { _svgWidth = Just (SvgNum w)

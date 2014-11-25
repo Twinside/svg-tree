@@ -450,6 +450,16 @@ instance SvgXMLUpdatable SvgTextPath where
     ,("href", \e s -> e & svgTextPathName .~ dropSharp s)
     ]
 
+instance SvgXMLUpdatable SvgPattern where
+  defaultSvg = defaultSvgPattern
+  svgAttributes =
+    [("viewBox", \e s -> e & svgPatternViewBox .~ parse viewBox s)
+    ,("width", numericSetter svgPatternWidth)
+    ,("height", numericSetter svgPatternHeight)
+    ,("x", numericSetter (svgPatternPos._1))
+    ,("y", numericSetter (svgPatternPos._2))
+    ]
+
 instance SvgXMLUpdatable SvgText where
   defaultSvg = defaultSvgText
   svgAttributes =
@@ -552,6 +562,10 @@ withId el f = case attributeFinder "id" el of
       return SvgNone
 
 unparseDefs :: Element -> State SvgSymbols SvgTree
+unparseDefs e@(nodeName -> "pattern") =
+  withId e $ pattern
+    where
+      pattern = xmlUnparse e
 unparseDefs e@(nodeName -> "linearGradient") =
   withId e $ ElementLinearGradient . unparser
   where
@@ -625,6 +639,7 @@ unparse e@(nodeName -> "text") = do
           Nothing -> pure Nothing
           Just (ElementLinearGradient _) -> pure Nothing
           Just (ElementRadialGradient _) -> pure Nothing
+          Just (ElementPattern _) -> pure Nothing
           Just (ElementGeometry (Path p)) ->
               pure . Just $ pathInfo { _svgTextPathData = _svgPathDefinition p }
           Just (ElementGeometry _) -> pure Nothing
@@ -656,6 +671,7 @@ unparse e@(nodeName -> "use") = do
     Nothing -> pure SvgNone
     Just (ElementLinearGradient _) -> pure SvgNone
     Just (ElementRadialGradient _) -> pure SvgNone
+    Just (ElementPattern _) -> pure SvgNone
     Just (ElementGeometry g) -> pure $ Use useInfo g
 unparse _ = pure SvgNone
 
