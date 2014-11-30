@@ -18,7 +18,6 @@ import qualified Data.Foldable as F
 import qualified Data.Map as M
 import Data.Monoid( mempty, (<>), Last( .. ), First( .. ) )
 import Data.Maybe( fromMaybe )
-import Data.List( mapAccumL )
 import qualified Data.Text as T
 import Graphics.Rasterific.Linear( (^+^), (^-^) )
 import Graphics.Rasterific hiding ( Path, Line, Texture, transform )
@@ -106,8 +105,11 @@ textInfoRests this parent sub = TextInfo
     decide  _ top    _ = top
 
 unconsTextInfo :: RenderContext -> DrawAttributes -> TextInfo
-               -> (CharInfo PixelRGBA8, TextInfo)
-unconsTextInfo ctxt attr nfo = (charInfo, restText) where
+               -> IODraw (CharInfo PixelRGBA8, TextInfo)
+unconsTextInfo ctxt attr nfo = do
+  texture <- textureOf ctxt attr _strokeColor _strokeOpacity
+  return (charInfo texture, restText)
+ where
   unconsInf lst = case lst of
      []     -> (Nothing, [])
      (x:xs) -> (Just x, xs)
@@ -127,18 +129,17 @@ unconsTextInfo ctxt attr nfo = (charInfo, restText) where
     , _textInfoLength = _textInfoLength nfo
     }
 
-  texture = textureOf ctxt attr _strokeColor _strokeOpacity
   width =
      lineariseLength ctxt attr <$> getLast (_strokeWidth attr)
 
-  charInfo = CharInfo
+  charInfo tex = CharInfo
     { _charX = xC
     , _charY = yC
     , _charDx = dxC
     , _charDy = dyC
     , _charRotate = rotateC
     , _charStroke =
-        (,, joinOfSvg attr, capOfSvg attr) <$> width <*> texture
+        (,, joinOfSvg attr, capOfSvg attr) <$> width <*> tex
     }
 
 repeatLast :: [a] -> [a]
@@ -153,13 +154,25 @@ infinitizeTextInfo nfo =
     nfo { _textInfoRotate = repeatLast $ _textInfoRotate nfo }
 
 
+-- | Monadic version of mapAccumL
+mapAccumLM :: Monad m
+            => (acc -> x -> m (acc, y)) -- ^ combining funcction
+            -> acc                      -- ^ initial state
+            -> [x]                      -- ^ inputs
+            -> m (acc, [y])             -- ^ final state, outputs
+mapAccumLM _ s []     = return (s, [])
+mapAccumLM f s (x:xs) = do
+    (s1, x')  <- f s x
+    (s2, xs') <- mapAccumLM f s1 xs
+    return    (s2, x' : xs')
+
 mixWithRenderInfo :: RenderContext -> DrawAttributes
                   -> TextInfo -> String
-                  -> (TextInfo, [(Char, CharInfo PixelRGBA8)])
-mixWithRenderInfo ctxt attr = mapAccumL go where
-  go info c = (rest, (c, thisInfo))
-    where
-      (thisInfo, rest) = unconsTextInfo ctxt attr info
+                  -> IODraw (TextInfo, [(Char, CharInfo PixelRGBA8)])
+mixWithRenderInfo ctxt attr = mapAccumLM go where
+  go info c = do
+    (thisInfo, rest) <- unconsTextInfo ctxt attr info
+    return (rest, (c, thisInfo))
 
 
 data LetterTransformerState = LetterTransformerState 
@@ -283,10 +296,9 @@ prepareRenderableString ctxt ini_attr root = -- trace (groom root) $
     font <- loadFont $ fromMaybe "" fontFilename
     case font of
       Nothing -> return (acc, info)
-      Just f ->
-        let (info', str) = mixWithRenderInfo ctxt attr info $ T.unpack txt
-            finalStr = RenderableString attr size f str
-        in
+      Just f -> do
+        (info', str) <- mixWithRenderInfo ctxt attr info $ T.unpack txt
+        let finalStr = RenderableString attr size f str
         return (acc <> [finalStr], info')
      
      where
@@ -349,21 +361,27 @@ textureOf :: RenderContext
           -> DrawAttributes
           -> (DrawAttributes -> Last Texture)
           -> (DrawAttributes -> Float)
-          -> Maybe (R.Texture PixelRGBA8)
-textureOf ctxt attr colorAccessor opacityAccessor = do
-  svgTexture <- getLast $ colorAccessor attr
-  prepareTexture ctxt attr svgTexture (opacityAccessor attr) []
+          -> IODraw (Maybe (R.Texture PixelRGBA8))
+textureOf ctxt attr colorAccessor opacityAccessor =
+  case getLast $ colorAccessor attr of
+    Nothing -> return Nothing
+    Just svgTexture ->
+        prepareTexture ctxt attr svgTexture (opacityAccessor attr) []
  
 renderString :: RenderContext -> Maybe (Float, R.Path) -> TextAnchor
              -> [RenderableString PixelRGBA8]
-             -> Drawing PixelRGBA8 ()
-renderString ctxt mayPath anchor str
-  | Just (offset, path) <- mayPath = pathPlacer offset path fillOrders
-  | otherwise = linePlacer fillOrders
+             -> IODraw (Drawing PixelRGBA8 ())
+renderString ctxt mayPath anchor str = do
+  textRanges <- mapM toFillTextRange str
+
+  case mayPath of
+    Just (offset, path) ->
+        return . pathPlacer offset path $ fillOrders textRanges
+    Nothing -> return . linePlacer $ fillOrders textRanges
   where
-    fillOrders = drawOrdersOfDrawing width height background
-               . printTextRanges 0
-               $ toFillTextRange <$> str
+    fillOrders =
+      drawOrdersOfDrawing width height background
+        . printTextRanges 0
 
     (mini, maxi) = _renderViewBox ctxt
     V2 width height = floor <$> (maxi ^-^ mini)
@@ -379,16 +397,15 @@ renderString ctxt mayPath anchor str
             . flip execState (initialLetterTransformerState str)
             . executePlacer (transformPlaceGlyph ctxt)
       
-    toFillTextRange renderable = TextRange
-      { _textFont = _renderableFont renderable
-      , _textSize = floor . pixelToPt $ _renderableSize renderable
-      , _text     = fst <$> _renderableString renderable
-      , _textTexture =
-          textureOf ctxt
-            (_renderableAttributes renderable)
-            _fillColor
-            _fillOpacity 
-      }
+    toFillTextRange renderable = do
+      mayTexture <- textureOf ctxt (_renderableAttributes renderable)
+                        _fillColor _fillOpacity 
+      return $ TextRange
+        { _textFont = _renderableFont renderable
+        , _textSize = floor . pixelToPt $ _renderableSize renderable
+        , _text     = fst <$> _renderableString renderable
+        , _textTexture = mayTexture
+        }
 
 startOffsetOfPath :: DrawAttributes -> R.Path -> Number
                   -> Float
@@ -403,7 +420,7 @@ renderText :: RenderContext
            -> Text
            -> IODraw (Drawing PixelRGBA8 ())
 renderText ctxt attr ppath stext =
-  renderString ctxt pathInfo anchor <$> prepareRenderableString ctxt attr stext
+  prepareRenderableString ctxt attr stext >>= renderString ctxt pathInfo anchor
   where
     renderPath =
       svgPathToRasterificPath False . _textPathData <$> ppath

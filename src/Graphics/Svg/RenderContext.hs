@@ -1,8 +1,9 @@
 module Graphics.Svg.RenderContext where
 
+import Control.Monad.Trans.Class( lift )
 import Control.Monad.Trans.State.Strict( StateT )
-import Control.Applicative( (<$>), pure )
-import Codec.Picture( PixelRGBA8( .. ) )
+import Control.Applicative( (<$>) )
+import Codec.Picture( Image, PixelRGBA8( .. ) )
 import qualified Data.Foldable as F
 import qualified Data.Map as M
 import Data.Monoid( Last( .. ) )
@@ -21,6 +22,7 @@ data RenderContext = RenderContext
     , _renderViewBox      :: (R.Point, R.Point)
     , _contextDefinitions :: M.Map String Element
     , _fontCache          :: FontCache
+    , _subRender          :: (Document -> IO (Image PixelRGBA8, LoadedFonts))
     }
 
 type LoadedFonts = M.Map FilePath Font
@@ -182,21 +184,35 @@ fillAlphaCombine opacity (PixelRGBA8 r g b a) =
     a' = fromIntegral a / 255.0
     alpha = floor . max 0 . min 255 $ opacity * a' * 255
 
+documentOfPattern :: Pattern -> Document
+documentOfPattern pat = Document
+    { _viewBox     = _patternViewBox pat
+    , _width       = return $ _patternWidth pat
+    , _height      = return $ _patternHeight pat
+    , _elements    = _patternElements pat
+    , _definitions = M.empty
+    }
+
 prepareTexture :: RenderContext -> DrawAttributes
                -> Texture -> Float
                -> [R.Primitive]
-               -> Maybe (R.Texture PixelRGBA8)
-prepareTexture _ _ FillNone _opacity _ = Nothing
+               -> IODraw (Maybe (R.Texture PixelRGBA8))
+prepareTexture _ _ FillNone _opacity _ = return Nothing
 prepareTexture _ _ (ColorRef color) opacity _ =
-  pure . RT.uniformTexture $ fillAlphaCombine opacity color
+  return . Just . RT.uniformTexture $ fillAlphaCombine opacity color
 prepareTexture ctxt attr (TextureRef ref) opacity prims =
-    M.lookup ref (_contextDefinitions ctxt) >>= prepare 
+    maybe (return Nothing) prepare $
+        M.lookup ref (_contextDefinitions ctxt)
   where
-    prepare (ElementGeometry _) = Nothing
+    prepare (ElementGeometry _) = return Nothing
     prepare (ElementLinearGradient grad) =
-        pure $ prepareLinearGradientTexture ctxt 
+      return . Just $ prepareLinearGradientTexture ctxt 
                         attr grad opacity prims
     prepare (ElementRadialGradient grad) =
-        pure $ prepareRadialGradientTexture ctxt
+      return . Just $ prepareRadialGradientTexture ctxt
                         attr grad opacity prims
+    prepare (ElementPattern pat) = do
+      (patternPicture, _) <- lift . _subRender ctxt $ documentOfPattern pat
+      return . Just . RT.withSampler R.SamplerRepeat
+                    $ RT.sampledImageTexture patternPicture
 

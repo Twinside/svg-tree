@@ -2,11 +2,13 @@
 {-# LANGUAGE TupleSections #-}
 module Graphics.Svg.RasterificRender where
 
+import Data.Monoid( mempty, (<>) )
+import Control.Monad( foldM )
 import Control.Monad.Trans.State.Strict( runStateT )
 import Control.Applicative( (<$>) )
 import Codec.Picture( Image, PixelRGBA8( .. ) )
 import qualified Data.Foldable as F
-import Data.Monoid( mempty, (<>), Last( .. ) )
+import Data.Monoid( Last( .. ) )
 import qualified Graphics.Rasterific as R
 import Graphics.Rasterific.Linear( V2( V2 ), (^-^), zero )
 import Graphics.Rasterific.Outline
@@ -40,6 +42,7 @@ renderSvgDocument cache sizes doc = case sizes of
         , _initialViewBox = box
         , _contextDefinitions = _definitions doc
         , _fontCache = cache
+        , _subRender = renderSvgDocument cache Nothing
         }
     white = PixelRGBA8 255 255 255 255
 
@@ -62,8 +65,12 @@ renderSvgDocument cache sizes doc = case sizes of
           img = R.renderDrawing w h white drawing
       return (img, s)
 
-withInfo :: Monad m => (a -> Maybe b) -> a -> (b -> m ()) -> m ()
-withInfo accessor val action = F.forM_ (accessor val) action
+withInfo :: (Monad m, Monad m2)
+         => (a -> Maybe b) -> a -> (b -> m (m2 ())) -> m (m2 ())
+withInfo accessor val action =
+    case accessor val of
+       Nothing -> return $ return ()
+       Just v -> action v
 
 toTransformationMatrix :: Transformation -> RT.Transformation
 toTransformationMatrix = go where
@@ -79,7 +86,8 @@ toTransformationMatrix = go where
   go (SkewY v) = RT.skewY $ toRadian v
   go TransformUnknown = mempty
 
-withTransform :: DrawAttributes -> R.Drawing a () -> R.Drawing a ()
+withTransform :: DrawAttributes -> R.Drawing a ()
+              -> R.Drawing a ()
 withTransform trans draw =
     case _transform trans of
        Nothing -> draw
@@ -89,24 +97,25 @@ withTransform trans draw =
 withSvgTexture :: RenderContext -> DrawAttributes
                -> Texture -> Float
                -> [R.Primitive]
-               -> R.Drawing PixelRGBA8 ()
-withSvgTexture ctxt attr texture opacity prims =
-  case prepareTexture ctxt attr texture opacity prims of
-    Nothing -> return ()
+               -> IODraw (R.Drawing PixelRGBA8 ())
+withSvgTexture ctxt attr texture opacity prims = do
+  mayTexture <- prepareTexture ctxt attr texture opacity prims
+  case mayTexture of
+    Nothing -> return $ return ()
     Just tex ->
       let method = fillMethodOfSvg attr in
-      R.withTexture tex $ R.fillWithMethod method prims
+      return . R.withTexture tex $ R.fillWithMethod method prims
 
 filler :: RenderContext
        -> DrawAttributes
        -> [R.Primitive]
-       -> R.Drawing PixelRGBA8 ()
+       -> IODraw (R.Drawing PixelRGBA8 ())
 filler ctxt info primitives =
   withInfo (getLast . _fillColor) info $ \svgTexture ->
     withSvgTexture ctxt info svgTexture (_fillOpacity info) primitives
 
 stroker :: RenderContext -> DrawAttributes -> [R.Primitive]
-        -> R.Drawing PixelRGBA8 ()
+        -> IODraw (R.Drawing PixelRGBA8 ())
 stroker ctxt info primitives =
   withInfo (getLast . _strokeWidth) info $ \swidth ->
     withInfo (getLast . _strokeColor) info $ \svgTexture ->
@@ -115,13 +124,17 @@ stroker ctxt info primitives =
           dashOffsetStart =
               maybe 0 toFloat . getLast $ _strokeOffset info
           primsList = case getLast $ _strokeDashArray info of
-            Just pattern ->
-                dashedStrokize dashOffsetStart (toFloat <$> pattern)
+            Just pat ->
+                dashedStrokize dashOffsetStart (toFloat <$> pat)
                   realWidth (joinOfSvg info) (capOfSvg info) primitives
             Nothing ->
               [strokize realWidth (joinOfSvg info) (capOfSvg info) primitives]
+          strokerAction acc prims =
+           (acc <>) <$>
+               withSvgTexture ctxt info svgTexture (_strokeOpacity info) prims
+            
       in
-      mapM_ (withSvgTexture ctxt info svgTexture (_strokeOpacity info)) primsList
+      foldM strokerAction mempty primsList
 
 mergeContext :: RenderContext -> DrawAttributes -> RenderContext
 mergeContext ctxt _attr = ctxt
@@ -203,9 +216,9 @@ renderSvg initialContext = go initialContext initialAttr
             (0, v) -> R.roundedRectangle p' w' h' v v
             (vx, vy) -> R.roundedRectangle p' w' h' vx vy
 
-      return . withTransform pAttr $ do
-        filler context' info rect
-        stroker context' info rect
+      filling <- filler context' info rect
+      stroking <- stroker context' info rect
+      return . withTransform pAttr $ filling <> stroking
 
     go ctxt attr (CircleTree (Circle pAttr p r)) = do
       let info = attr <> pAttr
@@ -213,9 +226,9 @@ renderSvg initialContext = go initialContext initialAttr
           p' = linearisePoint context' info p
           r' = lineariseLength context' info r
           c = R.circle p' r'
-      return . withTransform pAttr $ do
-        filler context' info c
-        stroker context' info c
+      filling <- filler context' info c
+      stroking <- stroker context' info c
+      return . withTransform pAttr $ filling <> stroking
 
     go ctxt attr (EllipseTree (Ellipse pAttr p rx ry)) = do
       let info = attr <> pAttr
@@ -224,9 +237,9 @@ renderSvg initialContext = go initialContext initialAttr
           rx' = lineariseXLength context' info rx
           ry' = lineariseYLength context' info ry
           c = R.ellipse p' rx' ry'
-      return . withTransform pAttr $ do
-        filler context' info c
-        stroker context' info c
+      filling <- filler context' info c
+      stroking <- stroker context' info c
+      return . withTransform pAttr $ filling <> stroking
 
     go ctxt attr (PolyLineTree (PolyLine pAttr points)) =
       go ctxt (dropFillColor attr)
@@ -255,13 +268,14 @@ renderSvg initialContext = go initialContext initialAttr
           context' = mergeContext ctxt pAttr
           p1' = linearisePoint context' info p1
           p2' = linearisePoint context' info p2
-      return . withTransform pAttr . stroker context' info $ R.line p1' p2'
+      stroking <- stroker context' info $ R.line p1' p2'
+      return $ withTransform pAttr stroking
 
     go ctxt attr (Path (PathPrim pAttr path)) = do
       let info = attr <> pAttr
           strokePrimitives = svgPathToPrimitives False path
           fillPrimitives = svgPathToPrimitives True path
-      return . withTransform pAttr $ do
-        filler ctxt info fillPrimitives
-        stroker ctxt info strokePrimitives
+      filling <- filler ctxt info fillPrimitives
+      stroking <- stroker ctxt info strokePrimitives
+      return . withTransform pAttr $ filling <> stroking
 

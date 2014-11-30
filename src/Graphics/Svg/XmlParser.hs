@@ -558,8 +558,9 @@ withId el f = case attributeFinder "id" el of
       return None
 
 unparseDefs :: X.Element -> State Symbols Tree
-unparseDefs e@(nodeName -> "pattern") =
-  withId e . const $ ElementPattern pat
+unparseDefs e@(nodeName -> "pattern") = do
+  subElements <- mapM unparse $ elChildren e
+  withId e . const . ElementPattern $ pat { _patternElements = subElements}
     where
       pat = xmlUnparse e
 unparseDefs e@(nodeName -> "linearGradient") =
@@ -693,7 +694,7 @@ cssApply rules = zipTree go where
    
 
 unparseDocument :: X.Element -> Maybe Document
-unparseDocument e@(nodeName -> "") = Just $ Document 
+unparseDocument e@(nodeName -> "svg") = Just $ Document 
     { _viewBox =
         attributeFinder "viewBox" e >>= parse viewBox
     , _elements = cssApply (cssStyle named) <$> elements
