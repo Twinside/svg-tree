@@ -448,9 +448,20 @@ instance XMLUpdatable TextPath where
 instance XMLUpdatable Text where
   defaultSvg = defaultText
   attributes =
-      [("lengthAdjust", \e s -> e & textAdjust .~ parseTextAdjust s)
-      ]
-        
+      [("lengthAdjust", \e s -> e & textAdjust .~ parseTextAdjust s)]
+
+
+instance XMLUpdatable Pattern where
+  defaultSvg = defaultPattern
+  attributes =
+    [("viewBox", \e s -> e & patternViewBox .~ parse viewBox s)
+    ,("width", numericSetter patternWidth)
+    ,("height", numericSetter patternHeight)
+    ,("x", numericSetter (patternPos._1))
+    ,("y", numericSetter (patternPos._2))
+    ]
+
+
 unparseText :: [X.Content] -> ([TextSpanContent], Maybe TextPath)
 unparseText = extractResult . go True
   where
@@ -547,6 +558,10 @@ withId el f = case attributeFinder "id" el of
       return None
 
 unparseDefs :: X.Element -> State Symbols Tree
+unparseDefs e@(nodeName -> "pattern") =
+  withId e . const $ ElementPattern pat
+    where
+      pat = xmlUnparse e
 unparseDefs e@(nodeName -> "linearGradient") =
   withId e $ ElementLinearGradient . unparser
   where
@@ -620,6 +635,7 @@ unparse e@(nodeName -> "text") = do
           Nothing -> pure Nothing
           Just (ElementLinearGradient _) -> pure Nothing
           Just (ElementRadialGradient _) -> pure Nothing
+          Just (ElementPattern _) -> pure Nothing
           Just (ElementGeometry (Path p)) ->
               pure . Just $ pathInfo { _textPathData = _pathDefinition p }
           Just (ElementGeometry _) -> pure Nothing
@@ -651,11 +667,12 @@ unparse e@(nodeName -> "use") = do
     Nothing -> pure None
     Just (ElementLinearGradient _) -> pure None
     Just (ElementRadialGradient _) -> pure None
+    Just (ElementPattern _) -> pure None
     Just (ElementGeometry g) -> pure $ UseTree useInfo g
 unparse _ = pure None
 
 cssDeclApplyer :: DrawAttributes -> CssDeclaration
-             -> DrawAttributes 
+               -> DrawAttributes 
 cssDeclApplyer value (CssDeclaration txt elems) = 
    case lookup txt cssUpdaters of
      Nothing -> value
