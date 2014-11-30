@@ -80,7 +80,7 @@ colorParser = rgbColor
         <$> hexChar <*> hexChar <*> hexChar
 
 
-textureParser :: Parser (Maybe SvgTexture)
+textureParser :: Parser (Maybe Texture)
 textureParser =
   (Just <$> (none
            <|> (TextureRef <$> urlRef)

@@ -5,108 +5,107 @@ module Graphics.Svg.Types
     ( Coord
     , Origin( .. )
     , Point
-    , SvgDocument( .. )
-    , SvgPath( .. )
-    , SvgCap( .. )
-    , SvgLineJoin( .. )
-    , SvgTree( .. )
-    , SvgNumber( .. )
-    , SvgTransformation( .. )
-    , SvgPoint
-    , SvgSpread( .. )
-    , SvgTexture( .. )
-    , SvgElement( .. )
-    , SvgFillRule( .. )
-    , SvgFontStyle( .. )
-    , toSvgPoint
-    , svgDocumentSize
+    , Document( .. )
+    , Path( .. )
+    , Cap( .. )
+    , LineJoin( .. )
+    , Tree( .. )
+    , Number( .. )
+    , Transformation( .. )
+    , Spread( .. )
+    , Texture( .. )
+    , Element( .. )
+    , FillRule( .. )
+    , FontStyle( .. )
+    , toPoint
+    , documentSize
 
     , GradientUnits( .. )
 
-    , SvgDrawAttributes( .. )
-    , HasSvgDrawAttributes( .. )
+    , DrawAttributes( .. )
+    , HasDrawAttributes( .. )
 
-    , SvgGradientStop( .. )
-    , HasSvgGradientStop( .. )
+    , GradientStop( .. )
+    , HasGradientStop( .. )
 
-    , SvgLinearGradient( .. )
+    , LinearGradient( .. )
     , defaultLinearGradient
-    , HasSvgLinearGradient( .. )
+    , HasLinearGradient( .. )
 
-    , SvgRadialGradient( .. )
+    , RadialGradient( .. )
     , defaultRadialGradient
-    , HasSvgRadialGradient( .. )
+    , HasRadialGradient( .. )
 
-    , SvgRectangle( .. )
+    , Rectangle( .. )
     , defaultRectangle
-    , HasSvgRectangle( .. )
+    , HasRectangle( .. )
 
-    , SvgLine( .. )
+    , Line( .. )
     , defaultLine
-    , HasSvgLine( .. )
+    , HasLine( .. )
 
-    , SvgPolygon( .. )
+    , Polygon( .. )
     , defaultPolygon
-    , HasSvgPolygon( .. )
+    , HasPolygon( .. )
 
-    , SvgPolyLine( .. )
+    , PolyLine( .. )
     , defaultPolyLine
-    , HasSvgPolyLine( .. )
+    , HasPolyLine( .. )
 
-    , SvgPathPrim( .. )
+    , PathPrim( .. )
     , defaultPathPrim
-    , HasSvgPathPrim( .. )
+    , HasPathPrim( .. )
 
-    , SvgGroup( .. )
+    , Group( .. )
     , defaultGroup
-    , svgGroupDrawAttributes
-    , svgGroupChildren
-    , svgGroupViewBox
+    , groupDrawAttributes
+    , groupChildren
+    , groupViewBox
 
-    , SvgSymbol( .. )
+    , Symbol( .. )
     , groupOfSymbol
 
-    , SvgCircle( .. )
+    , Circle( .. )
     , defaultCircle
-    , HasSvgCircle( .. )
+    , HasCircle( .. )
 
-    , SvgEllipse( .. )
+    , Ellipse( .. )
     , defaultEllipse
-    , HasSvgEllipse( .. )
+    , HasEllipse( .. )
 
-    , SvgUse( .. )
-    , defaultSvgUse
-    , HasSvgUse( .. )
+    , Use( .. )
+    , defaultUse
+    , HasUse( .. )
 
-    , SvgText( .. )
-    , defaultSvgText
-    , HasSvgText( .. )
+    , Text( .. )
+    , defaultText
+    , HasText( .. )
 
-    , SvgTextPath( .. )
-    , defaultSvgTextPath 
-    , HasSvgTextPath( .. )
+    , TextPath( .. )
+    , defaultTextPath 
+    , HasTextPath( .. )
 
-    , SvgTextPathSpacing( .. )
-    , SvgTextPathMethod( .. )
-    , SvgTextAnchor( .. )
+    , TextPathSpacing( .. )
+    , TextPathMethod( .. )
+    , TextAnchor( .. )
 
-    , SvgTextSpanContent( .. )
+    , TextSpanContent( .. )
 
-    , SvgTextSpan( .. )
-    , defaultSvgTextSpan
-    , HasSvgTextSpan( .. )
+    , TextSpan( .. )
+    , defaultTextSpan
+    , HasTextSpan( .. )
 
-    , SvgTextInfo( .. )
-    , defaultSvgTextInfo
-    , HasSvgTextInfo( .. )
+    , TextInfo( .. )
+    , defaultTextInfo
+    , HasTextInfo( .. )
 
-    , SvgTextAdjust( .. )
+    , TextAdjust( .. )
 
-    , WithSvgDrawAttributes( .. )
+    , WithDrawAttributes( .. )
     , isPathArc
     , isPathWithArc
     , nameOfTree
-    , zipSvgTree
+    , zipTree
     ) where
 
 import Data.Function( on )
@@ -117,8 +116,8 @@ import Data.Foldable( Foldable )
 import qualified Data.Foldable as F
 import qualified Data.Text as T
 import Codec.Picture( PixelRGBA8( .. ) )
-import Graphics.Rasterific.Transformations( Transformation )
-import Graphics.Rasterific( Point ) 
+import qualified Graphics.Rasterific.Transformations as RT
+import qualified Graphics.Rasterific as R
 import Control.Lens( Lens'
                    , lens
                    , makeClassy
@@ -135,492 +134,492 @@ data Origin
     | OriginRelative
     deriving (Eq, Show)
 
-data SvgPath
-    = MoveTo Origin [Point]
-    | LineTo Origin [Point]
+data Path
+    = MoveTo Origin [R.Point]
+    | LineTo Origin [R.Point]
 
     | HorizontalTo  Origin [Coord]
     | VerticalTo    Origin [Coord]
 
     -- | Cubic vezier
-    | CurveTo  Origin [(Point, Point, Point)]
+    | CurveTo  Origin [(R.Point, R.Point, R.Point)]
     -- | Cubic bezier
-    | SmoothCurveTo  Origin [(Point, Point)]
+    | SmoothCurveTo  Origin [(R.Point, R.Point)]
     -- | Quadratic bezier
-    | QuadraticBezier  Origin [(Point, Point)]
+    | QuadraticBezier  Origin [(R.Point, R.Point)]
     -- | Quadratic bezier
-    | SmoothQuadraticBezierCurveTo  Origin [Point]
-    | ElipticalArc  Origin [(Coord, Coord, Coord, Coord, Coord, Point)]
+    | SmoothQuadraticBezierCurveTo  Origin [R.Point]
+    | ElipticalArc  Origin [(Coord, Coord, Coord, Coord, Coord, R.Point)]
     | EndPath
     deriving (Eq, Show)
 
-data SvgNumber
-    = SvgNum Coord
-    | SvgEm Coord
-    | SvgPercent Coord
+data Number
+    = Num Coord
+    | Em Coord
+    | Percent Coord
     deriving (Eq, Show)
 
-type SvgPoint = (SvgNumber, SvgNumber)
+type Point = (Number, Number)
 
-toSvgPoint :: SvgNumber -> SvgNumber -> SvgPoint
-toSvgPoint = (,)
+toPoint :: Number -> Number -> Point
+toPoint = (,)
 
-isPathArc :: SvgPath -> Bool
+isPathArc :: Path -> Bool
 isPathArc (ElipticalArc _ _) = True
 isPathArc _ = False
 
-isPathWithArc :: Foldable f => f SvgPath -> Bool
+isPathWithArc :: Foldable f => f Path -> Bool
 isPathWithArc = F.any isPathArc
 
 
-data SvgCap
-    = SvgCapRound
-    | SvgCapButt
-    | SvgCapSquare
+data Cap
+    = CapRound
+    | CapButt
+    | CapSquare
     deriving (Eq, Show)
 
-data SvgLineJoin
-    = SvgJoinMiter
-    | SvgJoinBevel
-    | SvgJoinRound
+data LineJoin
+    = JoinMiter
+    | JoinBevel
+    | JoinRound
     deriving (Eq, Show)
 
-data SvgTexture
+data Texture
     = ColorRef   PixelRGBA8
     | TextureRef String
     | FillNone
     deriving (Eq, Show)
 
-data SvgFillRule
-    = SvgFillEvenOdd
-    | SvgFillNonZero
+data FillRule
+    = FillEvenOdd
+    | FillNonZero
     deriving (Eq, Show)
 
-data SvgTransformation
-    = SvgTransformMatrix Transformation
-    | SvgTranslate Float Float
-    | SvgScale Float (Maybe Float)
-    | SvgRotate Float (Maybe (Float, Float))
-    | SvgSkewX Float
-    | SvgSkewY Float
-    | SvgTransformUnknown
+data Transformation
+    = TransformMatrix RT.Transformation
+    | Translate Float Float
+    | Scale Float (Maybe Float)
+    | Rotate Float (Maybe (Float, Float))
+    | SkewX Float
+    | SkewY Float
+    | TransformUnknown
     deriving (Eq, Show)
 
-class WithSvgDrawAttributes a where
-    drawAttr :: Lens' a SvgDrawAttributes
+class WithDrawAttributes a where
+    drawAttr :: Lens' a DrawAttributes
 
-data SvgFontStyle
+data FontStyle
     = FontStyleNormal
     | FontStyleItalic
     | FontStyleOblique
     deriving (Eq, Show)
 
-data SvgTextAnchor
-  = SvgTextAnchorStart
-  | SvgTextAnchorMiddle
-  | SvgTextAnchorEnd
+data TextAnchor
+  = TextAnchorStart
+  | TextAnchorMiddle
+  | TextAnchorEnd
   deriving (Eq, Show)
 
-data SvgDrawAttributes = SvgDrawAttributes
-    { _strokeWidth      :: !(Last SvgNumber)
-    , _strokeColor      :: !(Last SvgTexture)
+data DrawAttributes = DrawAttributes
+    { _strokeWidth      :: !(Last Number)
+    , _strokeColor      :: !(Last Texture)
     , _strokeOpacity    :: !Float
-    , _strokeLineCap    :: !(Last SvgCap)
-    , _strokeLineJoin   :: !(Last SvgLineJoin)
+    , _strokeLineCap    :: !(Last Cap)
+    , _strokeLineJoin   :: !(Last LineJoin)
     , _strokeMiterLimit :: !(Last Float)
-    , _fillColor        :: !(Last SvgTexture)
+    , _fillColor        :: !(Last Texture)
     , _fillOpacity      :: !Float
-    , _transform        :: !(Maybe [SvgTransformation])
-    , _fillRule         :: !(Last SvgFillRule)
+    , _transform        :: !(Maybe [Transformation])
+    , _fillRule         :: !(Last FillRule)
     , _attrClass        :: !(Last String)
     , _attrId           :: !(Maybe String)
-    , _strokeOffset     :: !(Last SvgNumber)
-    , _strokeDashArray  :: !(Last [SvgNumber])
+    , _strokeOffset     :: !(Last Number)
+    , _strokeDashArray  :: !(Last [Number])
 
-    , _fontSize         :: !(Last SvgNumber)
+    , _fontSize         :: !(Last Number)
     , _fontFamily       :: !(Last [String])
-    , _fontStyle        :: !(Last SvgFontStyle)
-    , _textAnchor       :: !(Last SvgTextAnchor)
+    , _fontStyle        :: !(Last FontStyle)
+    , _textAnchor       :: !(Last TextAnchor)
     }
     deriving (Eq, Show)
 
-makeClassy ''SvgDrawAttributes
+makeClassy ''DrawAttributes
 
-data SvgPolyLine = SvgPolyLine
-  { _svgPolyLineDrawAttributes :: SvgDrawAttributes 
-  , _svgPolyLinePoints :: [Point]
+data PolyLine = PolyLine
+  { _polyLineDrawAttributes :: DrawAttributes 
+  , _polyLinePoints :: [R.Point]
   }
   deriving (Eq, Show)
 
-makeClassy ''SvgPolyLine
+makeClassy ''PolyLine
 
-defaultPolyLine :: SvgPolyLine
-defaultPolyLine = SvgPolyLine
-  { _svgPolyLineDrawAttributes = mempty
-  , _svgPolyLinePoints = []
+defaultPolyLine :: PolyLine
+defaultPolyLine = PolyLine
+  { _polyLineDrawAttributes = mempty
+  , _polyLinePoints = []
   }
 
-instance WithSvgDrawAttributes SvgPolyLine where
-    drawAttr = svgPolyLineDrawAttributes
+instance WithDrawAttributes PolyLine where
+    drawAttr = polyLineDrawAttributes
 
-data SvgPolygon = SvgPolygon
-  { _svgPolygonDrawAttributes :: SvgDrawAttributes
-  , _svgPolygonPoints :: [Point]
-  }
-  deriving (Eq, Show)
-
-makeClassy ''SvgPolygon
-
-instance WithSvgDrawAttributes SvgPolygon where
-    drawAttr = svgPolygonDrawAttributes
-
-defaultPolygon :: SvgPolygon
-defaultPolygon = SvgPolygon
-  { _svgPolygonDrawAttributes = mempty
-  , _svgPolygonPoints = []
-  }
-
-
-data SvgLine = SvgLine
-  { _svgLineDrawAttributes :: SvgDrawAttributes
-  , _svgLinePoint1 :: SvgPoint
-  , _svgLinePoint2 :: SvgPoint
+data Polygon = Polygon
+  { _polygonDrawAttributes :: DrawAttributes
+  , _polygonPoints :: [R.Point]
   }
   deriving (Eq, Show)
 
-makeClassy ''SvgLine
+makeClassy ''Polygon
 
-instance WithSvgDrawAttributes SvgLine where
-    drawAttr = svgLineDrawAttributes
+instance WithDrawAttributes Polygon where
+    drawAttr = polygonDrawAttributes
 
-defaultLine :: SvgLine
-defaultLine = SvgLine
-  { _svgLineDrawAttributes = mempty
-  , _svgLinePoint1 = zeroPoint
-  , _svgLinePoint2 = zeroPoint
+defaultPolygon :: Polygon
+defaultPolygon = Polygon
+  { _polygonDrawAttributes = mempty
+  , _polygonPoints = []
   }
-  where zeroPoint = (SvgNum 0, SvgNum 0)
 
-data SvgRectangle = SvgRectangle 
-  { _svgRectDrawAttributes  :: SvgDrawAttributes
-  , _svgRectUpperLeftCorner :: SvgPoint
-  , _svgRectWidth           :: SvgNumber
-  , _svgRectHeight          :: SvgNumber
-  , _svgRectCornerRadius    :: (SvgNumber, SvgNumber)
+
+data Line = Line
+  { _lineDrawAttributes :: DrawAttributes
+  , _linePoint1 :: Point
+  , _linePoint2 :: Point
   }
   deriving (Eq, Show)
 
-makeClassy ''SvgRectangle
+makeClassy ''Line
 
-instance WithSvgDrawAttributes SvgRectangle where
-    drawAttr = svgRectDrawAttributes
+instance WithDrawAttributes Line where
+    drawAttr = lineDrawAttributes
 
-defaultRectangle :: SvgRectangle
-defaultRectangle = SvgRectangle
-  { _svgRectDrawAttributes  = mempty
-  , _svgRectUpperLeftCorner = (SvgNum 0, SvgNum 0)
-  , _svgRectWidth           = SvgNum 0
-  , _svgRectHeight          = SvgNum 0
-  , _svgRectCornerRadius    = (SvgNum 0, SvgNum 0)
+defaultLine :: Line
+defaultLine = Line
+  { _lineDrawAttributes = mempty
+  , _linePoint1 = zeroPoint
+  , _linePoint2 = zeroPoint
   }
+  where zeroPoint = (Num 0, Num 0)
 
-data SvgPathPrim = SvgPathPrim
-  { _svgPathDrawAttributes :: SvgDrawAttributes
-  , _svgPathDefinition :: [SvgPath]
-  }
-  deriving (Eq, Show)
-
-makeClassy '' SvgPathPrim
-
-instance WithSvgDrawAttributes SvgPathPrim where
-    drawAttr = svgPathDrawAttributes
-
-defaultPathPrim :: SvgPathPrim
-defaultPathPrim = SvgPathPrim
-  { _svgPathDrawAttributes = mempty
-  , _svgPathDefinition = []
-  }
-
-data SvgGroup a = SvgGroup
-  { _svgGroupDrawAttributes :: !SvgDrawAttributes
-  , _svgGroupChildren  :: ![a]
-  , _svgGroupViewBox   :: !(Maybe (Int, Int, Int, Int))
+data Rectangle = Rectangle 
+  { _rectDrawAttributes  :: DrawAttributes
+  , _rectUpperLeftCorner :: Point
+  , _rectWidth           :: Number
+  , _rectHeight          :: Number
+  , _rectCornerRadius    :: (Number, Number)
   }
   deriving (Eq, Show)
 
-makeLenses ''SvgGroup
+makeClassy ''Rectangle
 
-instance WithSvgDrawAttributes (SvgGroup a) where
-    drawAttr = svgGroupDrawAttributes
+instance WithDrawAttributes Rectangle where
+    drawAttr = rectDrawAttributes
 
-newtype SvgSymbol a =
-    SvgSymbol { _groupOfSymbol :: SvgGroup a }
+defaultRectangle :: Rectangle
+defaultRectangle = Rectangle
+  { _rectDrawAttributes  = mempty
+  , _rectUpperLeftCorner = (Num 0, Num 0)
+  , _rectWidth           = Num 0
+  , _rectHeight          = Num 0
+  , _rectCornerRadius    = (Num 0, Num 0)
+  }
 
-makeLenses ''SvgSymbol
+data PathPrim = PathPrim
+  { _pathDrawAttributes :: DrawAttributes
+  , _pathDefinition :: [Path]
+  }
+  deriving (Eq, Show)
 
-instance WithSvgDrawAttributes (SvgSymbol a) where
+makeClassy '' PathPrim
+
+instance WithDrawAttributes PathPrim where
+    drawAttr = pathDrawAttributes
+
+defaultPathPrim :: PathPrim
+defaultPathPrim = PathPrim
+  { _pathDrawAttributes = mempty
+  , _pathDefinition = []
+  }
+
+data Group a = Group
+  { _groupDrawAttributes :: !DrawAttributes
+  , _groupChildren  :: ![a]
+  , _groupViewBox   :: !(Maybe (Int, Int, Int, Int))
+  }
+  deriving (Eq, Show)
+
+makeLenses ''Group
+
+instance WithDrawAttributes (Group a) where
+    drawAttr = groupDrawAttributes
+
+newtype Symbol a =
+    Symbol { _groupOfSymbol :: Group a }
+
+makeLenses ''Symbol
+
+instance WithDrawAttributes (Symbol a) where
     drawAttr = groupOfSymbol . drawAttr
 
-defaultGroup :: SvgGroup a
-defaultGroup = SvgGroup
-  { _svgGroupDrawAttributes = mempty
-  , _svgGroupChildren  = []
-  , _svgGroupViewBox = Nothing
+defaultGroup :: Group a
+defaultGroup = Group
+  { _groupDrawAttributes = mempty
+  , _groupChildren  = []
+  , _groupViewBox = Nothing
   }
 
-data SvgCircle = SvgCircle
-  { _svgCircleDrawAttributes :: SvgDrawAttributes
-  , _svgCircleCenter   :: SvgPoint
-  , _svgCircleRadius   :: SvgNumber
-  }
-  deriving (Eq, Show)
-
-makeClassy ''SvgCircle
-
-instance WithSvgDrawAttributes SvgCircle where
-    drawAttr = svgCircleDrawAttributes
-
-defaultCircle :: SvgCircle
-defaultCircle = SvgCircle
-  { _svgCircleDrawAttributes = mempty
-  , _svgCircleCenter = (SvgNum 0, SvgNum 0)
-  , _svgCircleRadius = SvgNum 0
-  }
-
-data SvgEllipse = SvgEllipse
-  { _svgEllipseDrawAttributes :: SvgDrawAttributes
-  , _svgEllipseCenter :: SvgPoint
-  , _svgEllipseXRadius :: SvgNumber
-  , _svgEllipseYRadius :: SvgNumber
+data Circle = Circle
+  { _circleDrawAttributes :: DrawAttributes
+  , _circleCenter   :: Point
+  , _circleRadius   :: Number
   }
   deriving (Eq, Show)
 
-makeClassy ''SvgEllipse
+makeClassy ''Circle
 
-instance WithSvgDrawAttributes SvgEllipse where
-  drawAttr = svgEllipseDrawAttributes
+instance WithDrawAttributes Circle where
+    drawAttr = circleDrawAttributes
 
-defaultEllipse :: SvgEllipse
-defaultEllipse = SvgEllipse
-  { _svgEllipseDrawAttributes = mempty
-  , _svgEllipseCenter = (SvgNum 0, SvgNum 0)
-  , _svgEllipseXRadius = SvgNum 0
-  , _svgEllipseYRadius = SvgNum 0
+defaultCircle :: Circle
+defaultCircle = Circle
+  { _circleDrawAttributes = mempty
+  , _circleCenter = (Num 0, Num 0)
+  , _circleRadius = Num 0
   }
 
-data SvgUse = SvgUse
-  { _svgUseBase   :: SvgPoint
-  , _svgUseName   :: String
-  , _svgUseWidth  :: Maybe SvgNumber
-  , _svgUseHeight :: Maybe SvgNumber
-  , _svgUseDrawAttributes :: SvgDrawAttributes
+data Ellipse = Ellipse
+  { _ellipseDrawAttributes :: DrawAttributes
+  , _ellipseCenter :: Point
+  , _ellipseXRadius :: Number
+  , _ellipseYRadius :: Number
   }
   deriving (Eq, Show)
 
-makeClassy ''SvgUse
+makeClassy ''Ellipse
 
-instance WithSvgDrawAttributes SvgUse where
-  drawAttr = svgUseDrawAttributes
+instance WithDrawAttributes Ellipse where
+  drawAttr = ellipseDrawAttributes
 
-defaultSvgUse :: SvgUse
-defaultSvgUse = SvgUse
-  { _svgUseBase   = (SvgNum 0, SvgNum 0)
-  , _svgUseName   = ""
-  , _svgUseWidth  = Nothing
-  , _svgUseHeight = Nothing
-  , _svgUseDrawAttributes = mempty
+defaultEllipse :: Ellipse
+defaultEllipse = Ellipse
+  { _ellipseDrawAttributes = mempty
+  , _ellipseCenter = (Num 0, Num 0)
+  , _ellipseXRadius = Num 0
+  , _ellipseYRadius = Num 0
   }
 
-data SvgTextInfo = SvgTextInfo
-  { _svgTextInfoX      :: ![SvgNumber]
-  , _svgTextInfoY      :: ![SvgNumber]
-  , _svgTextInfoDX     :: ![SvgNumber]
-  , _svgTextInfoDY     :: ![SvgNumber]
-  , _svgTextInfoRotate :: ![Float]
-  , _svgTextInfoLength :: !(Maybe SvgNumber)
+data Use = Use
+  { _useBase   :: Point
+  , _useName   :: String
+  , _useWidth  :: Maybe Number
+  , _useHeight :: Maybe Number
+  , _useDrawAttributes :: DrawAttributes
   }
   deriving (Eq, Show)
 
-instance Monoid SvgTextInfo where
-  mempty = SvgTextInfo [] [] [] [] [] Nothing
-  mappend (SvgTextInfo x1 y1 dx1 dy1 r1 l1)
-          (SvgTextInfo x2 y2 dx2 dy2 r2 l2) =
-    SvgTextInfo (x1 <> x2)   (y1 <> y2)
+makeClassy ''Use
+
+instance WithDrawAttributes Use where
+  drawAttr = useDrawAttributes
+
+defaultUse :: Use
+defaultUse = Use
+  { _useBase   = (Num 0, Num 0)
+  , _useName   = ""
+  , _useWidth  = Nothing
+  , _useHeight = Nothing
+  , _useDrawAttributes = mempty
+  }
+
+data TextInfo = TextInfo
+  { _textInfoX      :: ![Number]
+  , _textInfoY      :: ![Number]
+  , _textInfoDX     :: ![Number]
+  , _textInfoDY     :: ![Number]
+  , _textInfoRotate :: ![Float]
+  , _textInfoLength :: !(Maybe Number)
+  }
+  deriving (Eq, Show)
+
+instance Monoid TextInfo where
+  mempty = TextInfo [] [] [] [] [] Nothing
+  mappend (TextInfo x1 y1 dx1 dy1 r1 l1)
+          (TextInfo x2 y2 dx2 dy2 r2 l2) =
+    TextInfo (x1 <> x2)   (y1 <> y2)
                 (dx1 <> dx2) (dy1 <> dy2)
                 (r1 <> r2)
                 (getLast $ Last l1 <> Last l2)
 
-makeClassy ''SvgTextInfo
+makeClassy ''TextInfo
 
-defaultSvgTextInfo :: SvgTextInfo
-defaultSvgTextInfo = mempty
+defaultTextInfo :: TextInfo
+defaultTextInfo = mempty
 
-data SvgTextSpanContent
-    = SvgSpanText    !T.Text
-    | SvgSpanTextRef !String
-    | SvgSpanSub     !SvgTextSpan
+data TextSpanContent
+    = SpanText    !T.Text
+    | SpanTextRef !String
+    | SpanSub     !TextSpan
     deriving (Eq, Show)
 
-data SvgTextSpan = SvgTextSpan
-  { _svgSpanInfo           :: !SvgTextInfo
-  , _svgSpanDrawAttributes :: !SvgDrawAttributes
-  , _svgSpanContent        :: ![SvgTextSpanContent]
+data TextSpan = TextSpan
+  { _spanInfo           :: !TextInfo
+  , _spanDrawAttributes :: !DrawAttributes
+  , _spanContent        :: ![TextSpanContent]
   }
   deriving (Eq, Show)
 
-makeClassy ''SvgTextSpan
+makeClassy ''TextSpan
 
-defaultSvgTextSpan :: SvgTextSpan
-defaultSvgTextSpan = SvgTextSpan
-  { _svgSpanInfo = defaultSvgTextInfo
-  , _svgSpanDrawAttributes = mempty
-  , _svgSpanContent        = mempty
+defaultTextSpan :: TextSpan
+defaultTextSpan = TextSpan
+  { _spanInfo = defaultTextInfo
+  , _spanDrawAttributes = mempty
+  , _spanContent        = mempty
   }
 
-data SvgTextPathMethod
-  = SvgTextPathAlign
-  | SvgTextPathStretch
+data TextPathMethod
+  = TextPathAlign
+  | TextPathStretch
   deriving (Eq, Show)
 
-data SvgTextPathSpacing
-  = SvgTextPathSpacingExact
-  | SvgTextPathSpacingAuto
+data TextPathSpacing
+  = TextPathSpacingExact
+  | TextPathSpacingAuto
   deriving (Eq, Show)
 
-data SvgTextPath = SvgTextPath
-  { _svgTextPathStartOffset :: !SvgNumber
-  , _svgTextPathName        :: !String
-  , _svgTextPathData        :: ![SvgPath]
-  , _svgTextPathMethod      :: !SvgTextPathMethod
-  , _svgTextPathSpacing     :: !SvgTextPathSpacing
-  }
-  deriving (Eq, Show)
-
-makeClassy ''SvgTextPath
-
-defaultSvgTextPath :: SvgTextPath
-defaultSvgTextPath = SvgTextPath
-  { _svgTextPathStartOffset = SvgNum 0
-  , _svgTextPathName        = mempty
-  , _svgTextPathMethod      = SvgTextPathAlign
-  , _svgTextPathSpacing     = SvgTextPathSpacingExact
-  , _svgTextPathData        = []
-  }
-
-data SvgTextAdjust
-  = SvgTextAdjustSpacing
-  | SvgTextAdjustSpacingAndGlyphs
-  deriving (Eq, Show)
-
-data SvgText = SvgText
-  { _svgTextAdjust   :: !SvgTextAdjust
-  , _svgTextRoot     :: !SvgTextSpan
+data TextPath = TextPath
+  { _textPathStartOffset :: !Number
+  , _textPathName        :: !String
+  , _textPathData        :: ![Path]
+  , _textPathMethod      :: !TextPathMethod
+  , _textPathSpacing     :: !TextPathSpacing
   }
   deriving (Eq, Show)
 
-makeClassy ''SvgText
+makeClassy ''TextPath
 
-instance WithSvgDrawAttributes SvgText where
-  drawAttr = svgTextRoot . svgSpanDrawAttributes
-
-defaultSvgText :: SvgText
-defaultSvgText = SvgText
-  { _svgTextRoot = defaultSvgTextSpan
-  , _svgTextAdjust = SvgTextAdjustSpacing
+defaultTextPath :: TextPath
+defaultTextPath = TextPath
+  { _textPathStartOffset = Num 0
+  , _textPathName        = mempty
+  , _textPathMethod      = TextPathAlign
+  , _textPathSpacing     = TextPathSpacingExact
+  , _textPathData        = []
   }
 
-data SvgTree
-    = SvgNone
-    | Use       !SvgUse             !SvgTree
-    | Group     !(SvgGroup SvgTree)
-    | Symbol    !(SvgGroup SvgTree)
-    | Path      !SvgPathPrim
-    | Circle    !SvgCircle
-    | PolyLine  !SvgPolyLine
-    | Polygon   !SvgPolygon
-    | Ellipse   !SvgEllipse
-    | Line      !SvgLine
-    | Rectangle !SvgRectangle
-    | TextArea  !(Maybe SvgTextPath) !SvgText
+data TextAdjust
+  = TextAdjustSpacing
+  | TextAdjustSpacingAndGlyphs
+  deriving (Eq, Show)
+
+data Text = Text
+  { _textAdjust   :: !TextAdjust
+  , _textRoot     :: !TextSpan
+  }
+  deriving (Eq, Show)
+
+makeClassy ''Text
+
+instance WithDrawAttributes Text where
+  drawAttr = textRoot . spanDrawAttributes
+
+defaultText :: Text
+defaultText = Text
+  { _textRoot = defaultTextSpan
+  , _textAdjust = TextAdjustSpacing
+  }
+
+data Tree
+    = None
+    | UseTree       !Use  !Tree
+    | GroupTree     !(Group Tree)
+    | SymbolTree    !(Group Tree)
+    | Path          !PathPrim
+    | CircleTree    !Circle
+    | PolyLineTree  !PolyLine
+    | PolygonTree   !Polygon
+    | EllipseTree   !Ellipse
+    | LineTree      !Line
+    | RectangleTree !Rectangle
+    | TextArea      !(Maybe TextPath) !Text
     deriving (Eq, Show)
 
 appNode :: [[a]] -> a -> [[a]]
 appNode [] e = [[e]]
 appNode (curr:above) e = (e:curr) : above
 
-zipSvgTree :: ([[SvgTree]] -> SvgTree) -> SvgTree -> SvgTree
-zipSvgTree f = dig [] where
-  dig prev e@SvgNone = f $ appNode prev e
-  dig prev e@(Use u sub) =
-      f . appNode prev . Use u $ dig ([] : appNode prev e) sub
-  dig prev e@(Group g) =
-      f . appNode prev . Group $ zipGroup (appNode prev e) g
-  dig prev e@(Symbol g) =
-      f . appNode prev . Symbol $ zipGroup (appNode prev e) g
+zipTree :: ([[Tree]] -> Tree) -> Tree -> Tree
+zipTree f = dig [] where
+  dig prev e@None = f $ appNode prev e
+  dig prev e@(UseTree u sub) =
+      f . appNode prev . UseTree u $ dig ([] : appNode prev e) sub
+  dig prev e@(GroupTree g) =
+      f . appNode prev . GroupTree $ zipGroup (appNode prev e) g
+  dig prev e@(SymbolTree g) =
+      f . appNode prev . SymbolTree $ zipGroup (appNode prev e) g
   dig prev e@(Path _) = f $ appNode prev e
-  dig prev e@(Circle _) = f $ appNode prev e
-  dig prev e@(PolyLine _) = f $ appNode prev e
-  dig prev e@(Polygon _) = f $ appNode prev e
-  dig prev e@(Ellipse _) = f $ appNode prev e
-  dig prev e@(Line _) = f $ appNode prev e
-  dig prev e@(Rectangle _) = f $ appNode prev e
+  dig prev e@(CircleTree _) = f $ appNode prev e
+  dig prev e@(PolyLineTree _) = f $ appNode prev e
+  dig prev e@(PolygonTree _) = f $ appNode prev e
+  dig prev e@(EllipseTree _) = f $ appNode prev e
+  dig prev e@(LineTree _) = f $ appNode prev e
+  dig prev e@(RectangleTree _) = f $ appNode prev e
   dig prev e@(TextArea _ _) = f $ appNode prev e
 
-  zipGroup prev g = g { _svgGroupChildren = updatedChildren }
+  zipGroup prev g = g { _groupChildren = updatedChildren }
     where
-      groupChild = _svgGroupChildren g
+      groupChild = _groupChildren g
       updatedChildren = 
         [dig (c:prev) child
             | (child, c) <- zip groupChild $ inits groupChild]
 
 
-nameOfTree :: SvgTree -> T.Text
+nameOfTree :: Tree -> T.Text
 nameOfTree v =
   case v of
-   SvgNone     -> ""
-   Use _ _     -> "use"
-   Group _     -> "g"
-   Symbol _    -> "symbol"
+   None     -> ""
+   UseTree _ _     -> "use"
+   GroupTree _     -> "g"
+   SymbolTree _    -> "symbol"
    Path _      -> "path"
-   Circle _    -> "circle"
-   PolyLine _  -> "polyline"
-   Polygon _   -> "polygon"
-   Ellipse _   -> "ellipse"
-   Line _      -> "line"
-   Rectangle _ -> "rectangle"
-   TextArea _ _ -> "text"
+   CircleTree _    -> "circle"
+   PolyLineTree _  -> "polyline"
+   PolygonTree _   -> "polygon"
+   EllipseTree _   -> "ellipse"
+   LineTree _      -> "line"
+   RectangleTree _ -> "rectangle"
+   TextArea    _ _ -> "text"
 
-drawAttrOfTree :: SvgTree -> SvgDrawAttributes
+drawAttrOfTree :: Tree -> DrawAttributes
 drawAttrOfTree v = case v of
-  SvgNone -> mempty
-  Use e _ -> e ^. drawAttr
-  Group e -> e ^. drawAttr
-  Symbol e -> e ^. drawAttr
+  None -> mempty
+  UseTree e _ -> e ^. drawAttr
+  GroupTree e -> e ^. drawAttr
+  SymbolTree e -> e ^. drawAttr
   Path e -> e ^. drawAttr
-  Circle e -> e ^. drawAttr
-  PolyLine e -> e ^. drawAttr
-  Polygon e -> e ^. drawAttr
-  Ellipse e -> e ^. drawAttr
-  Line e -> e ^. drawAttr
-  Rectangle e -> e ^. drawAttr
+  CircleTree e -> e ^. drawAttr
+  PolyLineTree e -> e ^. drawAttr
+  PolygonTree e -> e ^. drawAttr
+  EllipseTree e -> e ^. drawAttr
+  LineTree e -> e ^. drawAttr
+  RectangleTree e -> e ^. drawAttr
   TextArea _ e -> e ^. drawAttr
 
-setDrawAttrOfTree :: SvgTree -> SvgDrawAttributes -> SvgTree
+setDrawAttrOfTree :: Tree -> DrawAttributes -> Tree
 setDrawAttrOfTree v attr = case v of
-  SvgNone -> SvgNone
-  Use e t -> Use (e & drawAttr .~ attr) t
-  Group e -> Group $ e & drawAttr .~ attr
-  Symbol e -> Symbol $ e & drawAttr .~ attr
+  None -> None
+  UseTree e t -> UseTree (e & drawAttr .~ attr) t
+  GroupTree e -> GroupTree $ e & drawAttr .~ attr
+  SymbolTree e -> SymbolTree $ e & drawAttr .~ attr
   Path e -> Path $ e & drawAttr .~ attr
-  Circle e -> Circle $ e & drawAttr .~ attr
-  PolyLine e -> PolyLine $ e & drawAttr .~ attr
-  Polygon e -> Polygon $ e & drawAttr .~ attr
-  Ellipse e -> Ellipse $ e & drawAttr .~ attr
-  Line e -> Line $ e & drawAttr .~ attr
-  Rectangle e -> Rectangle $ e & drawAttr .~ attr
+  CircleTree e -> CircleTree $ e & drawAttr .~ attr
+  PolyLineTree e -> PolyLineTree $ e & drawAttr .~ attr
+  PolygonTree e -> PolygonTree $ e & drawAttr .~ attr
+  EllipseTree e -> EllipseTree $ e & drawAttr .~ attr
+  LineTree e -> LineTree $ e & drawAttr .~ attr
+  RectangleTree e -> RectangleTree $ e & drawAttr .~ attr
   TextArea a e -> TextArea a $ e & drawAttr .~ attr
 
-instance WithSvgDrawAttributes SvgTree where
+instance WithDrawAttributes Tree where
     drawAttr = lens drawAttrOfTree setDrawAttrOfTree
 
 data GradientUnits
@@ -628,62 +627,62 @@ data GradientUnits
     | GradientBoundingBox
     deriving (Eq, Show)
 
-data SvgSpread
+data Spread
     = SpreadRepeat
     | SpreadPad
     | SpreadReflect
     deriving (Eq, Show)
 
-data SvgGradientStop = SvgGradientStop 
+data GradientStop = GradientStop 
     { _gradientOffset :: Float
     , _gradientColor  :: PixelRGBA8
     }
     deriving (Eq, Show)
 
-makeClassy ''SvgGradientStop
+makeClassy ''GradientStop
 
-data SvgLinearGradient = SvgLinearGradient
+data LinearGradient = LinearGradient
     { _linearGradientUnits  :: GradientUnits
-    , _linearGradientStart  :: SvgPoint
-    , _linearGradientStop   :: SvgPoint
-    , _linearGradientSpread :: SvgSpread
-    , _linearGradientTransform :: [SvgTransformation]
-    , _linearGradientStops  :: [SvgGradientStop]
+    , _linearGradientStart  :: Point
+    , _linearGradientStop   :: Point
+    , _linearGradientSpread :: Spread
+    , _linearGradientTransform :: [Transformation]
+    , _linearGradientStops  :: [GradientStop]
     }
     deriving (Eq, Show)
 
-makeClassy ''SvgLinearGradient
+makeClassy ''LinearGradient
 
-defaultLinearGradient :: SvgLinearGradient
-defaultLinearGradient = SvgLinearGradient
+defaultLinearGradient :: LinearGradient
+defaultLinearGradient = LinearGradient
   { _linearGradientUnits     = GradientBoundingBox
-  , _linearGradientStart     = (SvgPercent 0, SvgPercent 0)
-  , _linearGradientStop      = (SvgPercent 1, SvgPercent 0)
+  , _linearGradientStart     = (Percent 0, Percent 0)
+  , _linearGradientStop      = (Percent 1, Percent 0)
   , _linearGradientSpread    = SpreadPad
   , _linearGradientTransform = []
   , _linearGradientStops     = []
   }
 
 
-data SvgRadialGradient = SvgRadialGradient
+data RadialGradient = RadialGradient
   { _radialGradientUnits   :: GradientUnits
-  , _radialGradientCenter  :: SvgPoint
-  , _radialGradientRadius  :: SvgNumber
-  , _radialGradientFocusX  :: Maybe SvgNumber
-  , _radialGradientFocusY  :: Maybe SvgNumber
-  , _radialGradientSpread  :: SvgSpread
-  , _radialGradientTransform :: [SvgTransformation]
-  , _radialGradientStops   :: [SvgGradientStop]
+  , _radialGradientCenter  :: Point
+  , _radialGradientRadius  :: Number
+  , _radialGradientFocusX  :: Maybe Number
+  , _radialGradientFocusY  :: Maybe Number
+  , _radialGradientSpread  :: Spread
+  , _radialGradientTransform :: [Transformation]
+  , _radialGradientStops   :: [GradientStop]
   }
   deriving (Eq, Show)
 
-makeClassy ''SvgRadialGradient
+makeClassy ''RadialGradient
 
-defaultRadialGradient :: SvgRadialGradient
-defaultRadialGradient = SvgRadialGradient
+defaultRadialGradient :: RadialGradient
+defaultRadialGradient = RadialGradient
   { _radialGradientUnits   = GradientBoundingBox
-  , _radialGradientCenter  = (SvgPercent 0.5, SvgPercent 0.5)
-  , _radialGradientRadius  = SvgPercent 0.5
+  , _radialGradientCenter  = (Percent 0.5, Percent 0.5)
+  , _radialGradientRadius  = Percent 0.5
   , _radialGradientFocusX  = Nothing
   , _radialGradientFocusY  = Nothing
   , _radialGradientSpread  = SpreadPad
@@ -691,43 +690,43 @@ defaultRadialGradient = SvgRadialGradient
   , _radialGradientStops   = []
   }
 
-data SvgElement
-    = ElementLinearGradient SvgLinearGradient
-    | ElementRadialGradient SvgRadialGradient
-    | ElementGeometry SvgTree
+data Element
+    = ElementLinearGradient LinearGradient
+    | ElementRadialGradient RadialGradient
+    | ElementGeometry Tree
     deriving (Eq, Show)
 
-data SvgDocument = SvgDocument
-    { _svgViewBox     :: Maybe (Int, Int, Int, Int)
-    , _svgWidth       :: Maybe SvgNumber
-    , _svgHeight      :: Maybe SvgNumber
-    , _svgElements    :: [SvgTree]
-    , _svgDefinitions :: M.Map String SvgElement
+data Document = Document
+    { _viewBox     :: Maybe (Int, Int, Int, Int)
+    , _width       :: Maybe Number
+    , _height      :: Maybe Number
+    , _elements    :: [Tree]
+    , _definitions :: M.Map String Element
     }
     deriving (Eq, Show)
 
-svgDocumentSize :: SvgDocument -> (Int, Int)
-svgDocumentSize SvgDocument { _svgWidth = Just (SvgNum w)
-                            , _svgHeight = Just (SvgNum h) } = (floor w, floor h)
-svgDocumentSize SvgDocument { _svgViewBox = Just (x1, y1, x2, y2)
-                            , _svgWidth = Just (SvgPercent pw)
-                            , _svgHeight = Just (SvgPercent ph)
+documentSize :: Document -> (Int, Int)
+documentSize Document { _width = Just (Num w)
+                            , _height = Just (Num h) } = (floor w, floor h)
+documentSize Document { _viewBox = Just (x1, y1, x2, y2)
+                            , _width = Just (Percent pw)
+                            , _height = Just (Percent ph)
                             } =
     (floor $ dx * pw, floor $ dy * ph)
       where
         dx = fromIntegral . abs $ x2 - x1
         dy = fromIntegral . abs $ y2 - y1
-svgDocumentSize SvgDocument { _svgViewBox = Just (x1, y1, x2, y2) } =
+documentSize Document { _viewBox = Just (x1, y1, x2, y2) } =
     (abs $ x2 - x1, abs $ y2 - y1)
-svgDocumentSize _ = (1, 1)
+documentSize _ = (1, 1)
 
 mayMerge :: Monoid a => Maybe a -> Maybe a -> Maybe a
 mayMerge (Just a) (Just b) = Just $ mappend a b
 mayMerge _ b@(Just _) = b
 mayMerge a Nothing = a
 
-instance Monoid SvgDrawAttributes where
-    mempty = SvgDrawAttributes 
+instance Monoid DrawAttributes where
+    mempty = DrawAttributes 
         { _strokeWidth      = Last Nothing
         , _strokeColor      = Last Nothing
         , _strokeOpacity    = 1.0
@@ -748,7 +747,7 @@ instance Monoid SvgDrawAttributes where
         , _textAnchor       = Last Nothing
         }
 
-    mappend a b = SvgDrawAttributes
+    mappend a b = DrawAttributes
         { _strokeWidth = (mappend `on` _strokeWidth) a b
         , _strokeColor =  (mappend `on` _strokeColor) a b
         , _strokeLineCap = (mappend `on` _strokeLineCap) a b

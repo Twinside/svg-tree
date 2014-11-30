@@ -4,17 +4,17 @@ module Graphics.Svg.PathConverter( svgPathToPrimitives
 
 import Control.Applicative( (<$>), pure )
 import Data.List( mapAccumL )
-import Graphics.Rasterific.Linear( (^+^)
+import Graphics.Rasterific.Linear( V2( .. )
+                                 , (^+^)
                                  , (^-^)
                                  , (^*)
                                  , norm
                                  , nearZero
                                  , zero )
-import Graphics.Rasterific hiding ( Path, Line, transform )
 import qualified Graphics.Rasterific as R
 import Graphics.Svg.Types
 
-singularize :: [SvgPath] -> [SvgPath]
+singularize :: [Path] -> [Path]
 singularize = concatMap go
   where
    go (MoveTo _ []) = []
@@ -30,18 +30,18 @@ singularize = concatMap go
    go (ElipticalArc o lst) = ElipticalArc o . pure <$> lst
    go EndPath = [EndPath]
 
-svgPathToPrimitives :: Bool -> [SvgPath] -> [Primitive]
+svgPathToPrimitives :: Bool -> [Path] -> [R.Primitive]
 svgPathToPrimitives _ lst | isPathWithArc lst = []
 svgPathToPrimitives shouldClose lst
     | shouldClose && not (nearZero $ norm (lastPoint ^-^ firstPoint)) =
-        concat $ prims ++ [line lastPoint firstPoint]
+        concat $ prims ++ [R.line lastPoint firstPoint]
     | otherwise = concat prims
   where
     ((lastPoint, _, firstPoint), prims) =
         mapAccumL go (zero, zero, zero) $ singularize lst
 
     go (latest, p, first) EndPath =
-        ((first, p, first), line latest first)
+        ((first, p, first), R.line latest first)
 
     go o (HorizontalTo _ []) = (o, [])
     go o (VerticalTo _ []) = (o, [])
@@ -57,56 +57,56 @@ svgPathToPrimitives shouldClose lst
         ((pp, pp, pp), []) where pp = o ^+^ p
 
     go (o@(V2 _ y), _, fp) (HorizontalTo OriginAbsolute (c:_)) =
-        ((p, p, fp), line o p) where p = V2 c y
+        ((p, p, fp), R.line o p) where p = V2 c y
     go (o@(V2 x y), _, fp) (HorizontalTo OriginRelative (c:_)) =
-        ((p, p, fp), line o p) where p = V2 (x + c) y
+        ((p, p, fp), R.line o p) where p = V2 (x + c) y
 
     go (o@(V2 x _), _, fp) (VerticalTo OriginAbsolute (c:_)) =
-        ((p, p, fp), line o p) where p = V2 x c
+        ((p, p, fp), R.line o p) where p = V2 x c
     go (o@(V2 x y), _, fp) (VerticalTo OriginRelative (c:_)) =
-        ((p, p, fp), line o p) where p = V2 x (c + y)
+        ((p, p, fp), R.line o p) where p = V2 x (c + y)
 
     go (o, _, fp) (LineTo OriginRelative (c:_)) =
-        ((p, p, fp), line o p) where p = o ^+^ c
+        ((p, p, fp), R.line o p) where p = o ^+^ c
 
     go (o, _, fp) (LineTo OriginAbsolute (p:_)) =
-        ((p, p, fp), line o p)
+        ((p, p, fp), R.line o p)
 
     go (o, _, fp) (CurveTo OriginAbsolute ((c1, c2, e):_)) =
-        ((e, c2, fp), [CubicBezierPrim $ CubicBezier o c1 c2 e])
+        ((e, c2, fp), [R.CubicBezierPrim $ R.CubicBezier o c1 c2 e])
 
     go (o, _, fp) (CurveTo OriginRelative ((c1, c2, e):_)) =
-        ((e', c2', fp), [CubicBezierPrim $ CubicBezier o c1' c2' e'])
+        ((e', c2', fp), [R.CubicBezierPrim $ R.CubicBezier o c1' c2' e'])
       where c1' = o ^+^ c1
             c2' = o ^+^ c2
             e' = o ^+^ e
 
     go (o, control, fp) (SmoothCurveTo OriginAbsolute ((c2, e):_)) =
-        ((e, c2, fp), [CubicBezierPrim $ CubicBezier o c1' c2 e])
+        ((e, c2, fp), [R.CubicBezierPrim $ R.CubicBezier o c1' c2 e])
       where c1' = o ^* 2 ^-^ control
 
     go (o, control, fp) (SmoothCurveTo OriginRelative ((c2, e):_)) =
-        ((e', c2', fp), [CubicBezierPrim $ CubicBezier o c1' c2' e'])
+        ((e', c2', fp), [R.CubicBezierPrim $ R.CubicBezier o c1' c2' e'])
       where c1' = o ^* 2 ^-^ control
             c2' = o ^+^ c2
             e' = o ^+^ e
 
     go (o, _, fp) (QuadraticBezier OriginAbsolute ((c1, e):_)) =
-        ((e, c1, fp), [BezierPrim $ Bezier o c1 e])
+        ((e, c1, fp), [R.BezierPrim $ R.Bezier o c1 e])
 
     go (o, _, fp) (QuadraticBezier OriginRelative ((c1, e):_)) =
-        ((e', c1', fp), [BezierPrim $ Bezier o c1' e'])
+        ((e', c1', fp), [R.BezierPrim $ R.Bezier o c1' e'])
       where c1' = o ^+^ c1
             e' = o ^+^ e
 
     go (o, control, fp)
        (SmoothQuadraticBezierCurveTo OriginAbsolute (e:_)) =
-       ((e, c1', fp), [BezierPrim $ Bezier o c1' e])
+       ((e, c1', fp), [R.BezierPrim $ R.Bezier o c1' e])
       where c1' = o ^* 2 ^-^ control
 
     go (o, control, fp)
        (SmoothQuadraticBezierCurveTo OriginRelative (e:_)) =
-       ((e', c1', fp), [BezierPrim $ Bezier o c1' e'])
+       ((e', c1', fp), [R.BezierPrim $ R.Bezier o c1' e'])
       where c1' = o ^* 2 ^-^ control
             e' = o ^+^ e
 
@@ -114,13 +114,13 @@ svgPathToPrimitives shouldClose lst
 
 
 -- | Conversion function between svg path to the rasterific one.
-svgPathToRasterificPath :: Bool -> [SvgPath] -> R.Path
+svgPathToRasterificPath :: Bool -> [Path] -> R.Path
 svgPathToRasterificPath shouldClose lst =
     R.Path firstPoint shouldClose $ concat commands
  where
-  lineTo p = [PathLineTo p]
-  cubicTo e1 e2 e3 = [PathCubicBezierCurveTo e1 e2 e3]
-  quadTo e1 e2 = [PathQuadraticBezierCurveTo e1 e2]
+  lineTo p = [R.PathLineTo p]
+  cubicTo e1 e2 e3 = [R.PathCubicBezierCurveTo e1 e2 e3]
+  quadTo e1 e2 = [R.PathQuadraticBezierCurveTo e1 e2]
 
   ((_, _, firstPoint), commands) =
      mapAccumL go (zero, zero, zero) $ singularize lst

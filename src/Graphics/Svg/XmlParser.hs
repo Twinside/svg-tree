@@ -8,17 +8,12 @@ import Control.Applicative( (<$>)
                           , many
                           , pure )
 
-import Control.Lens hiding( transform )
+import Control.Lens hiding( transform, children, elements, element )
 import Control.Monad.State.Strict( State, runState, modify, gets )
 import Data.Monoid( mempty, Last( Last ) )
 import Data.List( foldl' )
 import Text.XML.Light.Proc( findAttrBy, elChildren, strContent )
-import Text.XML.Light.Types( Element( .. )
-                           , QName( .. )
-                           , Content( Elem, Text, CRef )
-                           , cdData
-                           )
-
+import qualified Text.XML.Light.Types as X
 import qualified Data.Text as T
 import qualified Data.Map as M
 import Data.Attoparsec.Text( Parser, parseOnly, many1 )
@@ -40,51 +35,51 @@ import Graphics.Svg.CssParser( complexNumber
 
 {-import Debug.Trace-}
 
-nodeName :: Element -> String
-nodeName = qName . elName
+nodeName :: X.Element -> String
+nodeName = X.qName . X.elName
 
-attributeFinder :: String -> Element -> Maybe String
+attributeFinder :: String -> X.Element -> Maybe String
 attributeFinder str =
-    findAttrBy (\a -> qName a == str)
+    findAttrBy (\a -> X.qName a == str)
 
-parseSvgCap :: String -> Last SvgCap
-parseSvgCap "butt" = Last $ Just SvgCapButt
-parseSvgCap "round" = Last $ Just SvgCapRound
-parseSvgCap "square" = Last $ Just SvgCapSquare
-parseSvgCap _ = Last Nothing
+parseCap :: String -> Last Cap
+parseCap "butt" = Last $ Just CapButt
+parseCap "round" = Last $ Just CapRound
+parseCap "square" = Last $ Just CapSquare
+parseCap _ = Last Nothing
 
-parseSvgTextAnchor :: String -> Last SvgTextAnchor
-parseSvgTextAnchor "middle" = Last $ Just SvgTextAnchorMiddle
-parseSvgTextAnchor "start" = Last $ Just SvgTextAnchorStart
-parseSvgTextAnchor "end" = Last $ Just SvgTextAnchorEnd
-parseSvgTextAnchor _ = Last Nothing
+parseTextAnchor :: String -> Last TextAnchor
+parseTextAnchor "middle" = Last $ Just TextAnchorMiddle
+parseTextAnchor "start" = Last $ Just TextAnchorStart
+parseTextAnchor "end" = Last $ Just TextAnchorEnd
+parseTextAnchor _ = Last Nothing
 
-parseSvgLineJoin :: String -> Last SvgLineJoin
-parseSvgLineJoin "miter" = Last $ Just SvgJoinMiter
-parseSvgLineJoin "round" = Last $ Just SvgJoinRound
-parseSvgLineJoin "bevel" = Last $ Just SvgJoinBevel
-parseSvgLineJoin _ = Last Nothing
+parseLineJoin :: String -> Last LineJoin
+parseLineJoin "miter" = Last $ Just JoinMiter
+parseLineJoin "round" = Last $ Just JoinRound
+parseLineJoin "bevel" = Last $ Just JoinBevel
+parseLineJoin _ = Last Nothing
 
 parseGradientUnit :: String -> GradientUnits
 parseGradientUnit "userSpaceOnUse" = GradientUserSpace
 parseGradientUnit "objectBoundingBox" = GradientBoundingBox
 parseGradientUnit _ = GradientBoundingBox
 
-parseGradientSpread :: String -> SvgSpread
+parseGradientSpread :: String -> Spread
 parseGradientSpread "pad" = SpreadPad
 parseGradientSpread "reflect" = SpreadReflect
 parseGradientSpread "repeat" = SpreadRepeat
 parseGradientSpread _ = SpreadPad
 
-parseFillRule :: String -> Last SvgFillRule
-parseFillRule "nonzero" = Last $ Just SvgFillNonZero
-parseFillRule "evenodd" = Last $ Just SvgFillEvenOdd
+parseFillRule :: String -> Last FillRule
+parseFillRule "nonzero" = Last $ Just FillNonZero
+parseFillRule "evenodd" = Last $ Just FillEvenOdd
 parseFillRule _ = Last Nothing
 
-parseTextAdjust :: String -> SvgTextAdjust
-parseTextAdjust "spacing" = SvgTextAdjustSpacing
-parseTextAdjust "spacingAndGlyphs" = SvgTextAdjustSpacingAndGlyphs
-parseTextAdjust _ = SvgTextAdjustSpacing
+parseTextAdjust :: String -> TextAdjust
+parseTextAdjust "spacing" = TextAdjustSpacing
+parseTextAdjust "spacingAndGlyphs" = TextAdjustSpacingAndGlyphs
+parseTextAdjust _ = TextAdjustSpacing
 
 parse :: Parser a -> String -> Maybe a
 parse p str = case parseOnly p (T.pack str) of
@@ -95,54 +90,54 @@ parseMayStartDot :: Parser a -> String -> Maybe a
 parseMayStartDot p l@('.':_) = parse p ('0':l)
 parseMayStartDot p l = parse p l
 
-xmlUpdate :: (SvgXMLUpdatable a) => a -> Element -> a
-xmlUpdate initialSvg el = foldl' grab initialSvg svgAttributes
+xmlUpdate :: (XMLUpdatable a) => a -> X.Element -> a
+xmlUpdate initial el = foldl' grab initial attributes
   where
     grab value (attributeName, setter) =
         case attributeFinder attributeName el of
           Nothing -> value
           Just v -> setter value v
 
-xmlUnparse :: (SvgXMLUpdatable a) => Element -> a
+xmlUnparse :: (XMLUpdatable a) => X.Element -> a
 xmlUnparse = xmlUpdate defaultSvg
 
 xmlUnparseWithDrawAttr
-    :: (SvgXMLUpdatable a, WithSvgDrawAttributes a)
-    => Element -> a
+    :: (XMLUpdatable a, WithDrawAttributes a)
+    => X.Element -> a
 xmlUnparseWithDrawAttr e =
     xmlUnparse e & drawAttr .~ xmlUnparse e
 
-xmlUpdateDrawAttr :: (WithSvgDrawAttributes a) => Element -> a -> a
+xmlUpdateDrawAttr :: (WithDrawAttributes a) => X.Element -> a -> a
 xmlUpdateDrawAttr e svg = svg & drawAttr .~ drawAttr'
   where drawAttr' = xmlUpdate (svg ^. drawAttr) e
 
 xmlUpdateWithDrawAttr
-    :: (SvgXMLUpdatable a, WithSvgDrawAttributes a)
-    => Element -> a -> a
+    :: (XMLUpdatable a, WithDrawAttributes a)
+    => X.Element -> a -> a
 xmlUpdateWithDrawAttr e svg = xmlUpdate (xmlUpdateDrawAttr e svg) e
 
-attributeReal :: String -> Element -> Maybe Float
+attributeReal :: String -> X.Element -> Maybe Float
 attributeReal attr e = read <$> attributeFinder attr e
 
-attributeLength :: String -> Element -> Maybe SvgNumber
+attributeLength :: String -> X.Element -> Maybe Number
 attributeLength attr e = 
   attributeFinder attr e >>= parseMayStartDot complexNumber
 
 type Updater t = t -> String -> t
 
-numericSetter :: ASetter a a b SvgNumber -> Updater a
+numericSetter :: ASetter a a b Number -> Updater a
 numericSetter setter el str =
   case parseMayStartDot complexNumber str of
     Nothing -> el
     Just v -> el & setter .~ v
 
-numericMaySetter :: ASetter a a b (Maybe SvgNumber) -> Updater a
+numericMaySetter :: ASetter a a b (Maybe Number) -> Updater a
 numericMaySetter setter el str =
   case parseMayStartDot complexNumber str of
     Nothing -> el
     Just v -> el & setter .~ Just v
 
-numericLastSetter :: ASetter a a b (Last SvgNumber) -> Updater a
+numericLastSetter :: ASetter a a b (Last Number) -> Updater a
 numericLastSetter setter el str =
   case parseMayStartDot complexNumber str of
     Nothing -> el
@@ -179,32 +174,32 @@ parserLastSetter setter parser el str =
     Nothing -> el
     Just v -> el & setter .~ Last (Just v)
 
-class SvgXMLUpdatable a where
-  svgAttributes :: [(String, Updater a)]
+class XMLUpdatable a where
+  attributes :: [(String, Updater a)]
   defaultSvg :: a
 
 type CssUpdater =
-    SvgDrawAttributes -> [[CssElement]] -> SvgDrawAttributes
+    DrawAttributes -> [[CssElement]] -> DrawAttributes
 
-cssUniqueNumber :: ASetter SvgDrawAttributes SvgDrawAttributes
-                   a (Last SvgNumber)
+cssUniqueNumber :: ASetter DrawAttributes DrawAttributes
+                   a (Last Number)
                 -> CssUpdater
 cssUniqueNumber setter attr ((CssNumber n:_):_) = attr & setter .~ Last (Just n)
 cssUniqueNumber _ attr _ = attr
 
-cssUniqueFloat :: ASetter SvgDrawAttributes SvgDrawAttributes a Float
+cssUniqueFloat :: ASetter DrawAttributes DrawAttributes a Float
                -> CssUpdater
-cssUniqueFloat setter attr ((CssNumber (SvgNum n):_):_) =
+cssUniqueFloat setter attr ((CssNumber (Num n):_):_) =
     attr & setter .~ n
 cssUniqueFloat _ attr _ = attr
 
-cssUniqueMayFloat :: ASetter SvgDrawAttributes SvgDrawAttributes a (Last Float)
+cssUniqueMayFloat :: ASetter DrawAttributes DrawAttributes a (Last Float)
                -> CssUpdater
-cssUniqueMayFloat setter attr ((CssNumber (SvgNum n):_):_) =
+cssUniqueMayFloat setter attr ((CssNumber (Num n):_):_) =
     attr & setter .~ Last (Just n)
 cssUniqueMayFloat _ attr _ = attr
 
-cssIdentParser :: ASetter SvgDrawAttributes SvgDrawAttributes a b
+cssIdentParser :: ASetter DrawAttributes DrawAttributes a b
                -> Parser b
                -> CssUpdater
 cssIdentParser setter parser attr ((CssIdent i:_):_) =
@@ -213,14 +208,14 @@ cssIdentParser setter parser attr ((CssIdent i:_):_) =
     Right v -> attr & setter .~ v
 cssIdentParser _ _ attr _ = attr
 
-cssIdentStringParser :: ASetter SvgDrawAttributes SvgDrawAttributes a b
+cssIdentStringParser :: ASetter DrawAttributes DrawAttributes a b
                      -> (String -> b) -> CssUpdater
 cssIdentStringParser setter f attr ((CssIdent i:_):_) =
     attr & setter .~ f (T.unpack i)
 cssIdentStringParser _ _ attr _ = attr
 
-cssUniqueTexture :: ASetter SvgDrawAttributes SvgDrawAttributes
-                    a (Last SvgTexture)
+cssUniqueTexture :: ASetter DrawAttributes DrawAttributes
+                    a (Last Texture)
                  -> CssUpdater
 cssUniqueTexture setter attr ((CssIdent "none":_):_) =
     attr & setter .~ Last (Just FillNone)
@@ -228,7 +223,7 @@ cssUniqueTexture setter attr ((CssColor c:_):_) =
     attr & setter .~ Last (Just $ ColorRef c)
 cssUniqueTexture _ attr _ = attr
 
-cssMayStringSetter :: ASetter SvgDrawAttributes SvgDrawAttributes a (Maybe String)
+cssMayStringSetter :: ASetter DrawAttributes DrawAttributes a (Maybe String)
                    -> CssUpdater
 cssMayStringSetter setter attr ((CssIdent i:_):_) =
     attr & setter .~ Just (T.unpack i)
@@ -236,7 +231,7 @@ cssMayStringSetter setter attr ((CssString i:_):_) =
     attr & setter .~ Just (T.unpack i)
 cssMayStringSetter _ attr _ = attr
 
-cssLastStringSetter :: ASetter SvgDrawAttributes SvgDrawAttributes a (Last String)
+cssLastStringSetter :: ASetter DrawAttributes DrawAttributes a (Last String)
                    -> CssUpdater
 cssLastStringSetter setter attr ((CssIdent i:_):_) =
     attr & setter .~ Last (Just $ T.unpack i)
@@ -244,7 +239,7 @@ cssLastStringSetter setter attr ((CssString i:_):_) =
     attr & setter .~ Last (Just $ T.unpack i)
 cssLastStringSetter _ attr _ = attr
 
-cssDashArray :: ASetter SvgDrawAttributes SvgDrawAttributes a (Last [SvgNumber])
+cssDashArray :: ASetter DrawAttributes DrawAttributes a (Last [Number])
              -> CssUpdater
 cssDashArray setter attr (lst:_) =
   case [n | CssNumber n <- lst ] of
@@ -252,17 +247,17 @@ cssDashArray setter attr (lst:_) =
     v -> attr & setter .~ Last (Just v)
 cssDashArray _ attr _ = attr
 
-drawAttributesList :: [(String, Updater SvgDrawAttributes, CssUpdater)]
+drawAttributesList :: [(String, Updater DrawAttributes, CssUpdater)]
 drawAttributesList =
     [("stroke-width", numericLastSetter strokeWidth, cssUniqueNumber strokeWidth)
     ,("stroke", parserSetter strokeColor (Last <$> textureParser),
         cssUniqueTexture strokeColor)
     ,("stroke-linecap",
-        \e s -> e & strokeLineCap .~ parseSvgCap s,
-        cssIdentStringParser strokeLineCap parseSvgCap)
+        \e s -> e & strokeLineCap .~ parseCap s,
+        cssIdentStringParser strokeLineCap parseCap)
     ,("stroke-linejoin", 
-        \e s -> e & strokeLineJoin .~ parseSvgLineJoin s,
-        cssIdentStringParser strokeLineJoin parseSvgLineJoin)
+        \e s -> e & strokeLineJoin .~ parseLineJoin s,
+        cssIdentStringParser strokeLineJoin parseLineJoin)
     ,("stroke-miterlimit", numMaySetter strokeMiterLimit,
         cssUniqueMayFloat strokeMiterLimit)
     ,("fill", parserSetter fillColor (Last <$> textureParser),
@@ -284,21 +279,21 @@ drawAttributesList =
         cssUniqueNumber strokeOffset)
     ,("stroke-dasharray", parserLastSetter strokeDashArray  dashArray,
         cssDashArray strokeDashArray)
-    ,("text-anchor", \e s -> e & textAnchor .~ parseSvgTextAnchor s,
-        cssIdentStringParser textAnchor parseSvgTextAnchor)
+    ,("text-anchor", \e s -> e & textAnchor .~ parseTextAnchor s,
+        cssIdentStringParser textAnchor parseTextAnchor)
     ]
   where commaSeparate =
             fmap (T.unpack . T.strip) . T.split (',' ==) . T.pack
 
-instance SvgXMLUpdatable SvgDrawAttributes where
+instance XMLUpdatable DrawAttributes where
   defaultSvg = mempty
-  svgAttributes =
+  attributes =
     stylePrepend [(attrName, updater)
                     | (attrName, updater, _) <- drawAttributesList]
     where stylePrepend lst = ("style", styleUpdater) : lst
 
-styleUpdater :: SvgDrawAttributes -> String
-             -> SvgDrawAttributes 
+styleUpdater :: DrawAttributes -> String
+             -> DrawAttributes 
 styleUpdater attrs style = case parse styleString style of
     Nothing -> attrs
     Just decls -> foldl' applyer attrs decls
@@ -309,61 +304,61 @@ styleUpdater attrs style = case parse styleString style of
           Nothing -> value
           Just f -> f value elems
 
-instance SvgXMLUpdatable SvgRectangle where
+instance XMLUpdatable Rectangle where
   defaultSvg = defaultRectangle
-  svgAttributes =
-    [("width", numericSetter svgRectWidth)
-    ,("height", numericSetter svgRectHeight)
-    ,("x", numericSetter (svgRectUpperLeftCorner._1))
-    ,("y", numericSetter (svgRectUpperLeftCorner._2))
-    ,("rx", numericSetter (svgRectCornerRadius._1))
-    ,("ry", numericSetter (svgRectCornerRadius._2))
+  attributes =
+    [("width", numericSetter rectWidth)
+    ,("height", numericSetter rectHeight)
+    ,("x", numericSetter (rectUpperLeftCorner._1))
+    ,("y", numericSetter (rectUpperLeftCorner._2))
+    ,("rx", numericSetter (rectCornerRadius._1))
+    ,("ry", numericSetter (rectCornerRadius._2))
     ]
 
-instance SvgXMLUpdatable SvgLine where
+instance XMLUpdatable Line where
   defaultSvg = defaultLine
-  svgAttributes =
-    [("x1", numericSetter $ svgLinePoint1._1)
-    ,("y1", numericSetter $ svgLinePoint1._2)
-    ,("x2", numericSetter $ svgLinePoint2._1)
-    ,("y2", numericSetter $ svgLinePoint2._2)
+  attributes =
+    [("x1", numericSetter $ linePoint1._1)
+    ,("y1", numericSetter $ linePoint1._2)
+    ,("x2", numericSetter $ linePoint2._1)
+    ,("y2", numericSetter $ linePoint2._2)
     ]
 
-instance SvgXMLUpdatable SvgEllipse where
+instance XMLUpdatable Ellipse where
   defaultSvg = defaultEllipse
-  svgAttributes =
-    [("cx", numericSetter $ svgEllipseCenter._1)
-    ,("cy", numericSetter $ svgEllipseCenter._2)
-    ,("rx", numericSetter svgEllipseXRadius)
-    ,("ry", numericSetter svgEllipseYRadius)
+  attributes =
+    [("cx", numericSetter $ ellipseCenter._1)
+    ,("cy", numericSetter $ ellipseCenter._2)
+    ,("rx", numericSetter ellipseXRadius)
+    ,("ry", numericSetter ellipseYRadius)
     ]
 
-instance SvgXMLUpdatable SvgCircle where
+instance XMLUpdatable Circle where
   defaultSvg = defaultCircle
-  svgAttributes =
-    [("cx", numericSetter $ svgCircleCenter._1)
-    ,("cy", numericSetter $ svgCircleCenter._2)
-    ,("r", numericSetter svgCircleRadius)
+  attributes =
+    [("cx", numericSetter $ circleCenter._1)
+    ,("cy", numericSetter $ circleCenter._2)
+    ,("r", numericSetter circleRadius)
     ]
 
-instance SvgXMLUpdatable SvgPolygon where
+instance XMLUpdatable Polygon where
   defaultSvg = defaultPolygon
-  svgAttributes =
-    [("points", parserSetter svgPolygonPoints pointData)]
+  attributes =
+    [("points", parserSetter polygonPoints pointData)]
 
-instance SvgXMLUpdatable SvgPolyLine where
+instance XMLUpdatable PolyLine where
   defaultSvg = defaultPolyLine
-  svgAttributes = 
-    [("points", parserSetter svgPolyLinePoints pointData)]
+  attributes = 
+    [("points", parserSetter polyLinePoints pointData)]
 
-instance SvgXMLUpdatable SvgPathPrim where
+instance XMLUpdatable PathPrim where
   defaultSvg = defaultPathPrim
-  svgAttributes =
-    [("d", parserSetter svgPathDefinition (many1 command))]
+  attributes =
+    [("d", parserSetter pathDefinition (many1 command))]
 
-instance SvgXMLUpdatable SvgLinearGradient where
+instance XMLUpdatable LinearGradient where
   defaultSvg = defaultLinearGradient
-  svgAttributes = 
+  attributes = 
     [("gradientTransform",
         parserSetter linearGradientTransform (many transformParser))
     ,("gradientUnits",
@@ -376,19 +371,19 @@ instance SvgXMLUpdatable SvgLinearGradient where
     ,("y2", numericSetter $ linearGradientStop._2)
     ]
 
-instance SvgXMLUpdatable (SvgGroup a) where
+instance XMLUpdatable (Group a) where
   defaultSvg = defaultGroup
-  svgAttributes = []
+  attributes = []
 
-instance SvgXMLUpdatable (SvgSymbol a) where
-  defaultSvg = SvgSymbol defaultSvg
-  svgAttributes =
-        [("viewBox", parserMaySetter (groupOfSymbol . svgGroupViewBox) viewBox)]
+instance XMLUpdatable (Symbol a) where
+  defaultSvg = Symbol defaultSvg
+  attributes =
+        [("viewBox", parserMaySetter (groupOfSymbol . groupViewBox) viewBox)]
 
 
-instance SvgXMLUpdatable SvgRadialGradient where
+instance XMLUpdatable RadialGradient where
   defaultSvg = defaultRadialGradient
-  svgAttributes =
+  attributes =
     [("gradientTransform",
         parserSetter radialGradientTransform (many transformParser))
     ,("gradientUnits",
@@ -402,94 +397,94 @@ instance SvgXMLUpdatable SvgRadialGradient where
     ,("fy", numericMaySetter radialGradientFocusY)
     ]
 
-instance SvgXMLUpdatable SvgUse where
-  defaultSvg = defaultSvgUse
-  svgAttributes =
-    [("x", numericSetter $ svgUseBase._1)
-    ,("y", numericSetter $ svgUseBase._2)
-    ,("width", numericMaySetter svgUseWidth)
-    ,("height", numericMaySetter svgUseHeight)
-    ,("href", \e s -> e & svgUseName .~ dropSharp s)
+instance XMLUpdatable Use where
+  defaultSvg = defaultUse
+  attributes =
+    [("x", numericSetter $ useBase._1)
+    ,("y", numericSetter $ useBase._2)
+    ,("width", numericMaySetter useWidth)
+    ,("height", numericMaySetter useHeight)
+    ,("href", \e s -> e & useName .~ dropSharp s)
     ]
 
 dropSharp :: String -> String
 dropSharp ('#':rest) = rest
 dropSharp a = a
 
-instance SvgXMLUpdatable SvgTextInfo where
-  defaultSvg = defaultSvgTextInfo
-  svgAttributes =
-    [("x", parserSetter svgTextInfoX dashArray)
-    ,("y", parserSetter svgTextInfoY dashArray)
-    ,("dx", parserSetter svgTextInfoDX dashArray)
-    ,("dy", parserSetter svgTextInfoDY dashArray)
-    ,("rotate", parserSetter svgTextInfoRotate numberList )
-    ,("textLength", numericMaySetter svgTextInfoLength)
+instance XMLUpdatable TextInfo where
+  defaultSvg = defaultTextInfo
+  attributes =
+    [("x", parserSetter textInfoX dashArray)
+    ,("y", parserSetter textInfoY dashArray)
+    ,("dx", parserSetter textInfoDX dashArray)
+    ,("dy", parserSetter textInfoDY dashArray)
+    ,("rotate", parserSetter textInfoRotate numberList )
+    ,("textLength", numericMaySetter textInfoLength)
     ]
 
-parseTextPathMethod :: String -> SvgTextPathMethod
+parseTextPathMethod :: String -> TextPathMethod
 parseTextPathMethod s = case s of
-  "align" -> SvgTextPathAlign
-  "stretch" -> SvgTextPathStretch
-  _ -> _svgTextPathMethod defaultSvgTextPath
+  "align" -> TextPathAlign
+  "stretch" -> TextPathStretch
+  _ -> _textPathMethod defaultTextPath
 
-parseTextPathSpacing :: String -> SvgTextPathSpacing
+parseTextPathSpacing :: String -> TextPathSpacing
 parseTextPathSpacing s = case s of
-  "auto" -> SvgTextPathSpacingAuto
-  "exact" -> SvgTextPathSpacingExact
-  _ -> _svgTextPathSpacing defaultSvgTextPath
+  "auto" -> TextPathSpacingAuto
+  "exact" -> TextPathSpacingExact
+  _ -> _textPathSpacing defaultTextPath
 
-instance SvgXMLUpdatable SvgTextPath where
-  defaultSvg = defaultSvgTextPath
-  svgAttributes =
-    [("startOffset", numericSetter svgTextPathStartOffset)
+instance XMLUpdatable TextPath where
+  defaultSvg = defaultTextPath
+  attributes =
+    [("startOffset", numericSetter textPathStartOffset)
     ,("method",
-        \e s -> e & svgTextPathMethod .~ parseTextPathMethod s)
+        \e s -> e & textPathMethod .~ parseTextPathMethod s)
     ,("spacing",
-        \e s -> e & svgTextPathSpacing .~ parseTextPathSpacing s)
-    ,("href", \e s -> e & svgTextPathName .~ dropSharp s)
+        \e s -> e & textPathSpacing .~ parseTextPathSpacing s)
+    ,("href", \e s -> e & textPathName .~ dropSharp s)
     ]
 
-instance SvgXMLUpdatable SvgText where
-  defaultSvg = defaultSvgText
-  svgAttributes =
-      [("lengthAdjust", \e s -> e & svgTextAdjust .~ parseTextAdjust s)
+instance XMLUpdatable Text where
+  defaultSvg = defaultText
+  attributes =
+      [("lengthAdjust", \e s -> e & textAdjust .~ parseTextAdjust s)
       ]
         
-unparseText :: [Content] -> ([SvgTextSpanContent], Maybe SvgTextPath)
+unparseText :: [X.Content] -> ([TextSpanContent], Maybe TextPath)
 unparseText = extractResult . go True
   where
     extractResult (a, b, _) = (a, b)
 
     go startStrip [] = ([], Nothing, startStrip)
-    go startStrip (CRef _:rest) = go startStrip rest
-    go startStrip (Elem e@(nodeName -> "tspan"):rest) =
-        (SvgSpanSub spans : trest, mpath, retStrip)
+    go startStrip (X.CRef _:rest) = go startStrip rest
+    go startStrip (X.Elem e@(nodeName -> "tspan"):rest) =
+        (SpanSub spans : trest, mpath, retStrip)
       where
         (trest, mpath, retStrip) = go restStrip rest
-        (sub, _, restStrip) = go startStrip $ elContent e
-        spans = SvgTextSpan (xmlUnparse e) (xmlUnparse e) sub
+        (sub, _, restStrip) = go startStrip $ X.elContent e
+        spans = TextSpan (xmlUnparse e) (xmlUnparse e) sub
 
-    go startStrip (Elem e@(nodeName -> "tref"):rest) = 
+    go startStrip (X.Elem e@(nodeName -> "tref"):rest) = 
         case attributeFinder "href" e of
           Nothing -> go startStrip rest
-          Just v -> (SvgSpanTextRef v : trest, mpath, stripRet)
+          Just v -> (SpanTextRef v : trest, mpath, stripRet)
             where (trest, mpath, stripRet) = go startStrip rest
 
-    go startStrip (Elem e@(nodeName -> "textPath"):rest) = 
+    go startStrip (X.Elem e@(nodeName -> "textPath"):rest) = 
         case attributeFinder "href" e of
           Nothing -> go startStrip rest
           Just v -> (tsub ++ trest, pure path, retStrp)
             where
-              path = (xmlUnparse e) { _svgTextPathName = dropSharp v }
+              path = (xmlUnparse e) { _textPathName = dropSharp v }
               (trest, _, retStrp) = go restStrip rest
-              (tsub, _, restStrip) = go startStrip $ elContent e
+              (tsub, _, restStrip) = go startStrip $ X.elContent e
 
-    go startStrip (Elem _:rest) = go startStrip rest
-    go startStrip (Text t:rest)
+    go startStrip (X.Elem _:rest) = go startStrip rest
+    go startStrip (X.Text t:rest)
       | T.length cleanText == 0 = go startStrip rest
       | otherwise =
-        (SvgSpanText cleanText : trest, mpath, stripRet)
+        (SpanText cleanText : trest, mpath, stripRet)
        where
          (trest, mpath, stripRet) = go subShouldStrip rest
 
@@ -510,48 +505,48 @@ unparseText = extractResult . go True
                    . T.filter (\c -> c /= '\n' && c /= '\r')
                    . T.map (\c -> if c == '\t' then ' ' else c)
                    . T.pack
-                   $ cdData t
+                   $ X.cdData t
 
-gradientOffsetSetter :: SvgGradientStop -> String -> SvgGradientStop
+gradientOffsetSetter :: GradientStop -> String -> GradientStop
 gradientOffsetSetter el str = el & gradientOffset .~ val
   where
     val = case parseMayStartDot complexNumber str of
       Nothing -> 0
-      Just (SvgNum n) -> n
-      Just (SvgPercent n) -> n
-      Just (SvgEm n) -> n
+      Just (Num n) -> n
+      Just (Percent n) -> n
+      Just (Em n) -> n
 
-instance SvgXMLUpdatable SvgGradientStop where
-    defaultSvg = SvgGradientStop 0 (PixelRGBA8 0 0 0 255)
-    svgAttributes =
+instance XMLUpdatable GradientStop where
+    defaultSvg = GradientStop 0 (PixelRGBA8 0 0 0 255)
+    attributes =
         [("offset", gradientOffsetSetter)
         ,("stop-color", parserSetter gradientColor colorParser)]
             
 
-data SvgSymbols = SvgSymbols
-    { svgSymbols :: !(M.Map String SvgElement)
+data Symbols = Symbols
+    { symbols :: !(M.Map String Element)
     , cssStyle   :: [CssRule]
     }
 
-emptyState :: SvgSymbols
-emptyState = SvgSymbols mempty mempty
+emptyState :: Symbols
+emptyState = Symbols mempty mempty
  
-parseGradientStops :: Element -> [SvgGradientStop]
+parseGradientStops :: X.Element -> [GradientStop]
 parseGradientStops = concatMap unStop . elChildren
   where
     unStop e@(nodeName -> "stop") = [xmlUnparse e]
     unStop _ = []
 
-withId :: Element -> (Element -> SvgElement)
-       -> State SvgSymbols SvgTree
+withId :: X.Element -> (X.Element -> Element)
+       -> State Symbols Tree
 withId el f = case attributeFinder "id" el of
-  Nothing -> return SvgNone
+  Nothing -> return None
   Just elemId -> do
       modify $ \s ->
-        s { svgSymbols = M.insert elemId (f el) $ svgSymbols s }
-      return SvgNone
+        s { symbols = M.insert elemId (f el) $ symbols s }
+      return None
 
-unparseDefs :: Element -> State SvgSymbols SvgTree
+unparseDefs :: X.Element -> State Symbols Tree
 unparseDefs e@(nodeName -> "linearGradient") =
   withId e $ ElementLinearGradient . unparser
   where
@@ -566,101 +561,101 @@ unparseDefs e = do
   el <- unparse e
   withId e (const $ ElementGeometry el)
 
-svgTreeModify
-    :: (forall a. (SvgXMLUpdatable a, WithSvgDrawAttributes a)
+treeModify
+    :: (forall a. (XMLUpdatable a, WithDrawAttributes a)
             => a -> a)
-    -> SvgTree -> SvgTree
-svgTreeModify f v = case v of
-  SvgNone -> SvgNone
-  Use n t -> Use n t
-  Symbol e -> Symbol $ f e
-  Group e -> Group $ f e
+    -> Tree -> Tree
+treeModify f v = case v of
+  None -> None
+  UseTree n t -> UseTree n t
+  SymbolTree e -> SymbolTree $ f e
+  GroupTree e -> GroupTree $ f e
   Path e -> Path $ f e
-  Circle e -> Circle $ f e
-  PolyLine e -> PolyLine $ f e
-  Polygon e -> Polygon $ f e
-  Ellipse e -> Ellipse $ f e
-  Line e -> Line $ f e
-  Rectangle e -> Rectangle $ f e
+  CircleTree e -> CircleTree $ f e
+  PolyLineTree e -> PolyLineTree $ f e
+  PolygonTree e -> PolygonTree $ f e
+  EllipseTree e -> EllipseTree $ f e
+  LineTree e -> LineTree $ f e
+  RectangleTree e -> RectangleTree $ f e
   TextArea a e -> TextArea a $ f e
 
 
-unparse :: Element -> State SvgSymbols SvgTree
+unparse :: X.Element -> State Symbols Tree
 unparse e@(nodeName -> "style") = do
   case parseOnly (many1 ruleSet) . T.pack $ strContent e of
     Left _ -> return ()
     Right rules ->
       modify $ \s -> s { cssStyle = cssStyle s ++ rules }
-  return SvgNone
+  return None
 unparse e@(nodeName -> "defs") = do
     mapM_ unparseDefs $ elChildren e
-    return SvgNone
+    return None
 unparse e@(nodeName -> "symbol") = do
-  svgChildren <- mapM unparse $ elChildren e
-  let realChildren = filter isNotNone svgChildren
-  pure . Symbol $ groupNode & svgGroupChildren .~ realChildren
+  symbolChildren <- mapM unparse $ elChildren e
+  let realChildren = filter isNotNone symbolChildren
+  pure . SymbolTree $ groupNode & groupChildren .~ realChildren
   where
     groupNode = _groupOfSymbol $ xmlUnparseWithDrawAttr e
-    isNotNone SvgNone = False
+    isNotNone None = False
     isNotNone _ = True
 
 unparse e@(nodeName -> "g") = do
-  svgChildren <- mapM unparse $ elChildren e
-  let realChildren = filter isNotNone svgChildren
-  pure . Group $ xmlUnparseWithDrawAttr e & svgGroupChildren .~ realChildren
+  children <- mapM unparse $ elChildren e
+  let realChildren = filter isNotNone children
+  pure . GroupTree $ xmlUnparseWithDrawAttr e & groupChildren .~ realChildren
   where
-    isNotNone SvgNone = False
+    isNotNone None = False
     isNotNone _ = True
 
 unparse e@(nodeName -> "text") = do
   pathWithGeometry <- pathGeomtryOf path
-  pure . TextArea pathWithGeometry $ xmlUnparse e & svgTextRoot .~ root
+  pure . TextArea pathWithGeometry $ xmlUnparse e & textRoot .~ root
     where
-      (textContent, path) = unparseText $ elContent e
+      (textContent, path) = unparseText $ X.elContent e
       
       pathGeomtryOf Nothing = pure Nothing
       pathGeomtryOf (Just pathInfo) = do
-        svgElem <- gets $ M.lookup (_svgTextPathName pathInfo) . svgSymbols
-        case svgElem of
+        pathElem <- gets $ M.lookup (_textPathName pathInfo) . symbols
+        case pathElem of
           Nothing -> pure Nothing
           Just (ElementLinearGradient _) -> pure Nothing
           Just (ElementRadialGradient _) -> pure Nothing
           Just (ElementGeometry (Path p)) ->
-              pure . Just $ pathInfo { _svgTextPathData = _svgPathDefinition p }
+              pure . Just $ pathInfo { _textPathData = _pathDefinition p }
           Just (ElementGeometry _) -> pure Nothing
 
-      root = SvgTextSpan
-           { _svgSpanInfo = xmlUnparse e
-           , _svgSpanDrawAttributes = xmlUnparse e
-           , _svgSpanContent = textContent
+      root = TextSpan
+           { _spanInfo = xmlUnparse e
+           , _spanDrawAttributes = xmlUnparse e
+           , _spanContent = textContent
            }
 
 unparse e@(nodeName -> "ellipse") =
-  pure . Ellipse $ xmlUnparseWithDrawAttr e
+  pure . EllipseTree $ xmlUnparseWithDrawAttr e
 unparse e@(nodeName -> "rect") = 
-  pure . Rectangle $ xmlUnparseWithDrawAttr e
+  pure . RectangleTree $ xmlUnparseWithDrawAttr e
 unparse e@(nodeName -> "polyline") =
-  pure . PolyLine $ xmlUnparseWithDrawAttr e
+  pure . PolyLineTree $ xmlUnparseWithDrawAttr e
 unparse e@(nodeName -> "polygon") =
-  pure . Polygon $ xmlUnparseWithDrawAttr e
+  pure . PolygonTree $ xmlUnparseWithDrawAttr e
 unparse e@(nodeName -> "circle") =
-  pure . Circle $ xmlUnparseWithDrawAttr e
+  pure . CircleTree $ xmlUnparseWithDrawAttr e
 unparse e@(nodeName -> "line") =
-  pure . Line $ xmlUnparseWithDrawAttr e
+  pure . LineTree $ xmlUnparseWithDrawAttr e
 unparse e@(nodeName -> "path") =
   pure . Path $ xmlUnparseWithDrawAttr e
 unparse e@(nodeName -> "use") = do
   let useInfo = xmlUnparseWithDrawAttr e
-  svgElem <- gets $ M.lookup (_svgUseName useInfo) . svgSymbols
-  case svgElem of
-    Nothing -> pure SvgNone
-    Just (ElementLinearGradient _) -> pure SvgNone
-    Just (ElementRadialGradient _) -> pure SvgNone
-    Just (ElementGeometry g) -> pure $ Use useInfo g
-unparse _ = pure SvgNone
+  element <- gets $ M.lookup (_useName useInfo) . symbols
+  case element of
+    Nothing -> pure None
+    Just (ElementLinearGradient _) -> pure None
+    Just (ElementRadialGradient _) -> pure None
+    Just (ElementGeometry g) -> pure $ UseTree useInfo g
+unparse _ = pure None
 
-cssDeclApplyer :: SvgDrawAttributes -> CssDeclaration
-             -> SvgDrawAttributes 
+cssDeclApplyer :: DrawAttributes -> CssDeclaration
+             -> DrawAttributes 
 cssDeclApplyer value (CssDeclaration txt elems) = 
    case lookup txt cssUpdaters of
      Nothing -> value
@@ -668,10 +663,10 @@ cssDeclApplyer value (CssDeclaration txt elems) =
   where
     cssUpdaters = [(T.pack n, u) | (n, _, u) <- drawAttributesList]
 
-cssApply :: [CssRule] -> SvgTree -> SvgTree
-cssApply rules = zipSvgTree go where
-  go [] = SvgNone
-  go ([]:_) = SvgNone
+cssApply :: [CssRule] -> Tree -> Tree
+cssApply rules = zipTree go where
+  go [] = None
+  go ([]:_) = None
   go context@((t:_):_) = t & drawAttr .~ attr'
    where
      matchingDeclarations =
@@ -680,17 +675,17 @@ cssApply rules = zipSvgTree go where
      attr' = foldl' cssDeclApplyer attr matchingDeclarations
    
 
-unparseDocument :: Element -> Maybe SvgDocument
-unparseDocument e@(nodeName -> "svg") = Just $ SvgDocument 
-    { _svgViewBox =
+unparseDocument :: X.Element -> Maybe Document
+unparseDocument e@(nodeName -> "") = Just $ Document 
+    { _viewBox =
         attributeFinder "viewBox" e >>= parse viewBox
-    , _svgElements = cssApply (cssStyle named) <$> svgElements
-    , _svgWidth = lengthFind "width"
-    , _svgHeight = lengthFind "height"
-    , _svgDefinitions = svgSymbols named
+    , _elements = cssApply (cssStyle named) <$> elements
+    , _width = lengthFind "width"
+    , _height = lengthFind "height"
+    , _definitions = symbols named
     }
   where
-    (svgElements, named) =
+    (elements, named) =
         runState (mapM unparse $ elChildren e) emptyState
     lengthFind n =
         attributeFinder n e >>= parse complexNumber

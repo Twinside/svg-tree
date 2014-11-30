@@ -21,11 +21,11 @@ import Data.Maybe( fromMaybe )
 import Data.List( mapAccumL )
 import qualified Data.Text as T
 import Graphics.Rasterific.Linear( (^+^), (^-^) )
-import Graphics.Rasterific hiding ( Path, Line, transform )
+import Graphics.Rasterific hiding ( Path, Line, Texture, transform )
 import qualified Graphics.Rasterific as R
 import qualified Graphics.Rasterific.Outline as RO
 import Graphics.Rasterific.Immediate
-import Graphics.Rasterific.Transformations
+import qualified Graphics.Rasterific.Transformations as RT
 import Graphics.Rasterific.PathWalker
 import Graphics.Text.TrueType
 import Graphics.Svg.Types
@@ -50,54 +50,54 @@ loadFont path = do
           return $ Just f
 
 data RenderableString px = RenderableString
-    { _renderableAttributes :: !SvgDrawAttributes
+    { _renderableAttributes :: !DrawAttributes
     , _renderableSize       :: !Float
     , _renderableFont       :: !Font
     , _renderableString     :: ![(Char, CharInfo px)]
     }
 
 data CharInfo px = CharInfo
-  { _svgCharX  :: Maybe SvgNumber
-  , _svgCharY  :: Maybe SvgNumber
-  , _svgCharDx :: Maybe SvgNumber
-  , _svgCharDy :: Maybe SvgNumber
-  , _svgCharRotate :: Maybe Float
-  , _svgCharStroke :: Maybe (Float, Texture px, R.Join, (R.Cap, R.Cap))
+  { _charX  :: Maybe Number
+  , _charY  :: Maybe Number
+  , _charDx :: Maybe Number
+  , _charDy :: Maybe Number
+  , _charRotate :: Maybe Float
+  , _charStroke :: Maybe (Float, R.Texture px, R.Join, (R.Cap, R.Cap))
   }
 
 emptyCharInfo :: CharInfo px
 emptyCharInfo = CharInfo
-  { _svgCharX      = Nothing
-  , _svgCharY      = Nothing
-  , _svgCharDx     = Nothing
-  , _svgCharDy     = Nothing
-  , _svgCharRotate = Nothing
-  , _svgCharStroke = Nothing
+  { _charX      = Nothing
+  , _charY      = Nothing
+  , _charDx     = Nothing
+  , _charDy     = Nothing
+  , _charRotate = Nothing
+  , _charStroke = Nothing
   }
 
-propagateTextInfo :: SvgTextInfo -> SvgTextInfo -> SvgTextInfo
-propagateTextInfo parent current = SvgTextInfo
-  { _svgTextInfoX = combine _svgTextInfoX
-  , _svgTextInfoY = combine _svgTextInfoY
-  , _svgTextInfoDX = combine _svgTextInfoDX
-  , _svgTextInfoDY = combine _svgTextInfoDY
-  , _svgTextInfoRotate = combine _svgTextInfoRotate
-  , _svgTextInfoLength = _svgTextInfoLength current
+propagateTextInfo :: TextInfo -> TextInfo -> TextInfo
+propagateTextInfo parent current = TextInfo
+  { _textInfoX = combine _textInfoX
+  , _textInfoY = combine _textInfoY
+  , _textInfoDX = combine _textInfoDX
+  , _textInfoDY = combine _textInfoDY
+  , _textInfoRotate = combine _textInfoRotate
+  , _textInfoLength = _textInfoLength current
   }
   where
     combine f = case f current of
       [] -> f parent
       lst -> lst
 
-textInfoRests :: SvgTextInfo -> SvgTextInfo -> SvgTextInfo
-              -> SvgTextInfo
-textInfoRests this parent sub = SvgTextInfo
-    { _svgTextInfoX      = decideWith _svgTextInfoX
-    , _svgTextInfoY      = decideWith _svgTextInfoY
-    , _svgTextInfoDX     = decideWith _svgTextInfoDX
-    , _svgTextInfoDY     = decideWith _svgTextInfoDY
-    , _svgTextInfoRotate = decideWith _svgTextInfoRotate
-    , _svgTextInfoLength = _svgTextInfoLength parent
+textInfoRests :: TextInfo -> TextInfo -> TextInfo
+              -> TextInfo
+textInfoRests this parent sub = TextInfo
+    { _textInfoX      = decideWith _textInfoX
+    , _textInfoY      = decideWith _textInfoY
+    , _textInfoDX     = decideWith _textInfoDX
+    , _textInfoDY     = decideWith _textInfoDY
+    , _textInfoRotate = decideWith _textInfoRotate
+    , _textInfoLength = _textInfoLength parent
     }
   where
     decideWith f = decide (f this) (f parent) (f sub)
@@ -105,26 +105,26 @@ textInfoRests this parent sub = SvgTextInfo
     decide []   _ ssub = ssub 
     decide  _ top    _ = top
 
-unconsTextInfo :: RenderContext -> SvgDrawAttributes -> SvgTextInfo
-               -> (CharInfo PixelRGBA8, SvgTextInfo)
+unconsTextInfo :: RenderContext -> DrawAttributes -> TextInfo
+               -> (CharInfo PixelRGBA8, TextInfo)
 unconsTextInfo ctxt attr nfo = (charInfo, restText) where
   unconsInf lst = case lst of
      []     -> (Nothing, [])
      (x:xs) -> (Just x, xs)
 
-  (xC, xRest) = unconsInf $ _svgTextInfoX nfo
-  (yC, yRest) = unconsInf $ _svgTextInfoY nfo
-  (dxC, dxRest) = unconsInf $ _svgTextInfoDX nfo
-  (dyC, dyRest) = unconsInf $ _svgTextInfoDY nfo
-  (rotateC, rotateRest) = unconsInf $ _svgTextInfoRotate nfo
+  (xC, xRest) = unconsInf $ _textInfoX nfo
+  (yC, yRest) = unconsInf $ _textInfoY nfo
+  (dxC, dxRest) = unconsInf $ _textInfoDX nfo
+  (dyC, dyRest) = unconsInf $ _textInfoDY nfo
+  (rotateC, rotateRest) = unconsInf $ _textInfoRotate nfo
 
-  restText = SvgTextInfo
-    { _svgTextInfoX      = xRest
-    , _svgTextInfoY      = yRest
-    , _svgTextInfoDX     = dxRest
-    , _svgTextInfoDY     = dyRest
-    , _svgTextInfoRotate = rotateRest
-    , _svgTextInfoLength = _svgTextInfoLength nfo
+  restText = TextInfo
+    { _textInfoX      = xRest
+    , _textInfoY      = yRest
+    , _textInfoDX     = dxRest
+    , _textInfoDY     = dyRest
+    , _textInfoRotate = rotateRest
+    , _textInfoLength = _textInfoLength nfo
     }
 
   texture = textureOf ctxt attr _strokeColor _strokeOpacity
@@ -132,12 +132,12 @@ unconsTextInfo ctxt attr nfo = (charInfo, restText) where
      lineariseLength ctxt attr <$> getLast (_strokeWidth attr)
 
   charInfo = CharInfo
-    { _svgCharX = xC
-    , _svgCharY = yC
-    , _svgCharDx = dxC
-    , _svgCharDy = dyC
-    , _svgCharRotate = rotateC
-    , _svgCharStroke =
+    { _charX = xC
+    , _charY = yC
+    , _charDx = dxC
+    , _charDy = dyC
+    , _charRotate = rotateC
+    , _charStroke =
         (,, joinOfSvg attr, capOfSvg attr) <$> width <*> texture
     }
 
@@ -148,14 +148,14 @@ repeatLast = go where
     [x] -> repeat x
     (x:xs) -> x : go xs
 
-infinitizeTextInfo :: SvgTextInfo -> SvgTextInfo
+infinitizeTextInfo :: TextInfo -> TextInfo
 infinitizeTextInfo nfo =
-    nfo { _svgTextInfoRotate = repeatLast $ _svgTextInfoRotate nfo }
+    nfo { _textInfoRotate = repeatLast $ _textInfoRotate nfo }
 
 
-mixWithRenderInfo :: RenderContext -> SvgDrawAttributes
-                  -> SvgTextInfo -> String
-                  -> (SvgTextInfo, [(Char, CharInfo PixelRGBA8)])
+mixWithRenderInfo :: RenderContext -> DrawAttributes
+                  -> TextInfo -> String
+                  -> (TextInfo, [(Char, CharInfo PixelRGBA8)])
 mixWithRenderInfo ctxt attr = mapAccumL go where
   go info c = (rest, (c, thisInfo))
     where
@@ -165,8 +165,8 @@ mixWithRenderInfo ctxt attr = mapAccumL go where
 data LetterTransformerState = LetterTransformerState 
     { _charactersInfos      :: ![CharInfo PixelRGBA8]
     , _characterCurrent     :: !(CharInfo PixelRGBA8)
-    , _currentCharDelta     :: !Point
-    , _currentAbsoluteDelta :: !Point
+    , _currentCharDelta     :: !R.Point
+    , _currentAbsoluteDelta :: !R.Point
     , _currentDrawing       :: Drawing PixelRGBA8 ()
     , _stringBounds         :: !PlaneBound
     }
@@ -181,47 +181,47 @@ unconsCurrentLetter = modify $ \s ->
                 , _characterCurrent = x
                 }
 
-prepareCharRotation :: CharInfo px -> PlaneBound -> Transformation
-prepareCharRotation info bounds = case _svgCharRotate info of
+prepareCharRotation :: CharInfo px -> R.PlaneBound -> RT.Transformation
+prepareCharRotation info bounds = case _charRotate info of
   Nothing -> mempty
-  Just angle -> rotateCenter (toRadian angle) lowerLeftCorner
+  Just angle -> RT.rotateCenter (toRadian angle) lowerLeftCorner
       where
         lowerLeftCorner = boundLowerLeftCorner bounds
 
-prepareCharTranslation :: RenderContext -> CharInfo px -> PlaneBound
-                       -> Point -> Point
-                       -> (Point, Point, Transformation)
+prepareCharTranslation :: RenderContext -> CharInfo px -> R.PlaneBound
+                       -> R.Point -> R.Point
+                       -> (R.Point, R.Point, RT.Transformation)
 prepareCharTranslation ctxt info bounds prevDelta prevAbsolute = go where
   lowerLeftCorner = boundLowerLeftCorner bounds
-  toPoint a b = linearisePoint ctxt mempty (a, b)
-  mzero = Just $ SvgNum 0
-  V2 pmx pmy = Just . SvgNum <$> prevAbsolute
+  toRPoint a b = linearisePoint ctxt mempty (a, b)
+  mzero = Just $ Num 0
+  V2 pmx pmy = Just . Num <$> prevAbsolute
 
-  mayForcedPoint = case (_svgCharX info, _svgCharY info) of
+  mayForcedPoint = case (_charX info, _charY info) of
     (Nothing, Nothing) -> Nothing
-    (mx, my) -> toPoint <$> (mx <|> pmx) <*> (my <|> pmy)
+    (mx, my) -> toRPoint <$> (mx <|> pmx) <*> (my <|> pmy)
 
   delta = fromMaybe 0 $
-    toPoint <$> (_svgCharDx info <|> mzero)
-            <*> (_svgCharDy info <|> mzero)
+    toRPoint <$> (_charDx info <|> mzero)
+             <*> (_charDy info <|> mzero)
 
   go = case mayForcedPoint of
     Nothing ->
       let newDelta = prevDelta ^+^ delta
-          trans = translate $ newDelta ^+^ prevAbsolute in
+          trans = RT.translate $ newDelta ^+^ prevAbsolute in
       (newDelta, prevAbsolute, trans)
 
     Just p ->
       let newDelta = prevDelta ^+^ delta
           positionDelta = p ^-^ lowerLeftCorner
-          trans = translate $ positionDelta ^+^ newDelta in
+          trans = RT.translate $ positionDelta ^+^ newDelta in
       (newDelta, positionDelta, trans)
 
 pixelToPt :: Float -> Float
 pixelToPt a = a / 1.25
 
 transformPlaceGlyph :: RenderContext
-                    -> Transformation
+                    -> RT.Transformation
                     -> R.PlaneBound
                     -> DrawOrder PixelRGBA8
                     -> GlyphPlacer ()
@@ -235,7 +235,7 @@ transformPlaceGlyph ctxt pathTransformation bounds order = do
         prepareCharTranslation ctxt info bounds delta absoluteDelta
       finalTrans = pathTransformation <> placement <> rotateTrans
       newGeometry =
-          R.transform (applyTransformation finalTrans) $ _orderPrimitives order
+          R.transform (RT.applyTransformation finalTrans) $ _orderPrimitives order
       newOrder = order { _orderPrimitives = newGeometry }
 
         
@@ -255,29 +255,29 @@ transformPlaceGlyph ctxt pathTransformation bounds order = do
     , _currentDrawing = do
         _currentDrawing s
         orderToDrawing newOrder
-        stroking $ _svgCharStroke info
+        stroking $ _charStroke info
     }
 
 
-prepareRenderableString :: RenderContext -> SvgDrawAttributes -> SvgText
+prepareRenderableString :: RenderContext -> DrawAttributes -> Text
                         -> IODraw [RenderableString PixelRGBA8]
-prepareRenderableString ctxt ini_attr textRoot = -- trace (groom textRoot) $
-    fst <$> everySpan ini_attr mempty (_svgTextRoot textRoot) where
+prepareRenderableString ctxt ini_attr root = -- trace (groom root) $
+    fst <$> everySpan ini_attr mempty (_textRoot root) where
 
   everySpan attr originalInfo tspan =
-      foldM (everyContent subAttr) (mempty, nfo) $ _svgSpanContent tspan
+      foldM (everyContent subAttr) (mempty, nfo) $ _spanContent tspan
     where
-      subAttr = attr <> _svgSpanDrawAttributes tspan
+      subAttr = attr <> _spanDrawAttributes tspan
       nfo = propagateTextInfo originalInfo
           . infinitizeTextInfo
-          $ _svgSpanInfo tspan
+          $ _spanInfo tspan
 
-  everyContent _attr (acc, info) (SvgSpanTextRef _) = return (acc, info)
-  everyContent attr (acc, info) (SvgSpanSub thisSpan) = do
-      let thisTextInfo = _svgSpanInfo thisSpan
+  everyContent _attr (acc, info) (SpanTextRef _) = return (acc, info)
+  everyContent attr (acc, info) (SpanSub thisSpan) = do
+      let thisTextInfo = _spanInfo thisSpan
       (drawn, newInfo) <- everySpan attr info thisSpan
       return (acc <> drawn, textInfoRests thisTextInfo info newInfo)
-  everyContent attr (acc, info) (SvgSpanText txt) = do
+  everyContent attr (acc, info) (SpanText txt) = do
     let fontFamilies = fromMaybe [] . getLast $ _fontFamily attr
         fontFilename = trace (show fontFamilies) $ getFirst $ F.foldMap fontFinder fontFamilies
     font <- loadFont $ fromMaybe "" fontFilename
@@ -311,15 +311,15 @@ prepareRenderableString ctxt ini_attr textRoot = -- trace (groom textRoot) $
                     { _descriptorFamilyName = T.pack ff
                     , _descriptorStyle = style }
 
-anchorStringRendering :: SvgTextAnchor -> LetterTransformerState
+anchorStringRendering :: TextAnchor -> LetterTransformerState
                       -> Drawing PixelRGBA8 ()
 anchorStringRendering anchor st = case anchor of
-    SvgTextAnchorStart -> _currentDrawing st
-    SvgTextAnchorMiddle ->
-        withTransformation (translate (V2 (negate $ stringWidth / 2) 0)) $
+    TextAnchorStart -> _currentDrawing st
+    TextAnchorMiddle ->
+        withTransformation (RT.translate (V2 (negate $ stringWidth / 2) 0)) $
             _currentDrawing st
-    SvgTextAnchorEnd ->
-        withTransformation (translate (V2 (- stringWidth) 0)) $ _currentDrawing st
+    TextAnchorEnd ->
+        withTransformation (RT.translate (V2 (- stringWidth) 0)) $ _currentDrawing st
   where
     stringWidth = boundWidth $ _stringBounds st
 
@@ -346,15 +346,15 @@ executePlacer placer = F.mapM_ exec where
              $ _orderPrimitives order
 
 textureOf :: RenderContext
-          -> SvgDrawAttributes
-          -> (SvgDrawAttributes -> Last SvgTexture)
-          -> (SvgDrawAttributes -> Float)
-          -> Maybe (Texture PixelRGBA8)
+          -> DrawAttributes
+          -> (DrawAttributes -> Last Texture)
+          -> (DrawAttributes -> Float)
+          -> Maybe (R.Texture PixelRGBA8)
 textureOf ctxt attr colorAccessor opacityAccessor = do
   svgTexture <- getLast $ colorAccessor attr
   prepareTexture ctxt attr svgTexture (opacityAccessor attr) []
  
-renderString :: RenderContext -> Maybe (Float, R.Path) -> SvgTextAnchor
+renderString :: RenderContext -> Maybe (Float, R.Path) -> TextAnchor
              -> [RenderableString PixelRGBA8]
              -> Drawing PixelRGBA8 ()
 renderString ctxt mayPath anchor str
@@ -390,34 +390,34 @@ renderString ctxt mayPath anchor str
             _fillOpacity 
       }
 
-startOffsetOfPath :: SvgDrawAttributes -> R.Path -> SvgNumber
+startOffsetOfPath :: DrawAttributes -> R.Path -> Number
                   -> Float
-startOffsetOfPath _ _ (SvgNum i) = i
-startOffsetOfPath attr _ (SvgEm i) = emTransform attr i
-startOffsetOfPath _ path (SvgPercent p) =
+startOffsetOfPath _ _ (Num i) = i
+startOffsetOfPath attr _ (Em i) = emTransform attr i
+startOffsetOfPath _ path (Percent p) =
     p * RO.approximatePathLength path
 
 renderText :: RenderContext
-           -> SvgDrawAttributes
-           -> Maybe SvgTextPath
-           -> SvgText
+           -> DrawAttributes
+           -> Maybe TextPath
+           -> Text
            -> IODraw (Drawing PixelRGBA8 ())
 renderText ctxt attr ppath stext =
   renderString ctxt pathInfo anchor <$> prepareRenderableString ctxt attr stext
   where
     renderPath =
-      svgPathToRasterificPath False . _svgTextPathData <$> ppath
+      svgPathToRasterificPath False . _textPathData <$> ppath
 
     offset = do
       rpath <- renderPath
-      mayOffset <- _svgTextPathStartOffset <$> ppath
+      mayOffset <- _textPathStartOffset <$> ppath
       return . (\a -> trace ("OFFSET: " ++ show a) a) $ startOffsetOfPath attr rpath mayOffset
 
     pathInfo = (,) <$> (offset <|> return 0) <*> renderPath
 
-    anchor = fromMaybe SvgTextAnchorStart
+    anchor = fromMaybe TextAnchorStart
            . getLast
            . _textAnchor
            . mappend attr
-           . _svgSpanDrawAttributes $ _svgTextRoot stext
+           . _spanDrawAttributes $ _textRoot stext
 

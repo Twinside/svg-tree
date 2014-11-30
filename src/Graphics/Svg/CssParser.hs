@@ -45,7 +45,6 @@ import Data.Attoparsec.Combinator
 
 import Codec.Picture( PixelRGBA8( .. ) )
 import Graphics.Svg.Types
-import Data.Text( Text )
 import Graphics.Svg.NamedColors( svgNamedColors )
 import Graphics.Svg.ColorParser( colorParser )
 import Graphics.Svg.CssTypes
@@ -70,7 +69,7 @@ num = realToFrac <$> (skipSpace *> plusMinus <* skipSpace)
                  <|> doubleNumber
 
 
-ident :: Parser Text
+ident :: Parser T.Text
 ident =
   (\f c -> f . T.cons c . T.pack)
         <$> trailingSub
@@ -81,7 +80,7 @@ ident =
     nmstart = letter <|> underscore
     nmchar = many (letter <|> digit <|> underscore <|> char '-')
 
-str :: Parser Text
+str :: Parser T.Text
 str = char '"' *> AT.takeWhile (/= '"') <* char '"' <* skipSpace
    <?> "str"
 
@@ -228,20 +227,20 @@ unitNumber = do
   f <- unitParser
   return $ f n
 
-dashArray :: Parser [SvgNumber]
+dashArray :: Parser [Number]
 dashArray = skipSpace *> (complexNumber `sepBy1` commaWsp)
 
 numberList :: Parser [Float]
 numberList = skipSpace *> (num `sepBy1` commaWsp)
 
-complexNumber :: Parser SvgNumber
+complexNumber :: Parser Number
 complexNumber = do
     n <- num
-    let apply f = SvgNum $ f n
-    (SvgPercent (n / 100) <$ char '%')
-        <|> (SvgEm n <$ string "em")
+    let apply f = Num $ f n
+    (Percent (n / 100) <$ char '%')
+        <|> (Em n <$ string "em")
         <|> (apply <$> unitParser)
-        <|> pure (SvgNum n)
+        <|> pure (Num n)
 
 term :: Parser CssElement
 term = checkRgb <$> function
@@ -259,9 +258,9 @@ term = checkRgb <$> function
                 [CssNumber r, CssNumber g, CssNumber b]) =
         CssColor $ PixelRGBA8 (to r) (to g) (to b) 255
        where clamp = max 0 . min 255
-             to (SvgNum n) = floor $ clamp n 
-             to (SvgPercent p) = floor . clamp $ p * 255
-             to (SvgEm c) = floor $ clamp c
+             to (Num n) = floor $ clamp n 
+             to (Percent p) = floor . clamp $ p * 255
+             to (Em c) = floor $ clamp c
 
     checkRgb a = a
 

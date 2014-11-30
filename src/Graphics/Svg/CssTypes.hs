@@ -13,19 +13,18 @@ module Graphics.Svg.CssTypes
 
 import Codec.Picture( PixelRGBA8 )
 import Data.Monoid( Last( .. ) )
-import Data.Text( Text )
 import Control.Lens( view )
 import qualified Data.Text as T
 import Graphics.Svg.Types
 {-import Debug.Trace-}
 
 data CssDescriptor
-  = OfClass Text    -- ^ .IDENT
-  | OfName  Text    -- ^ IDENT
-  | OfId    Text    -- ^ #IDENT
-  | OfPseudoClass Text   -- ^ :IDENT (ignore function syntax)
+  = OfClass T.Text    -- ^ .IDENT
+  | OfName  T.Text    -- ^ IDENT
+  | OfId    T.Text    -- ^ #IDENT
+  | OfPseudoClass T.Text   -- ^ :IDENT (ignore function syntax)
   | AnyElem         -- ^ '*'
-  | WithAttrib Text Text
+  | WithAttrib T.Text T.Text
   deriving (Eq, Show)
 
 data CssSelector
@@ -41,12 +40,12 @@ data CssRule = CssRule
     deriving (Eq, Show)
 
 class CssMatcheable a where
-  cssIdOf     :: a -> Maybe Text
-  cssClassOf  :: a -> Maybe Text
-  cssNameOf   :: a -> Text
-  cssAttribOf :: a -> Text -> Maybe Text
+  cssIdOf     :: a -> Maybe T.Text
+  cssClassOf  :: a -> Maybe T.Text
+  cssNameOf   :: a -> T.Text
+  cssAttribOf :: a -> T.Text -> Maybe T.Text
 
-instance CssMatcheable SvgTree where
+instance CssMatcheable Tree where
   cssAttribOf _ _ = Nothing
   cssClassOf = fmap T.pack . getLast . view (drawAttr . attrClass)
   cssIdOf = fmap T.pack . view (drawAttr . attrId)
@@ -88,15 +87,15 @@ findMatchingDeclarations rules context =
                     , isMatching context $ reverse selector ]
 
 data CssDeclaration
-    = CssDeclaration Text [[CssElement]]
+    = CssDeclaration T.Text [[CssElement]]
     deriving (Eq, Show)
 
 data CssElement
-    = CssIdent    !Text
-    | CssString   !Text
-    | CssNumber   !SvgNumber
+    = CssIdent    !T.Text
+    | CssString   !T.Text
+    | CssNumber   !Number
     | CssColor    !PixelRGBA8
-    | CssFunction !Text ![CssElement]
+    | CssFunction !T.Text ![CssElement]
     | CssOpComa
     | CssOpSlash
     deriving (Eq, Show)
