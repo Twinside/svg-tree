@@ -360,13 +360,14 @@ executePlacer placer = F.mapM_ exec where
 textureOf :: RenderContext
           -> DrawAttributes
           -> (DrawAttributes -> Last Texture)
-          -> (DrawAttributes -> Float)
+          -> (DrawAttributes -> Maybe Float)
           -> IODraw (Maybe (R.Texture PixelRGBA8))
 textureOf ctxt attr colorAccessor opacityAccessor =
   case getLast $ colorAccessor attr of
     Nothing -> return Nothing
     Just svgTexture ->
-        prepareTexture ctxt attr svgTexture (opacityAccessor attr) []
+        prepareTexture ctxt attr svgTexture opacity []
+      where opacity = fromMaybe 1.0 $ opacityAccessor attr
  
 renderString :: RenderContext -> Maybe (Float, R.Path) -> TextAnchor
              -> [RenderableString PixelRGBA8]

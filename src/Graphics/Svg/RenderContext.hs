@@ -191,6 +191,9 @@ documentOfPattern pat = Document
     , _height      = return $ _patternHeight pat
     , _elements    = _patternElements pat
     , _definitions = M.empty
+    , _styleRules  = []
+    , _styleText = ""
+    , _description = ""
     }
 
 prepareTexture :: RenderContext -> DrawAttributes

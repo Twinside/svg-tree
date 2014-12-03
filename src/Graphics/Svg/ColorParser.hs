@@ -1,5 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Graphics.Svg.ColorParser( colorParser, textureParser ) where
+module Graphics.Svg.ColorParser( colorParser
+                               , colorSerializer
+                               , textureParser
+                               , textureSerializer
+                               ) where
 
 import Data.Bits( (.|.), unsafeShiftL )
 import Control.Applicative( (<$>), (<$)
@@ -21,6 +25,7 @@ import Data.Attoparsec.Text
     , scientific
     )
 
+import Text.Printf( printf )
 import Data.Scientific( toRealFloat )
 import Codec.Picture( PixelRGBA8( .. ) )
 import Data.Word( Word8 )
@@ -41,6 +46,9 @@ num = realToFrac <$> (skipSpace *> plusMinus <* skipSpace)
         plusMinus = negate <$ string "-" <*> doubleNumber
                  <|> string "+" *> doubleNumber
                  <|> doubleNumber
+
+colorSerializer :: PixelRGBA8 -> String
+colorSerializer (PixelRGBA8 r g b _) = printf "#%02X%02X%02X" r g b
 
 colorParser :: Parser PixelRGBA8
 colorParser = rgbColor
@@ -79,6 +87,11 @@ colorParser = rgbColor
         (\r g b -> PixelRGBA8 (r * 17) (g * 17) (b * 17) 255)
         <$> hexChar <*> hexChar <*> hexChar
 
+
+textureSerializer :: Texture -> String
+textureSerializer (ColorRef px) = colorSerializer px
+textureSerializer (TextureRef str) = printf "url(#%s)" str
+textureSerializer FillNone = "none"
 
 textureParser :: Parser (Maybe Texture)
 textureParser =

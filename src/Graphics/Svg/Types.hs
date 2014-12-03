@@ -19,6 +19,9 @@ module Graphics.Svg.Types
     , FontStyle( .. )
     , toPoint
     , documentSize
+    , serializeNumber
+    , serializeTransformation
+    , serializeTransformations
 
     , GradientUnits( .. )
 
@@ -38,6 +41,7 @@ module Graphics.Svg.Types
 
 
     , Pattern( .. )
+    , PatternUnit( .. )
     , defaultPattern
     , HasPattern( .. )
 
@@ -114,7 +118,7 @@ module Graphics.Svg.Types
     ) where
 
 import Data.Function( on )
-import Data.List( inits )
+import Data.List( inits, intersperse )
 import qualified Data.Map as M
 import Data.Monoid( Monoid( .. ), Last( .. ), (<>) )
 import Data.Foldable( Foldable )
@@ -127,10 +131,14 @@ import Control.Lens( Lens'
                    , lens
                    , makeClassy
                    , makeLenses
+                   , view
                    , (^.)
                    , (&)
                    , (.~)
                    )
+import Graphics.Svg.CssTypes
+
+import Text.Printf
 
 type Coord = Float
 
@@ -158,11 +166,11 @@ data Path
     | EndPath
     deriving (Eq, Show)
 
-data Number
-    = Num Coord
-    | Em Coord
-    | Percent Coord
-    deriving (Eq, Show)
+serializeNumber :: Number -> String
+serializeNumber n = case n of
+  Num c -> printf "%g" c
+  Em cc -> printf "%gem" cc
+  Percent p -> printf "%d%%" $ (floor $ 100 * p :: Int)
 
 type Point = (Number, Number)
 
@@ -210,6 +218,23 @@ data Transformation
     | TransformUnknown
     deriving (Eq, Show)
 
+serializeTransformation :: Transformation -> String
+serializeTransformation t = case t of
+  TransformUnknown -> ""
+  TransformMatrix (RT.Transformation a b c d e f) ->
+      printf "matrix(%g, %g, %g, %g, %g, %g)" a b c d e f
+  Translate x y -> printf "translate(%g, %g)" x y
+  Scale x Nothing -> printf "scale(%g)" x
+  Scale x (Just y) -> printf "scale(%g, %g)" x y
+  Rotate angle Nothing -> printf "rotate(%g)" angle
+  Rotate angle (Just (x, y))-> printf "rotate(%g, %g, %g)" angle x y
+  SkewX x -> printf "skewX(%g)" x
+  SkewY y -> printf "skewY(%g)" y
+
+serializeTransformations :: [Transformation] -> String
+serializeTransformations =
+    concat . intersperse " " . fmap serializeTransformation
+
 class WithDrawAttributes a where
     drawAttr :: Lens' a DrawAttributes
 
@@ -228,12 +253,12 @@ data TextAnchor
 data DrawAttributes = DrawAttributes
     { _strokeWidth      :: !(Last Number)
     , _strokeColor      :: !(Last Texture)
-    , _strokeOpacity    :: !Float
+    , _strokeOpacity    :: !(Maybe Float)
     , _strokeLineCap    :: !(Last Cap)
     , _strokeLineJoin   :: !(Last LineJoin)
     , _strokeMiterLimit :: !(Last Float)
     , _fillColor        :: !(Last Texture)
-    , _fillOpacity      :: !Float
+    , _fillOpacity      :: !(Maybe Float)
     , _transform        :: !(Maybe [Transformation])
     , _fillRule         :: !(Last FillRule)
     , _attrClass        :: !(Last String)
@@ -695,12 +720,18 @@ defaultRadialGradient = RadialGradient
   , _radialGradientStops   = []
   }
 
+data PatternUnit
+  = PatternUnitUserSpaceOnUse
+  | PatternUnitObjectBoundingBox
+  deriving (Eq, Show)
+
 data Pattern = Pattern
     { _patternViewBox  :: Maybe (Int, Int, Int, Int)
     , _patternWidth    :: Number
     , _patternHeight   :: Number
     , _patternPos      :: Point
     , _patternElements :: [Tree]
+    , _patternUnit     :: PatternUnit
     }
     deriving Show
 
@@ -713,6 +744,7 @@ defaultPattern = Pattern
   , _patternHeight   = Num 0
   , _patternPos      = (Num 0, Num 0)
   , _patternElements = []
+  , _patternUnit = PatternUnitObjectBoundingBox
   }
 
 data Element
@@ -739,6 +771,9 @@ data Document = Document
     , _height      :: Maybe Number
     , _elements    :: [Tree]
     , _definitions :: M.Map String Element
+    , _description  :: String
+    , _styleText   :: String
+    , _styleRules  :: [CssRule]
     }
     deriving Show
 
@@ -766,12 +801,12 @@ instance Monoid DrawAttributes where
     mempty = DrawAttributes 
         { _strokeWidth      = Last Nothing
         , _strokeColor      = Last Nothing
-        , _strokeOpacity    = 1.0
+        , _strokeOpacity    = Nothing
         , _strokeLineCap    = Last Nothing
         , _strokeLineJoin   = Last Nothing
         , _strokeMiterLimit = Last Nothing
         , _fillColor        = Last Nothing
-        , _fillOpacity      = 1.0
+        , _fillOpacity      = Nothing
         , _fontSize         = Last Nothing
         , _fontFamily       = Last Nothing
         , _fontStyle        = Last Nothing
@@ -788,11 +823,11 @@ instance Monoid DrawAttributes where
         { _strokeWidth = (mappend `on` _strokeWidth) a b
         , _strokeColor =  (mappend `on` _strokeColor) a b
         , _strokeLineCap = (mappend `on` _strokeLineCap) a b
-        , _strokeOpacity = ((*) `on` _strokeOpacity) a b
+        , _strokeOpacity = (opacityMappend `on` _strokeOpacity) a b
         , _strokeLineJoin = (mappend `on` _strokeLineJoin) a b
         , _strokeMiterLimit = (mappend `on` _strokeMiterLimit) a b
         , _fillColor =  (mappend `on` _fillColor) a b
-        , _fillOpacity = ((*) `on` _fillOpacity) a b
+        , _fillOpacity = (opacityMappend `on` _fillOpacity) a b
         , _fontSize = (mappend `on` _fontSize) a b
         , _transform = (mayMerge `on` _transform) a b
         , _fillRule = (mappend `on` _fillRule) a b
@@ -804,4 +839,16 @@ instance Monoid DrawAttributes where
         , _fontStyle = (mappend `on` _fontStyle) a b
         , _textAnchor = (mappend `on` _textAnchor) a b
         }
+      where
+        opacityMappend Nothing Nothing = Nothing
+        opacityMappend (Just v) Nothing = Just v
+        opacityMappend Nothing (Just v) = Just v
+        opacityMappend (Just v) (Just v2) = Just $ v * v2
+
+
+instance CssMatcheable Tree where
+  cssAttribOf _ _ = Nothing
+  cssClassOf = fmap T.pack . getLast . view (drawAttr . attrClass)
+  cssIdOf = fmap T.pack . view (drawAttr . attrId)
+  cssNameOf = nameOfTree
 

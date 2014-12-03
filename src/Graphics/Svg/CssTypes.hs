@@ -8,14 +8,12 @@ module Graphics.Svg.CssTypes
 
     , CssMatcheable( .. )
     , CssContext
+    , Number( .. )
     , findMatchingDeclarations
     ) where
 
 import Codec.Picture( PixelRGBA8 )
-import Data.Monoid( Last( .. ) )
-import Control.Lens( view )
 import qualified Data.Text as T
-import Graphics.Svg.Types
 {-import Debug.Trace-}
 
 data CssDescriptor
@@ -44,12 +42,6 @@ class CssMatcheable a where
   cssClassOf  :: a -> Maybe T.Text
   cssNameOf   :: a -> T.Text
   cssAttribOf :: a -> T.Text -> Maybe T.Text
-
-instance CssMatcheable Tree where
-  cssAttribOf _ _ = Nothing
-  cssClassOf = fmap T.pack . getLast . view (drawAttr . attrClass)
-  cssIdOf = fmap T.pack . view (drawAttr . attrId)
-  cssNameOf = nameOfTree
 
 type CssContext a = [[a]]
 
@@ -88,6 +80,12 @@ findMatchingDeclarations rules context =
 
 data CssDeclaration
     = CssDeclaration T.Text [[CssElement]]
+    deriving (Eq, Show)
+
+data Number
+    = Num Float
+    | Em Float
+    | Percent Float
     deriving (Eq, Show)
 
 data CssElement

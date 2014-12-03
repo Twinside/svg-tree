@@ -8,7 +8,7 @@
   <style type="text/css"><![CDATA[
     .thick { stroke:black; stroke-width:70 }
     .thin { stroke:#ffcccc; stroke-width:5 }
-    text { text-anchor:middle; font-size:50; font-family:Verdana }
+    text { text-anchor:middle; font-size:50px; font-family:Verdana }
     circle { fill:#ffcccc; stroke:none }
   ]]></style>
   <defs>

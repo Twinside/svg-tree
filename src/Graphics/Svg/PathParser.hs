@@ -3,12 +3,17 @@ module Graphics.Svg.PathParser( transformParser
                               , command
                               , viewBox
                               , pointData
+                              , serializePoints
+                              , serializeCommand
+                              , serializeCommands
+                              , serializeViewBox
                               ) where
 
 import Control.Applicative( (<$>), (<$)
                           , (<*>), (<*), (*>)
                           , (<|>)
                           )
+import Data.List( intersperse )
 import Data.Scientific( toRealFloat )
 import Data.Attoparsec.Text
     ( Parser
@@ -25,6 +30,7 @@ import Graphics.Rasterific.Linear( V2( V2 ) )
 import qualified Graphics.Rasterific as R
 import qualified Graphics.Rasterific.Transformations as RT
 import qualified Data.Text as T
+import Text.Printf( printf )
 
 num :: Parser Float
 num = realToFrac <$> (skipSpace *> plusMinus <* skipSpace)
@@ -40,6 +46,9 @@ viewBox = (,,,)
        <$> iParse <*> iParse <*> iParse <*> iParse
   where
     iParse = floor <$> num <* skipSpace
+
+serializeViewBox :: (Int, Int, Int, Int) -> String
+serializeViewBox (a, b, c, d) = printf "%d %d %d %d" a b c d
 
 commaWsp :: Parser ()
 commaWsp = skipSpace *> option () (string "," *> return ()) <* skipSpace
@@ -87,6 +96,63 @@ command =  (MoveTo OriginAbsolute <$ string "M" <*> pointList)
                                   <*> numComma
                                   <*> numComma
                                   <*> point
+
+serializePoint :: R.Point -> String
+serializePoint (V2 x y) = printf "%g,%g" x y
+
+serializePoints :: [R.Point] -> String
+serializePoints = concat . intersperse " " . fmap serializePoint
+
+serializeCoords :: [Coord] -> String
+serializeCoords = concat . intersperse " " . fmap (printf "%g")
+
+serializePointPair :: (R.Point, R.Point) -> String
+serializePointPair (a, b) = serializePoint a ++ " " ++ serializePoint b
+
+serializePointPairs :: [(R.Point, R.Point)] -> String
+serializePointPairs =
+    concat . intersperse " " . fmap serializePointPair
+
+serializePointTriplet :: (R.Point, R.Point, R.Point) -> String
+serializePointTriplet (a, b, c) =
+    serializePoint a ++ " " ++ serializePoint b ++ " " ++ serializePoint c
+
+serializePointTriplets :: [(R.Point, R.Point, R.Point)] -> String
+serializePointTriplets =
+    concat . intersperse " " . fmap serializePointTriplet
+
+serializeCommands :: [Path] -> String
+serializeCommands = concat . intersperse " " . fmap serializeCommand
+
+serializeCommand :: Path -> String
+serializeCommand p = case p of
+  MoveTo OriginAbsolute points -> "M" ++ serializePoints points
+  MoveTo OriginRelative points -> "m" ++ serializePoints points
+  LineTo OriginAbsolute points -> "L" ++ serializePoints points
+  LineTo OriginRelative points -> "l" ++ serializePoints points
+
+  HorizontalTo OriginAbsolute coords -> "H" ++ serializeCoords coords
+  HorizontalTo OriginRelative coords -> "h" ++ serializeCoords coords
+  VerticalTo OriginAbsolute coords -> "V" ++ serializeCoords coords
+  VerticalTo OriginRelative coords -> "v" ++ serializeCoords coords
+
+  CurveTo OriginAbsolute triplets -> "C" ++ serializePointTriplets triplets
+  CurveTo OriginRelative triplets -> "c" ++ serializePointTriplets triplets
+  SmoothCurveTo OriginAbsolute pointPairs -> "S" ++ serializePointPairs pointPairs
+  SmoothCurveTo OriginRelative pointPairs -> "s" ++ serializePointPairs pointPairs
+  QuadraticBezier OriginAbsolute pointPairs -> "Q" ++ serializePointPairs pointPairs
+  QuadraticBezier OriginRelative pointPairs -> "q" ++ serializePointPairs pointPairs
+  SmoothQuadraticBezierCurveTo OriginAbsolute points -> "T" ++ serializePoints points
+  SmoothQuadraticBezierCurveTo OriginRelative points -> "t" ++ serializePoints points
+  ElipticalArc OriginAbsolute args -> "A" ++ serializeArgs args
+  ElipticalArc OriginRelative args -> "a" ++ serializeArgs args
+  EndPath -> "Z"
+  where
+    serializeArg (a, b, c, d, e, V2 x y) =
+        printf "%g %g %g %g %g %g,%g" a b c d e x y
+    serializeArgs =
+        concat . intersperse " " . fmap serializeArg 
+
 
 
 transformParser :: Parser Transformation

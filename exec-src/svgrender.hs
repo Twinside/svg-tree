@@ -76,11 +76,20 @@ testFileOfPath :: FilePath -> FilePath
 testFileOfPath path = testOutputFolder </> base <.> "png"
   where (_, base) = splitFileName path
 
+svgTestFileOfPath :: FilePath -> FilePath
+svgTestFileOfPath path = testOutputFolder </> base <.> "svg"
+  where (_, base) = splitFileName path
+
+
 text :: String -> Html
 text txt = txt ++ "<br/>"
 
 generateFileInfo :: FilePath -> [Html]
-generateFileInfo path = [text path, img path 0 0, img pngRef 0 0,  img (testFileOfPath path) 0 0]
+generateFileInfo path =
+    [ text path, img path 0 0
+    , img pngRef 0 0
+    , img (testFileOfPath path) 0 0
+    , img (svgTestFileOfPath path) 0 0]
   where
     pngRef = dropExtension path <.> "png"
 
@@ -92,7 +101,7 @@ analyzeFolder :: FontCache -> FilePath -> IO ()
 analyzeFolder cache folder = do
   createDirectoryIfMissing True testOutputFolder
   fileList <- sort . filter (".svg" `isSuffixOf`) <$> getDirectoryContents folder
-  let all_table = table ["name", "W3C Svg", "W3C ref PNG", "mine"] 
+  let all_table = table ["name", "W3C Svg", "W3C ref PNG", "mine", "svgmine"]
                 . map generateFileInfo $ map (folder </>) fileList
       doc = toHtmlDocument all_table
       (_, folderBase) = splitFileName folder
@@ -111,6 +120,9 @@ analyzeFolder cache folder = do
         putStrLn $ "   => Rendering " ++ show (documentSize d)
         (finalImage, _) <- renderSvgDocument cache Nothing d
         writePng (testFileOfPath p) finalImage
+
+        putStrLn $ "   => XMLize"
+        saveXmlFile (svgTestFileOfPath p) d
 
 
 testSuite :: IO ()

@@ -1,7 +1,13 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE OverloadedStrings #-}
-module Graphics.Svg.XmlParser where
+{-# LANGUAGE FlexibleInstances #-}
+module Graphics.Svg.XmlParser( xmlOfDocument
+                             , unparseDocument
+
+                             , SvgAttributeLens( .. )
+                             , drawAttributesList
+                             ) where
 
 import Control.Applicative( (<$>)
                           {-, (<*>)-}
@@ -9,11 +15,13 @@ import Control.Applicative( (<$>)
                           , pure )
 
 import Control.Lens hiding( transform, children, elements, element )
+import Control.Monad( join )
 import Control.Monad.State.Strict( State, runState, modify, gets )
-import Data.Monoid( mempty, Last( Last ) )
-import Data.List( foldl' )
+import Data.Maybe( catMaybes )
+import Data.Monoid( mempty, Last( Last ), getLast )
+import Data.List( foldl', intersperse )
 import Text.XML.Light.Proc( findAttrBy, elChildren, strContent )
-import qualified Text.XML.Light.Types as X
+import qualified Text.XML.Light as X
 import qualified Data.Text as T
 import qualified Data.Map as M
 import Data.Attoparsec.Text( Parser, parseOnly, many1 )
@@ -24,7 +32,6 @@ import Graphics.Svg.ColorParser
 import Graphics.Svg.CssTypes( CssDeclaration( .. )
                             , CssElement( .. )
                             , CssRule
-                            , findMatchingDeclarations
                             )
 import Graphics.Svg.CssParser( complexNumber
                              , num
@@ -32,6 +39,8 @@ import Graphics.Svg.CssParser( complexNumber
                              , dashArray
                              , styleString
                              , numberList )
+
+import Text.Printf( printf )
 
 {-import Debug.Trace-}
 
@@ -42,28 +51,51 @@ attributeFinder :: String -> X.Element -> Maybe String
 attributeFinder str =
     findAttrBy (\a -> X.qName a == str)
 
-parseCap :: String -> Last Cap
-parseCap "butt" = Last $ Just CapButt
-parseCap "round" = Last $ Just CapRound
-parseCap "square" = Last $ Just CapSquare
-parseCap _ = Last Nothing
+parseCap :: String -> Maybe Cap
+parseCap "butt" = Just CapButt
+parseCap "round" = Just CapRound
+parseCap "square" = Just CapSquare
+parseCap _ = Nothing
 
-parseTextAnchor :: String -> Last TextAnchor
-parseTextAnchor "middle" = Last $ Just TextAnchorMiddle
-parseTextAnchor "start" = Last $ Just TextAnchorStart
-parseTextAnchor "end" = Last $ Just TextAnchorEnd
-parseTextAnchor _ = Last Nothing
+serializeCap :: Cap -> String
+serializeCap c = case c of
+  CapButt -> "butt"
+  CapRound -> "round"
+  CapSquare -> "square"
 
-parseLineJoin :: String -> Last LineJoin
-parseLineJoin "miter" = Last $ Just JoinMiter
-parseLineJoin "round" = Last $ Just JoinRound
-parseLineJoin "bevel" = Last $ Just JoinBevel
-parseLineJoin _ = Last Nothing
+parseTextAnchor :: String -> Maybe TextAnchor
+parseTextAnchor "middle" = Just TextAnchorMiddle
+parseTextAnchor "start" = Just TextAnchorStart
+parseTextAnchor "end" = Just TextAnchorEnd
+parseTextAnchor _ = Nothing
+
+serializeTextAnchor :: TextAnchor -> String
+serializeTextAnchor t = case t of
+  TextAnchorMiddle -> "middle"
+  TextAnchorStart -> "start"
+  TextAnchorEnd -> "end"
+
+parseLineJoin :: String -> Maybe LineJoin
+parseLineJoin "miter" = Just JoinMiter
+parseLineJoin "round" = Just JoinRound
+parseLineJoin "bevel" = Just JoinBevel
+parseLineJoin _ = Nothing
+
+serializeLineJoin :: LineJoin -> String
+serializeLineJoin j = case j of
+    JoinMiter -> "miter"
+    JoinRound -> "round"
+    JoinBevel -> "bevel"
 
 parseGradientUnit :: String -> GradientUnits
 parseGradientUnit "userSpaceOnUse" = GradientUserSpace
 parseGradientUnit "objectBoundingBox" = GradientBoundingBox
 parseGradientUnit _ = GradientBoundingBox
+
+serializeGradientUnit :: GradientUnits -> String
+serializeGradientUnit uni = case uni of
+    GradientUserSpace -> "userSpaceOnUse"
+    GradientBoundingBox -> "objectBoundingBox"
 
 parseGradientSpread :: String -> Spread
 parseGradientSpread "pad" = SpreadPad
@@ -71,15 +103,41 @@ parseGradientSpread "reflect" = SpreadReflect
 parseGradientSpread "repeat" = SpreadRepeat
 parseGradientSpread _ = SpreadPad
 
-parseFillRule :: String -> Last FillRule
-parseFillRule "nonzero" = Last $ Just FillNonZero
-parseFillRule "evenodd" = Last $ Just FillEvenOdd
-parseFillRule _ = Last Nothing
+serializeGradientSpread :: Spread -> String
+serializeGradientSpread spread = case spread of
+    SpreadPad -> "pad"
+    SpreadReflect -> "reflect"
+    SpreadRepeat -> "repeat"
+
+parseFillRule :: String -> Maybe FillRule
+parseFillRule "nonzero" = Just FillNonZero
+parseFillRule "evenodd" = Just FillEvenOdd
+parseFillRule _ = Nothing
+
+serializeFillRule :: FillRule -> String
+serializeFillRule FillNonZero = "nonzero"
+serializeFillRule FillEvenOdd = "evenodd"
 
 parseTextAdjust :: String -> TextAdjust
 parseTextAdjust "spacing" = TextAdjustSpacing
 parseTextAdjust "spacingAndGlyphs" = TextAdjustSpacingAndGlyphs
 parseTextAdjust _ = TextAdjustSpacing
+
+parsePatternUnit :: String -> Maybe PatternUnit
+parsePatternUnit str = case str of
+  "userSpaceOnUse" -> Just PatternUnitUserSpaceOnUse
+  "objectBoundingBox" -> Just PatternUnitObjectBoundingBox
+  _ -> Nothing
+
+serializePatternUnit :: PatternUnit -> String
+serializePatternUnit p = case p of
+  PatternUnitUserSpaceOnUse -> "userSpaceOnUse"
+  PatternUnitObjectBoundingBox -> "objectBoundingBox"
+
+serializeTextAdjust :: TextAdjust -> String
+serializeTextAdjust adj = case adj of
+    TextAdjustSpacing -> "spacing"
+    TextAdjustSpacingAndGlyphs -> "spacingAndGlyphs"
 
 parse :: Parser a -> String -> Maybe a
 parse p str = case parseOnly p (T.pack str) of
@@ -93,10 +151,10 @@ parseMayStartDot p l = parse p l
 xmlUpdate :: (XMLUpdatable a) => a -> X.Element -> a
 xmlUpdate initial el = foldl' grab initial attributes
   where
-    grab value (attributeName, setter) =
-        case attributeFinder attributeName el of
+    grab value updater =
+        case attributeFinder (_attributeName updater) el of
           Nothing -> value
-          Just v -> setter value v
+          Just v -> _attributeUpdater updater value v
 
 xmlUnparse :: (XMLUpdatable a) => X.Element -> a
 xmlUnparse = xmlUpdate defaultSvg
@@ -107,79 +165,151 @@ xmlUnparseWithDrawAttr
 xmlUnparseWithDrawAttr e =
     xmlUnparse e & drawAttr .~ xmlUnparse e
 
-xmlUpdateDrawAttr :: (WithDrawAttributes a) => X.Element -> a -> a
-xmlUpdateDrawAttr e svg = svg & drawAttr .~ drawAttr'
-  where drawAttr' = xmlUpdate (svg ^. drawAttr) e
+data SvgAttributeLens t = SvgAttributeLens
+  { _attributeName       :: String
+  , _attributeUpdater    :: t -> String -> t
+  , _attributeSerializer :: t -> Maybe String
+  }
 
-xmlUpdateWithDrawAttr
-    :: (XMLUpdatable a, WithDrawAttributes a)
-    => X.Element -> a -> a
-xmlUpdateWithDrawAttr e svg = xmlUpdate (xmlUpdateDrawAttr e svg) e
+class XMLUpdatable treeNode where
+  xmlTagName :: treeNode -> String
+  attributes :: [SvgAttributeLens treeNode]
+  defaultSvg :: treeNode
 
-attributeReal :: String -> X.Element -> Maybe Float
-attributeReal attr e = read <$> attributeFinder attr e
+  serializeTreeNode :: treeNode -> X.Element
 
-attributeLength :: String -> X.Element -> Maybe Number
-attributeLength attr e = 
-  attributeFinder attr e >>= parseMayStartDot complexNumber
+setChildren :: X.Element -> [X.Content] -> X.Element
+setChildren xNode children = xNode { X.elContent = children }
 
-type Updater t = t -> String -> t
+updateWithAccessor :: XMLUpdatable b => (a -> [b]) -> a -> X.Element -> X.Element
+updateWithAccessor accessor node xNode =
+    setChildren xNode $ X.Elem . serializeTreeNode <$> accessor node
 
-numericSetter :: ASetter a a b Number -> Updater a
-numericSetter setter el str =
-  case parseMayStartDot complexNumber str of
-    Nothing -> el
-    Just v -> el & setter .~ v
-
-numericMaySetter :: ASetter a a b (Maybe Number) -> Updater a
-numericMaySetter setter el str =
-  case parseMayStartDot complexNumber str of
-    Nothing -> el
-    Just v -> el & setter .~ Just v
-
-numericLastSetter :: ASetter a a b (Last Number) -> Updater a
-numericLastSetter setter el str =
-  case parseMayStartDot complexNumber str of
-    Nothing -> el
-    Just v -> el & setter .~ Last (Just v)
+genericSerializeNode :: (XMLUpdatable treeNode) => treeNode -> X.Element
+genericSerializeNode node =
+    X.unode (xmlTagName node) $ concatMap generateAttribute attributes
+  where
+    generateAttribute attr = case _attributeSerializer attr node of
+      Nothing -> []
+      Just str -> return $ X.Attr
+        { X.attrKey = xName $ _attributeName attr
+        , X.attrVal = str
+        }
+        where
+         xName "href" = 
+            X.QName	{ X.qName = "href", X.qURI = Nothing, X.qPrefix = Just "xlink" }
+         xName h = X.unqual h
 
 
-numMaySetter :: ASetter a a b (Last Float) -> Updater a
-numMaySetter setter el str =
-  case parseMayStartDot num str of
-    Nothing -> el
-    Just v -> el & setter .~ Last (Just v)
+mergeAttributes :: X.Element -> X.Element -> X.Element
+mergeAttributes thisXml otherXml =
+    thisXml { X.elAttribs = X.elAttribs otherXml ++ X.elAttribs thisXml }
 
-numSetter :: ASetter a a b Float -> Updater a
-numSetter setter el str =
-  case parseMayStartDot num str of
-    Nothing -> el
-    Just v -> el & setter .~ v
-
-parserSetter :: ASetter a a b e -> Parser e -> Updater a
-parserSetter setter parser el str =
-  case parse parser str of
-    Nothing -> el
-    Just v -> el & setter .~ v
-
-parserMaySetter :: ASetter a a b (Maybe e) -> Parser e -> Updater a
-parserMaySetter setter parser el str =
-  case parse parser str of
-    Nothing -> el
-    Just v -> el & setter .~ Just v
-
-parserLastSetter :: ASetter a a b (Last e) -> Parser e -> Updater a
-parserLastSetter setter parser el str =
-  case parse parser str of
-    Nothing -> el
-    Just v -> el & setter .~ Last (Just v)
-
-class XMLUpdatable a where
-  attributes :: [(String, Updater a)]
-  defaultSvg :: a
+genericSerializeWithDrawAttr :: (XMLUpdatable treeNode, WithDrawAttributes treeNode)
+                             => treeNode -> X.Element
+genericSerializeWithDrawAttr node = mergeAttributes thisXml drawAttrNode where
+  thisXml = genericSerializeNode node
+  drawAttrNode = genericSerializeNode $ node ^. drawAttr
 
 type CssUpdater =
     DrawAttributes -> [[CssElement]] -> DrawAttributes
+
+numericSetter :: String -> Lens' a Number -> SvgAttributeLens a
+numericSetter attribute elLens = SvgAttributeLens attribute updater serializer
+  where
+    updater el str = case parseMayStartDot complexNumber str of
+        Nothing -> el
+        Just v -> el & elLens .~ v
+
+    serializer a = Just . serializeNumber $ a ^. elLens
+
+numericMaySetter :: String -> Lens' a (Maybe Number) -> SvgAttributeLens a
+numericMaySetter attribute elLens = SvgAttributeLens attribute updater serializer
+  where
+    updater el str = case parseMayStartDot complexNumber str of
+        Nothing -> el
+        Just v -> el & elLens .~ Just v
+
+    serializer a = serializeNumber <$> a ^. elLens
+
+
+numericLastSetter :: String -> Lens' a (Last Number) -> SvgAttributeLens a
+numericLastSetter attribute elLens = SvgAttributeLens attribute updater serializer
+  where
+    updater el str = case parseMayStartDot complexNumber str of
+        Nothing -> el
+        Just v -> el & elLens .~ Last (Just v)
+
+    serializer a = serializeNumber <$> getLast (a ^. elLens)
+
+numLastSetter :: String -> Lens' a (Last Float) -> SvgAttributeLens a
+numLastSetter attribute elLens = SvgAttributeLens attribute updater serializer
+  where
+    updater el str = case parseMayStartDot num str of
+        Nothing -> el
+        Just v -> el & elLens .~ Last (Just v)
+
+    serializer a = printf "%g" <$> getLast (a ^. elLens)
+
+groupOpacitySetter :: SvgAttributeLens DrawAttributes
+groupOpacitySetter = SvgAttributeLens "opacity" updater serializer
+  where
+    updater el str = case parseMayStartDot num str of
+        Nothing -> el
+        Just v -> (el & fillOpacity .~ Just v) & strokeOpacity .~ Just v
+
+    serializer a = case (a ^. fillOpacity, a ^. strokeOpacity) of
+      (Just v, Just b) | v == b -> Just $ printf "%g" v
+      _ -> Nothing
+
+opacitySetter :: String -> Lens' a (Maybe Float) -> Lens' a (Maybe Float)
+              -> SvgAttributeLens a
+opacitySetter attribute elLens otherLens =
+    SvgAttributeLens attribute updater serializer
+  where
+    updater el str = case parseMayStartDot num str of
+        Nothing -> el
+        Just v -> el & elLens .~ Just v
+
+    serializer a = case (a ^. elLens, a ^. otherLens) of
+        (Just v, Just b) | v == b -> Nothing
+        (Just v, _) -> Just $ printf "%g" v
+        (Nothing, _) -> Nothing
+
+type Serializer e = e -> Maybe String
+
+parserSetter :: String -> Lens' a e -> (String -> Maybe e) -> Serializer e
+             -> SvgAttributeLens a
+parserSetter attribute elLens parser serialize =
+    SvgAttributeLens attribute updater serializer
+  where
+    updater el str = case parser str of
+        Nothing -> el
+        Just v -> el & elLens .~ v
+
+    serializer  a = serialize $ a ^. elLens
+
+parserMaySetter :: String -> Lens' a (Maybe e) -> (String -> Maybe e) -> Serializer e
+                -> SvgAttributeLens a
+parserMaySetter attribute elLens parser serialize =
+    SvgAttributeLens attribute updater serializer
+  where
+    updater el str = case parser str of
+        Nothing -> el
+        Just v -> el & elLens .~ Just v
+
+    serializer a = a ^. elLens >>= serialize
+
+parserLastSetter :: String -> Lens' a (Last e) -> (String -> Maybe e) -> Serializer e
+                 -> SvgAttributeLens a
+parserLastSetter attribute elLens parser serialize =
+    SvgAttributeLens attribute updater serializer
+  where
+    updater el str = case parser str of
+        Nothing -> el
+        Just v -> el & elLens .~ Last (Just v)
+
+    serializer a = getLast (a ^. elLens) >>= serialize 
 
 cssUniqueNumber :: ASetter DrawAttributes DrawAttributes
                    a (Last Number)
@@ -187,10 +317,10 @@ cssUniqueNumber :: ASetter DrawAttributes DrawAttributes
 cssUniqueNumber setter attr ((CssNumber n:_):_) = attr & setter .~ Last (Just n)
 cssUniqueNumber _ attr _ = attr
 
-cssUniqueFloat :: ASetter DrawAttributes DrawAttributes a Float
+cssUniqueFloat :: ASetter DrawAttributes DrawAttributes a (Maybe Float)
                -> CssUpdater
 cssUniqueFloat setter attr ((CssNumber (Num n):_):_) =
-    attr & setter .~ n
+    attr & setter .~ Just n
 cssUniqueFloat _ attr _ = attr
 
 cssUniqueMayFloat :: ASetter DrawAttributes DrawAttributes a (Last Float)
@@ -198,15 +328,6 @@ cssUniqueMayFloat :: ASetter DrawAttributes DrawAttributes a (Last Float)
 cssUniqueMayFloat setter attr ((CssNumber (Num n):_):_) =
     attr & setter .~ Last (Just n)
 cssUniqueMayFloat _ attr _ = attr
-
-cssIdentParser :: ASetter DrawAttributes DrawAttributes a b
-               -> Parser b
-               -> CssUpdater
-cssIdentParser setter parser attr ((CssIdent i:_):_) =
-  case parseOnly parser i of
-    Left _ -> attr
-    Right v -> attr & setter .~ v
-cssIdentParser _ _ attr _ = attr
 
 cssIdentStringParser :: ASetter DrawAttributes DrawAttributes a b
                      -> (String -> b) -> CssUpdater
@@ -247,164 +368,264 @@ cssDashArray setter attr (lst:_) =
     v -> attr & setter .~ Last (Just v)
 cssDashArray _ attr _ = attr
 
-drawAttributesList :: [(String, Updater DrawAttributes, CssUpdater)]
+
+drawAttributesList :: [(SvgAttributeLens DrawAttributes, CssUpdater)]
 drawAttributesList =
-    [("stroke-width", numericLastSetter strokeWidth, cssUniqueNumber strokeWidth)
-    ,("stroke", parserSetter strokeColor (Last <$> textureParser),
+    [(numericLastSetter "stroke-width" strokeWidth, cssUniqueNumber strokeWidth)
+    ,(parserLastSetter "stroke" strokeColor
+        (join . parse textureParser)
+        (Just . textureSerializer),
         cssUniqueTexture strokeColor)
-    ,("stroke-linecap",
-        \e s -> e & strokeLineCap .~ parseCap s,
-        cssIdentStringParser strokeLineCap parseCap)
-    ,("stroke-linejoin", 
-        \e s -> e & strokeLineJoin .~ parseLineJoin s,
-        cssIdentStringParser strokeLineJoin parseLineJoin)
-    ,("stroke-miterlimit", numMaySetter strokeMiterLimit,
-        cssUniqueMayFloat strokeMiterLimit)
-    ,("fill", parserSetter fillColor (Last <$> textureParser),
+
+    ,(parserLastSetter "fill" fillColor
+        (join . parse textureParser)
+        (Just . textureSerializer),
         cssUniqueTexture fillColor)
-     -- TODO: fix this incompletness
-    ,("transform", parserMaySetter transform (many transformParser), const)
-    ,("opacity", numSetter fillOpacity, cssUniqueFloat fillOpacity)
-    ,("fill-opacity", numSetter fillOpacity, cssUniqueFloat fillOpacity)
-    ,("stroke-opacity", numSetter strokeOpacity, cssUniqueFloat strokeOpacity)
-    ,("font-size", numericLastSetter fontSize, cssUniqueNumber fontSize)
-    ,("font-family", \e s -> e & fontFamily .~ Last (Just $ commaSeparate s),
+
+    ,(parserLastSetter "stroke-linecap" strokeLineCap parseCap
+        (Just . serializeCap),
+        cssIdentStringParser strokeLineCap (Last . parseCap))
+
+    ,(parserLastSetter "stroke-linejoin" strokeLineJoin parseLineJoin
+        (Just . serializeLineJoin) ,
+        cssIdentStringParser strokeLineJoin (Last . parseLineJoin))
+    ,(numLastSetter "stroke-miterlimit" strokeMiterLimit,
+         cssUniqueMayFloat strokeMiterLimit)
+
+    ,(parserMaySetter "transform"  transform
+         (parse $ many transformParser)
+         (Just . serializeTransformations), const)
+    ,(groupOpacitySetter, cssUniqueFloat fillOpacity)
+    ,(opacitySetter "fill-opacity" fillOpacity strokeOpacity,
+        cssUniqueFloat fillOpacity)
+    ,(opacitySetter "stroke-opacity" strokeOpacity fillOpacity,
+        cssUniqueFloat strokeOpacity)
+    ,(numericLastSetter "font-size" fontSize, cssUniqueNumber fontSize)
+    ,(parserLastSetter "font-family" fontFamily (Just . commaSeparate)
+        (Just . concat . intersperse ", "),
         cssIdentStringParser fontFamily (\s -> Last (Just $ commaSeparate s)))
         
-    ,("fill-rule", \e s -> e & fillRule .~ parseFillRule s,
-        cssIdentStringParser fillRule parseFillRule)
-    ,("class", \e s -> e & attrClass .~ Last (Just s), cssLastStringSetter attrClass)
-    ,("id", \e s -> e & attrId .~ Just s, cssMayStringSetter attrId)
-    ,("stroke-dashoffset",numericLastSetter strokeOffset,
+    ,(parserLastSetter "fill-rule" fillRule parseFillRule
+        (Just . serializeFillRule),
+        cssIdentStringParser fillRule (Last . parseFillRule))
+    ,(parserLastSetter "class" attrClass Just Just, cssLastStringSetter attrClass)
+    ,(parserMaySetter "id" attrId Just Just, cssMayStringSetter attrId)
+    ,(numericLastSetter "stroke-dashoffset" strokeOffset,
         cssUniqueNumber strokeOffset)
-    ,("stroke-dasharray", parserLastSetter strokeDashArray  dashArray,
+    ,(parserLastSetter "stroke-dasharray" strokeDashArray
+        (parse dashArray)
+        (Just . serializeDashArray),
         cssDashArray strokeDashArray)
-    ,("text-anchor", \e s -> e & textAnchor .~ parseTextAnchor s,
-        cssIdentStringParser textAnchor parseTextAnchor)
+    ,(parserLastSetter "text-anchor" textAnchor parseTextAnchor
+        (Just . serializeTextAnchor),
+        cssIdentStringParser textAnchor (Last . parseTextAnchor))
     ]
-  where commaSeparate =
-            fmap (T.unpack . T.strip) . T.split (',' ==) . T.pack
+  where
+    commaSeparate =
+        fmap (T.unpack . T.strip) . T.split (',' ==) . T.pack
+
+serializeDashArray :: [Number] -> String
+serializeDashArray =
+   concat . intersperse ", " . fmap serializeNumber 
 
 instance XMLUpdatable DrawAttributes where
+  xmlTagName _ = "DRAWATTRIBUTES"
   defaultSvg = mempty
-  attributes =
-    stylePrepend [(attrName, updater)
-                    | (attrName, updater, _) <- drawAttributesList]
-    where stylePrepend lst = ("style", styleUpdater) : lst
+  attributes = styleAttribute : fmap fst drawAttributesList
+  serializeTreeNode = genericSerializeNode
 
-styleUpdater :: DrawAttributes -> String
-             -> DrawAttributes 
-styleUpdater attrs style = case parse styleString style of
-    Nothing -> attrs
-    Just decls -> foldl' applyer attrs decls
+styleAttribute :: SvgAttributeLens DrawAttributes
+styleAttribute = SvgAttributeLens
+  { _attributeName       = "style"
+  , _attributeUpdater    = updater
+  , _attributeSerializer = const Nothing
+  }
   where
-    cssUpdaters = [(T.pack n, u) | (n, _, u) <- drawAttributesList]
+    updater attrs style = case parse styleString style of
+        Nothing -> attrs
+        Just decls -> foldl' applyer attrs decls
+
+    cssUpdaters = [(T.pack $ _attributeName n, u) | (n, u) <- drawAttributesList]
     applyer value (CssDeclaration txt elems) =
         case lookup txt cssUpdaters of
           Nothing -> value
           Just f -> f value elems
 
 instance XMLUpdatable Rectangle where
+  xmlTagName _ = "rect"
   defaultSvg = defaultRectangle
+  serializeTreeNode = genericSerializeWithDrawAttr
   attributes =
-    [("width", numericSetter rectWidth)
-    ,("height", numericSetter rectHeight)
-    ,("x", numericSetter (rectUpperLeftCorner._1))
-    ,("y", numericSetter (rectUpperLeftCorner._2))
-    ,("rx", numericSetter (rectCornerRadius._1))
-    ,("ry", numericSetter (rectCornerRadius._2))
+    [numericSetter "width" rectWidth
+    ,numericSetter "height" rectHeight
+    ,numericSetter "x" (rectUpperLeftCorner._1)
+    ,numericSetter "y" (rectUpperLeftCorner._2)
+    ,numericSetter "rx" (rectCornerRadius._1)
+    ,numericSetter "ry" (rectCornerRadius._2)
     ]
 
 instance XMLUpdatable Line where
+  xmlTagName _ = "line"
   defaultSvg = defaultLine
+  serializeTreeNode = genericSerializeWithDrawAttr
   attributes =
-    [("x1", numericSetter $ linePoint1._1)
-    ,("y1", numericSetter $ linePoint1._2)
-    ,("x2", numericSetter $ linePoint2._1)
-    ,("y2", numericSetter $ linePoint2._2)
+    [numericSetter "x1" $ linePoint1._1
+    ,numericSetter "y1" $ linePoint1._2
+    ,numericSetter "x2" $ linePoint2._1
+    ,numericSetter "y2" $ linePoint2._2
     ]
 
 instance XMLUpdatable Ellipse where
+  xmlTagName _ = "ellipse"
   defaultSvg = defaultEllipse
+  serializeTreeNode = genericSerializeWithDrawAttr
   attributes =
-    [("cx", numericSetter $ ellipseCenter._1)
-    ,("cy", numericSetter $ ellipseCenter._2)
-    ,("rx", numericSetter ellipseXRadius)
-    ,("ry", numericSetter ellipseYRadius)
+    [numericSetter "cx" $ ellipseCenter._1
+    ,numericSetter "cy" $ ellipseCenter._2
+    ,numericSetter "rx" ellipseXRadius
+    ,numericSetter "ry" ellipseYRadius
     ]
 
 instance XMLUpdatable Circle where
+  xmlTagName _ = "circle"
   defaultSvg = defaultCircle
+  serializeTreeNode = genericSerializeWithDrawAttr
   attributes =
-    [("cx", numericSetter $ circleCenter._1)
-    ,("cy", numericSetter $ circleCenter._2)
-    ,("r", numericSetter circleRadius)
+    [numericSetter "cx" $ circleCenter._1
+    ,numericSetter "cy" $ circleCenter._2
+    ,numericSetter "r" circleRadius
     ]
 
 instance XMLUpdatable Polygon where
+  xmlTagName _ = "polygon"
   defaultSvg = defaultPolygon
+  serializeTreeNode = genericSerializeWithDrawAttr
   attributes =
-    [("points", parserSetter polygonPoints pointData)]
+    [parserSetter "points" polygonPoints
+        (parse pointData)
+        (Just . serializePoints)]
 
 instance XMLUpdatable PolyLine where
+  xmlTagName _ =  "polyline"
   defaultSvg = defaultPolyLine
+  serializeTreeNode = genericSerializeWithDrawAttr
   attributes = 
-    [("points", parserSetter polyLinePoints pointData)]
+    [parserSetter "points" polyLinePoints
+        (parse pointData)
+        (Just . serializePoints)]
 
 instance XMLUpdatable PathPrim where
+  xmlTagName _ =  "path"
   defaultSvg = defaultPathPrim
+  serializeTreeNode = genericSerializeWithDrawAttr
   attributes =
-    [("d", parserSetter pathDefinition (many1 command))]
+    [parserSetter "d" pathDefinition
+        (parse $ many1 command)
+        (Just . serializeCommands)]
 
 instance XMLUpdatable LinearGradient where
+  xmlTagName _ = "linearGradient"
   defaultSvg = defaultLinearGradient
+  serializeTreeNode node =
+     updateWithAccessor _linearGradientStops node $ genericSerializeNode node
+        
   attributes = 
-    [("gradientTransform",
-        parserSetter linearGradientTransform (many transformParser))
-    ,("gradientUnits",
-        \e s -> e & linearGradientUnits .~ parseGradientUnit s)
-    ,("spreadMethod",
-        \e s -> e & linearGradientSpread .~ parseGradientSpread s)
-    ,("x1", numericSetter $ linearGradientStart._1)
-    ,("y1", numericSetter $ linearGradientStart._2)
-    ,("x2", numericSetter $ linearGradientStop._1)
-    ,("y2", numericSetter $ linearGradientStop._2)
+    [parserSetter "gradientTransform" linearGradientTransform
+        (parse $ many transformParser)
+        (Just . serializeTransformations)
+    ,parserSetter "gradientUnits" linearGradientUnits
+        (Just . parseGradientUnit)
+        (Just . serializeGradientUnit)
+    ,parserSetter "spreadMethod" linearGradientSpread
+        (Just . parseGradientSpread)
+        (Just . serializeGradientSpread)
+    ,numericSetter "x1" $ linearGradientStart._1
+    ,numericSetter "y1" $ linearGradientStart._2
+    ,numericSetter "x2" $ linearGradientStop._1
+    ,numericSetter "y2" $ linearGradientStop._2
     ]
 
-instance XMLUpdatable (Group a) where
+instance XMLUpdatable Tree where
+  xmlTagName _ = "TREE"
+  defaultSvg = None
+  attributes = []
+  serializeTreeNode e = case e of
+    None -> X.blank_element
+    UseTree u _ -> serializeTreeNode u
+    GroupTree g -> serializeTreeNode g
+    SymbolTree s -> serializeTreeNode s
+    Path p -> serializeTreeNode p
+    CircleTree c -> serializeTreeNode c
+    PolyLineTree p -> serializeTreeNode p
+    PolygonTree p -> serializeTreeNode p
+    EllipseTree el -> serializeTreeNode el
+    LineTree l -> serializeTreeNode l
+    RectangleTree r -> serializeTreeNode r
+    TextArea Nothing t -> serializeTreeNode t
+    TextArea (Just p) t ->
+        setChildren textNode [X.Elem . setChildren pathNode $ X.elContent textNode]
+      where
+        textNode = serializeTreeNode t
+        pathNode = serializeTreeNode p
+
+
+isNotNone :: Tree -> Bool
+isNotNone None = False
+isNotNone _ = True
+
+instance XMLUpdatable (Group Tree) where
+  xmlTagName _ = "g"
+  serializeTreeNode node =
+     updateWithAccessor (filter isNotNone . _groupChildren) node $
+        genericSerializeWithDrawAttr node
   defaultSvg = defaultGroup
   attributes = []
 
-instance XMLUpdatable (Symbol a) where
+instance XMLUpdatable (Symbol Tree) where
+  xmlTagName _ = "symbol"
   defaultSvg = Symbol defaultSvg
+  serializeTreeNode node =
+     updateWithAccessor (filter isNotNone . _groupChildren . _groupOfSymbol) node $
+        genericSerializeWithDrawAttr node
   attributes =
-        [("viewBox", parserMaySetter (groupOfSymbol . groupViewBox) viewBox)]
+        [parserMaySetter "viewBox" (groupOfSymbol . groupViewBox)
+            (parse viewBox)
+            (Just . serializeViewBox)
+        ]
 
 
 instance XMLUpdatable RadialGradient where
+  xmlTagName _ = "radialGradient"
   defaultSvg = defaultRadialGradient
+  serializeTreeNode node =
+     updateWithAccessor _radialGradientStops node $ genericSerializeNode node
   attributes =
-    [("gradientTransform",
-        parserSetter radialGradientTransform (many transformParser))
-    ,("gradientUnits",
-        \e s -> e & radialGradientUnits .~ parseGradientUnit s)
-    ,("spreadMethod",
-        \e s -> e & radialGradientSpread .~ parseGradientSpread s)
-    ,("cx", numericSetter $ radialGradientCenter._1)
-    ,("cy", numericSetter $ radialGradientCenter._2)
-    ,("r", numericSetter radialGradientRadius)
-    ,("fx", numericMaySetter radialGradientFocusX)
-    ,("fy", numericMaySetter radialGradientFocusY)
+    [parserSetter "gradientTransform" radialGradientTransform
+        (parse $ many transformParser)
+        (Just . serializeTransformations)
+    ,parserSetter "gradientUnits" radialGradientUnits
+        (Just . parseGradientUnit)
+        (Just . serializeGradientUnit)
+    ,parserSetter "spreadMethod" radialGradientSpread
+        (Just . parseGradientSpread)
+        (Just . serializeGradientSpread)
+    ,numericSetter "cx" $ radialGradientCenter._1
+    ,numericSetter "cy" $ radialGradientCenter._2
+    ,numericSetter "r" radialGradientRadius
+    ,numericMaySetter "fx" radialGradientFocusX
+    ,numericMaySetter "fy" radialGradientFocusY
     ]
 
 instance XMLUpdatable Use where
+  xmlTagName _ = "use"
   defaultSvg = defaultUse
+  serializeTreeNode = genericSerializeWithDrawAttr
   attributes =
-    [("x", numericSetter $ useBase._1)
-    ,("y", numericSetter $ useBase._2)
-    ,("width", numericMaySetter useWidth)
-    ,("height", numericMaySetter useHeight)
-    ,("href", \e s -> e & useName .~ dropSharp s)
+    [numericSetter "x" $ useBase._1
+    ,numericSetter "y" $ useBase._2
+    ,numericMaySetter "width" useWidth
+    ,numericMaySetter "height" useHeight
+    ,parserSetter "href" useName (Just . dropSharp) (Just . ('#':))
     ]
 
 dropSharp :: String -> String
@@ -412,15 +633,27 @@ dropSharp ('#':rest) = rest
 dropSharp a = a
 
 instance XMLUpdatable TextInfo where
+  xmlTagName _ = "tspan"
   defaultSvg = defaultTextInfo
+  serializeTreeNode = genericSerializeNode
   attributes =
-    [("x", parserSetter textInfoX dashArray)
-    ,("y", parserSetter textInfoY dashArray)
-    ,("dx", parserSetter textInfoDX dashArray)
-    ,("dy", parserSetter textInfoDY dashArray)
-    ,("rotate", parserSetter textInfoRotate numberList )
-    ,("textLength", numericMaySetter textInfoLength)
+    [parserSetter "x" textInfoX (parse dashArray) dashNotEmpty
+    ,parserSetter "y" textInfoY (parse dashArray) dashNotEmpty
+    ,parserSetter "dx" textInfoDX (parse dashArray) dashNotEmpty
+    ,parserSetter "dy" textInfoDY (parse dashArray) dashNotEmpty
+    ,parserSetter "rotate" textInfoRotate 
+        (parse numberList)
+        rotateNotEmpty
+    ,numericMaySetter "textLength" textInfoLength
     ]
+    where
+      dashNotEmpty [] = Nothing
+      dashNotEmpty lst = Just $ serializeDashArray lst
+
+      rotateNotEmpty [] = Nothing
+      rotateNotEmpty lst =
+          Just . concat . intersperse " " $ (printf "%g") <$> lst
+
 
 parseTextPathMethod :: String -> TextPathMethod
 parseTextPathMethod s = case s of
@@ -428,39 +661,78 @@ parseTextPathMethod s = case s of
   "stretch" -> TextPathStretch
   _ -> _textPathMethod defaultTextPath
 
+serializeTextPathMethod :: TextPathMethod -> String
+serializeTextPathMethod m = case m of
+  TextPathAlign -> "align"
+  TextPathStretch -> "stretch"
+
 parseTextPathSpacing :: String -> TextPathSpacing
 parseTextPathSpacing s = case s of
   "auto" -> TextPathSpacingAuto
   "exact" -> TextPathSpacingExact
   _ -> _textPathSpacing defaultTextPath
 
+serializeTextPathSpacing :: TextPathSpacing -> String
+serializeTextPathSpacing s = case s of
+  TextPathSpacingAuto -> "auto"
+  TextPathSpacingExact -> "exact"
+
 instance XMLUpdatable TextPath where
+  xmlTagName _ =  "textPath"
   defaultSvg = defaultTextPath
+  serializeTreeNode = genericSerializeNode
   attributes =
-    [("startOffset", numericSetter textPathStartOffset)
-    ,("method",
-        \e s -> e & textPathMethod .~ parseTextPathMethod s)
-    ,("spacing",
-        \e s -> e & textPathSpacing .~ parseTextPathSpacing s)
-    ,("href", \e s -> e & textPathName .~ dropSharp s)
+    [numericSetter "startOffset" textPathStartOffset
+    ,parserSetter "method"textPathMethod
+        (Just . parseTextPathMethod)
+        (Just . serializeTextPathMethod)
+    ,parserSetter "spacing" textPathSpacing
+        (Just . parseTextPathSpacing)
+        (Just . serializeTextPathSpacing)
+    ,parserSetter "href" textPathName (Just . dropSharp) (Just . ('#':))
     ]
 
 instance XMLUpdatable Text where
+  xmlTagName _ = "text"
   defaultSvg = defaultText
+  serializeTreeNode = serializeText
   attributes =
-      [("lengthAdjust", \e s -> e & textAdjust .~ parseTextAdjust s)]
+      [parserSetter "lengthAdjust" textAdjust 
+         (Just . parseTextAdjust)
+         (Just . serializeTextAdjust)]
 
 
 instance XMLUpdatable Pattern where
+  xmlTagName _ = "pattern"
   defaultSvg = defaultPattern
+  serializeTreeNode node =
+     updateWithAccessor _patternElements node $ genericSerializeNode node
   attributes =
-    [("viewBox", \e s -> e & patternViewBox .~ parse viewBox s)
-    ,("width", numericSetter patternWidth)
-    ,("height", numericSetter patternHeight)
-    ,("x", numericSetter (patternPos._1))
-    ,("y", numericSetter (patternPos._2))
+    [parserMaySetter "viewBox" patternViewBox 
+        (parse viewBox)
+        (Just . serializeViewBox)
+    ,parserSetter "patternUnits" patternUnit
+        parsePatternUnit
+        (Just . serializePatternUnit)
+    ,numericSetter "width" patternWidth
+    ,numericSetter "height" patternHeight
+    ,numericSetter "x" (patternPos._1)
+    ,numericSetter "y" (patternPos._2)
     ]
 
+serializeText :: Text -> X.Element
+serializeText topText = topNode { X.elName = X.unqual "text" } where
+  topNode = serializeSpan $ _textRoot topText 
+  
+  serializeSpan tspan = setChildren (mergeAttributes info drawInfo) subContent
+    where
+      info = genericSerializeNode $ _spanInfo tspan
+      drawInfo = genericSerializeNode $ _spanDrawAttributes tspan
+      subContent = serializeContent <$> _spanContent tspan
+
+  serializeContent (SpanText t) = X.Text $ X.blank_cdata { X.cdData = T.unpack t }
+  serializeContent (SpanTextRef _t) = X.Text $ X.blank_cdata { X.cdData = "" }
+  serializeContent (SpanSub sub) = X.Elem $ serializeSpan sub
 
 unparseText :: [X.Content] -> ([TextSpanContent], Maybe TextPath)
 unparseText = extractResult . go True
@@ -518,29 +790,40 @@ unparseText = extractResult . go True
                    . T.pack
                    $ X.cdData t
 
-gradientOffsetSetter :: GradientStop -> String -> GradientStop
-gradientOffsetSetter el str = el & gradientOffset .~ val
+gradientOffsetSetter :: SvgAttributeLens GradientStop
+gradientOffsetSetter = SvgAttributeLens "offset" setter serialize
   where
-    val = case parseMayStartDot complexNumber str of
-      Nothing -> 0
-      Just (Num n) -> n
-      Just (Percent n) -> n
-      Just (Em n) -> n
+    serialize a = Just $ printf "%d%%" percentage
+      where percentage = floor . (100 *) $ a ^. gradientOffset :: Int
+
+    setter el str = el & gradientOffset .~ val
+      where 
+        val = case parseMayStartDot complexNumber str of
+            Nothing -> 0
+            Just (Num n) -> n
+            Just (Percent n) -> n
+            Just (Em n) -> n
 
 instance XMLUpdatable GradientStop where
+    xmlTagName _ = "stop"
     defaultSvg = GradientStop 0 (PixelRGBA8 0 0 0 255)
+    serializeTreeNode = genericSerializeNode
     attributes =
-        [("offset", gradientOffsetSetter)
-        ,("stop-color", parserSetter gradientColor colorParser)]
+        [gradientOffsetSetter
+        ,parserSetter "stop-color" gradientColor
+            (parse colorParser)
+            (Just . colorSerializer)
+        ]
             
 
 data Symbols = Symbols
     { symbols :: !(M.Map String Element)
     , cssStyle   :: [CssRule]
+    , cssText    :: String
     }
 
 emptyState :: Symbols
-emptyState = Symbols mempty mempty
+emptyState = Symbols mempty mempty ""
  
 parseGradientStops :: X.Element -> [GradientStop]
 parseGradientStops = concatMap unStop . elChildren
@@ -577,31 +860,13 @@ unparseDefs e = do
   el <- unparse e
   withId e (const $ ElementGeometry el)
 
-treeModify
-    :: (forall a. (XMLUpdatable a, WithDrawAttributes a)
-            => a -> a)
-    -> Tree -> Tree
-treeModify f v = case v of
-  None -> None
-  UseTree n t -> UseTree n t
-  SymbolTree e -> SymbolTree $ f e
-  GroupTree e -> GroupTree $ f e
-  Path e -> Path $ f e
-  CircleTree e -> CircleTree $ f e
-  PolyLineTree e -> PolyLineTree $ f e
-  PolygonTree e -> PolygonTree $ f e
-  EllipseTree e -> EllipseTree $ f e
-  LineTree e -> LineTree $ f e
-  RectangleTree e -> RectangleTree $ f e
-  TextArea a e -> TextArea a $ f e
-
-
 unparse :: X.Element -> State Symbols Tree
 unparse e@(nodeName -> "style") = do
   case parseOnly (many1 ruleSet) . T.pack $ strContent e of
     Left _ -> return ()
     Right rules ->
-      modify $ \s -> s { cssStyle = cssStyle s ++ rules }
+      modify $ \s -> s { cssStyle = cssStyle s ++ rules
+                      , cssText = cssText s ++ "\n" ++ strContent e }
   return None
 unparse e@(nodeName -> "defs") = do
     mapM_ unparseDefs $ elChildren e
@@ -611,17 +876,17 @@ unparse e@(nodeName -> "symbol") = do
   let realChildren = filter isNotNone symbolChildren
   pure . SymbolTree $ groupNode & groupChildren .~ realChildren
   where
+    groupNode :: Group Tree
     groupNode = _groupOfSymbol $ xmlUnparseWithDrawAttr e
-    isNotNone None = False
-    isNotNone _ = True
 
 unparse e@(nodeName -> "g") = do
   children <- mapM unparse $ elChildren e
   let realChildren = filter isNotNone children
-  pure . GroupTree $ xmlUnparseWithDrawAttr e & groupChildren .~ realChildren
-  where
-    isNotNone None = False
-    isNotNone _ = True
+
+      groupNode :: Group Tree
+      groupNode = xmlUnparseWithDrawAttr e 
+
+  pure $ GroupTree $ groupNode & groupChildren .~ realChildren
 
 unparse e@(nodeName -> "text") = do
   pathWithGeometry <- pathGeomtryOf path
@@ -672,35 +937,17 @@ unparse e@(nodeName -> "use") = do
     Just (ElementGeometry g) -> pure $ UseTree useInfo g
 unparse _ = pure None
 
-cssDeclApplyer :: DrawAttributes -> CssDeclaration
-               -> DrawAttributes 
-cssDeclApplyer value (CssDeclaration txt elems) = 
-   case lookup txt cssUpdaters of
-     Nothing -> value
-     Just f -> f value elems
-  where
-    cssUpdaters = [(T.pack n, u) | (n, _, u) <- drawAttributesList]
-
-cssApply :: [CssRule] -> Tree -> Tree
-cssApply rules = zipTree go where
-  go [] = None
-  go ([]:_) = None
-  go context@((t:_):_) = t & drawAttr .~ attr'
-   where
-     matchingDeclarations =
-         findMatchingDeclarations rules context
-     attr = view drawAttr t
-     attr' = foldl' cssDeclApplyer attr matchingDeclarations
-   
-
 unparseDocument :: X.Element -> Maybe Document
 unparseDocument e@(nodeName -> "svg") = Just $ Document 
     { _viewBox =
         attributeFinder "viewBox" e >>= parse viewBox
-    , _elements = cssApply (cssStyle named) <$> elements
+    , _elements = elements
     , _width = lengthFind "width"
     , _height = lengthFind "height"
     , _definitions = symbols named
+    , _description = ""
+    , _styleRules = cssStyle named
+    , _styleText = cssText named
     }
   where
     (elements, named) =
@@ -708,4 +955,54 @@ unparseDocument e@(nodeName -> "svg") = Just $ Document
     lengthFind n =
         attributeFinder n e >>= parse complexNumber
 unparseDocument _ = Nothing   
+
+xmlOfDocument :: Document -> X.Element
+xmlOfDocument doc =
+    X.node (X.unqual "svg") (attrs, descTag ++ styleTag ++ defsTag ++ children)
+  where
+    attr name = X.Attr (X.unqual name)
+    children = [serializeTreeNode el | el <- _elements doc, isNotNone el ]
+
+    defsTag | null defs = []
+            | otherwise = [X.node (X.unqual "defs") defs]
+
+    defs = [elementRender k e | (k, e) <- M.assocs $ _definitions doc
+                              , isElementNotNone e]
+
+    isElementNotNone (ElementGeometry el) = isNotNone el
+    isElementNotNone _ = True
+
+    elementRender k e = case e of
+        ElementGeometry t -> serializeTreeNode t
+        ElementLinearGradient lg ->
+            X.add_attr (attr "id" k) $ serializeTreeNode lg
+        ElementRadialGradient rg ->
+            X.add_attr (attr "id" k) $ serializeTreeNode rg
+        ElementPattern p ->
+            X.add_attr (attr "id" k) $ serializeTreeNode p
+
+    docViewBox = case _viewBox doc of
+        Nothing -> []
+        Just b -> [attr "viewBox" $ serializeViewBox b]
+
+    {-style [] = []-}
+    {-style lst =-}
+
+    descTag = case _description doc of
+        "" -> []
+        txt -> [X.node (X.unqual "desc") txt]
+
+    styleTag = case _styleText doc of
+        "" -> []
+        txt -> [X.node (X.unqual "style")
+                    ([attr "type" "text/css"], txt)]
+
+    attrs =
+        docViewBox ++
+        [attr "xmlns" "http://www.w3.org/2000/svg"
+        ,attr "xmlns:xlink" "http://www.w3.org/1999/xlink"
+        ,attr "version" "1.1"] ++
+        catMaybes [attr "width" . serializeNumber <$> _width doc
+                  ,attr "height" . serializeNumber <$> _height doc
+                  ]
 

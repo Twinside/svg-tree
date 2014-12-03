@@ -1,14 +1,14 @@
 {-# LANGUAGE ScopedTypeVariables     #-}
 {-# LANGUAGE TupleSections #-}
-module Graphics.Svg.RasterificRender where
+module Graphics.Svg.RasterificRender( renderSvgDocument ) where
 
-import Data.Monoid( mempty, (<>) )
+import Data.Monoid( Last( .. ), mempty, (<>) )
+import Data.Maybe( fromMaybe  )
 import Control.Monad( foldM )
 import Control.Monad.Trans.State.Strict( runStateT )
 import Control.Applicative( (<$>) )
 import Codec.Picture( Image, PixelRGBA8( .. ) )
 import qualified Data.Foldable as F
-import Data.Monoid( Last( .. ) )
 import qualified Graphics.Rasterific as R
 import Graphics.Rasterific.Linear( V2( V2 ), (^-^), zero )
 import Graphics.Rasterific.Outline
@@ -112,7 +112,8 @@ filler :: RenderContext
        -> IODraw (R.Drawing PixelRGBA8 ())
 filler ctxt info primitives =
   withInfo (getLast . _fillColor) info $ \svgTexture ->
-    withSvgTexture ctxt info svgTexture (_fillOpacity info) primitives
+    let opacity = fromMaybe 1.0 $ _fillOpacity info in
+    withSvgTexture ctxt info svgTexture opacity primitives
 
 stroker :: RenderContext -> DrawAttributes -> [R.Primitive]
         -> IODraw (R.Drawing PixelRGBA8 ())
@@ -129,9 +130,10 @@ stroker ctxt info primitives =
                   realWidth (joinOfSvg info) (capOfSvg info) primitives
             Nothing ->
               [strokize realWidth (joinOfSvg info) (capOfSvg info) primitives]
+          opacity = fromMaybe 1.0 $ _strokeOpacity info
           strokerAction acc prims =
            (acc <>) <$>
-               withSvgTexture ctxt info svgTexture (_strokeOpacity info) prims
+               withSvgTexture ctxt info svgTexture opacity prims
             
       in
       foldM strokerAction mempty primsList
@@ -151,9 +153,9 @@ renderSvg initialContext = go initialContext initialAttr
              , _strokeLineCap = Last $ Just CapButt
              , _strokeLineJoin = Last $ Just JoinMiter
              , _strokeMiterLimit = Last $ Just 4.0
-             , _strokeOpacity = 1.0
+             , _strokeOpacity = Just 1.0
              , _fillColor = Last . Just . ColorRef $ PixelRGBA8 0 0 0 255
-             , _fillOpacity = 1.0
+             , _fillOpacity = Just 1.0
              , _fillRule = Last $ Just FillNonZero
              , _fontSize = Last . Just $ Num 12
              , _fontFamily = Last $ Just ["Verdana"]
