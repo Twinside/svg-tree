@@ -31,6 +31,12 @@ module Graphics.Svg.Types
     , GradientStop( .. )
     , HasGradientStop( .. )
 
+    , Marker( .. )
+    , MarkerOrientation( .. )
+    , MarkerUnit( .. )
+    , HasMarker( .. )
+    , defaultMarker
+
     , LinearGradient( .. )
     , defaultLinearGradient
     , HasLinearGradient( .. )
@@ -567,6 +573,43 @@ data Tree
     | TextArea      !(Maybe TextPath) !Text
     deriving (Eq, Show)
 
+data MarkerOrientation
+  = OrientationAuto
+  | OrientationAngle Coord
+  deriving (Eq, Show)
+
+data MarkerUnit
+  = MarkerUnitStrokeWidth
+  | MarkerUnitUserSpaceOnUse
+  deriving (Eq, Show)
+
+data Marker = Marker
+  { _markerDrawAttributes :: DrawAttributes
+  , _markerRefPoint :: (Number, Number)
+  , _markerWidth    :: Number
+  , _markerHeight   :: Number
+  , _markerOrient   :: Maybe MarkerOrientation
+  , _markerUnits    :: Maybe MarkerUnit
+  , _markerElements :: [Tree]
+  }
+  deriving (Eq, Show)
+
+makeClassy ''Marker
+
+instance WithDrawAttributes Marker where
+    drawAttr = markerDrawAttributes
+
+defaultMarker :: Marker
+defaultMarker = Marker
+  { _markerDrawAttributes = mempty
+  , _markerRefPoint = (Num 0, Num 0)
+  , _markerWidth = Num 0
+  , _markerHeight = Num 0
+  , _markerOrient = Nothing -- MarkerOrientation
+  , _markerUnits = Nothing -- MarkerUnitStrokeWidth
+  , _markerElements = []
+  }
+
 appNode :: [[a]] -> a -> [[a]]
 appNode [] e = [[e]]
 appNode (curr:above) e = (e:curr) : above
@@ -720,7 +763,8 @@ data PatternUnit
   deriving (Eq, Show)
 
 data Pattern = Pattern
-    { _patternViewBox  :: Maybe (Int, Int, Int, Int)
+    { _patternDrawAttributes :: DrawAttributes
+    , _patternViewBox  :: Maybe (Int, Int, Int, Int)
     , _patternWidth    :: Number
     , _patternHeight   :: Number
     , _patternPos      :: Point
@@ -731,6 +775,9 @@ data Pattern = Pattern
 
 makeClassy ''Pattern
 
+instance WithDrawAttributes Pattern where
+    drawAttr = patternDrawAttributes
+
 defaultPattern :: Pattern
 defaultPattern = Pattern
   { _patternViewBox  = Nothing
@@ -739,6 +786,7 @@ defaultPattern = Pattern
   , _patternPos      = (Num 0, Num 0)
   , _patternElements = []
   , _patternUnit = PatternUnitObjectBoundingBox
+  , _patternDrawAttributes = mempty
   }
 
 data Element
@@ -746,6 +794,7 @@ data Element
     | ElementRadialGradient RadialGradient
     | ElementGeometry Tree
     | ElementPattern  Pattern
+    | ElementMarker Marker
     deriving Show
 
 {-

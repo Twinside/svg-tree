@@ -208,6 +208,7 @@ prepareTexture ctxt attr (TextureRef ref) opacity prims =
         M.lookup ref (_contextDefinitions ctxt)
   where
     prepare (ElementGeometry _) = return Nothing
+    prepare (ElementMarker _) = return Nothing
     prepare (ElementLinearGradient grad) =
       return . Just $ prepareLinearGradientTexture ctxt 
                         attr grad opacity prims

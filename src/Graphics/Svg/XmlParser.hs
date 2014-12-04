@@ -21,6 +21,7 @@ import Data.Maybe( catMaybes )
 import Data.Monoid( mempty, Last( Last ), getLast )
 import Data.List( foldl', intersperse )
 import Text.XML.Light.Proc( findAttrBy, elChildren, strContent )
+import Text.Read( readMaybe )
 import qualified Text.XML.Light as X
 import qualified Data.Text as T
 import qualified Data.Map as M
@@ -138,6 +139,28 @@ serializeTextAdjust :: TextAdjust -> String
 serializeTextAdjust adj = case adj of
     TextAdjustSpacing -> "spacing"
     TextAdjustSpacingAndGlyphs -> "spacingAndGlyphs"
+
+parseMarkerUnit :: String -> Maybe MarkerUnit
+parseMarkerUnit s = case s of
+  "strokeWidth" -> Just MarkerUnitStrokeWidth
+  "userSpaceOnUse" -> Just MarkerUnitUserSpaceOnUse
+  _ -> Nothing
+
+serializeMarkerUnit :: MarkerUnit -> String
+serializeMarkerUnit u = case u of
+  MarkerUnitStrokeWidth -> "strokeWidth"
+  MarkerUnitUserSpaceOnUse -> "userSpaceOnUse"
+
+parseOrientation :: String -> Maybe MarkerOrientation
+parseOrientation s = case (s, readMaybe s) of
+    ("auto", _) -> Just OrientationAuto
+    (_, Just f) -> Just $ OrientationAngle f
+    _ -> Nothing
+
+serializeOrientation :: MarkerOrientation -> String
+serializeOrientation s = case s of
+    OrientationAuto -> "auto"
+    OrientationAngle f -> show f
 
 parse :: Parser a -> String -> Maybe a
 parse p str = case parseOnly p (T.pack str) of
@@ -720,6 +743,24 @@ instance XMLUpdatable Pattern where
     ,numericSetter "y" (patternPos._2)
     ]
 
+instance XMLUpdatable Marker where
+  xmlTagName _ = "marker"
+  defaultSvg = defaultMarker
+  serializeTreeNode node =
+     updateWithAccessor _markerElements node $ genericSerializeNode node
+  attributes =
+    [numericSetter "refX" (markerRefPoint._1)
+    ,numericSetter "refY" (markerRefPoint._2)
+    ,numericSetter "markerWidth" markerWidth
+    ,numericSetter "markerHeight" markerHeight
+    ,parserMaySetter "patternUnits" markerUnits
+        parseMarkerUnit
+        (Just . serializeMarkerUnit)
+    ,parserMaySetter "patternUnits" markerOrient
+        parseOrientation
+        (Just . serializeOrientation)
+    ]
+
 serializeText :: Text -> X.Element
 serializeText topText = topNode { X.elName = X.unqual "text" } where
   topNode = serializeSpan $ _textRoot topText 
@@ -846,6 +887,11 @@ unparseDefs e@(nodeName -> "pattern") = do
   withId e . const . ElementPattern $ pat { _patternElements = subElements}
     where
       pat = xmlUnparse e
+unparseDefs e@(nodeName -> "marker") = do
+  subElements <- mapM unparse $ elChildren e
+  withId e . const . ElementMarker $ mark {_markerElements = subElements }
+    where
+      mark = xmlUnparseWithDrawAttr e
 unparseDefs e@(nodeName -> "linearGradient") =
   withId e $ ElementLinearGradient . unparser
   where
@@ -902,6 +948,7 @@ unparse e@(nodeName -> "text") = do
           Just (ElementLinearGradient _) -> pure Nothing
           Just (ElementRadialGradient _) -> pure Nothing
           Just (ElementPattern _) -> pure Nothing
+          Just (ElementMarker _) -> pure Nothing
           Just (ElementGeometry (Path p)) ->
               pure . Just $ pathInfo { _textPathData = _pathDefinition p }
           Just (ElementGeometry _) -> pure Nothing
@@ -934,6 +981,7 @@ unparse e@(nodeName -> "use") = do
     Just (ElementLinearGradient _) -> pure None
     Just (ElementRadialGradient _) -> pure None
     Just (ElementPattern _) -> pure None
+    Just (ElementMarker _) -> pure None
     Just (ElementGeometry g) -> pure $ UseTree useInfo g
 unparse _ = pure None
 
@@ -974,12 +1022,12 @@ xmlOfDocument doc =
 
     elementRender k e = case e of
         ElementGeometry t -> serializeTreeNode t
+        ElementMarker m -> serializeTreeNode m
+        ElementPattern p -> serializeTreeNode p
         ElementLinearGradient lg ->
             X.add_attr (attr "id" k) $ serializeTreeNode lg
         ElementRadialGradient rg ->
             X.add_attr (attr "id" k) $ serializeTreeNode rg
-        ElementPattern p ->
-            X.add_attr (attr "id" k) $ serializeTreeNode p
 
     docViewBox = case _viewBox doc of
         Nothing -> []
