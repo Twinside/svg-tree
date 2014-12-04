@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 -- | Define the types used to describes CSS elements
 module Graphics.Svg.CssTypes
     ( CssSelector( .. )
@@ -9,12 +10,21 @@ module Graphics.Svg.CssTypes
     , CssMatcheable( .. )
     , CssContext
     , Number( .. )
+    , serializeNumber
     , findMatchingDeclarations
     ) where
 
-import Codec.Picture( PixelRGBA8 )
+import Data.Monoid( mconcat, (<>) )
+import Data.List( intersperse )
 import qualified Data.Text as T
+import qualified Data.Text.Lazy.Builder as TB
+import Text.Printf
+
+import Codec.Picture( PixelRGBA8( .. ) )
 {-import Debug.Trace-}
+
+class TextBuildable a where
+    tserialize :: a -> TB.Builder
 
 data CssDescriptor
   = OfClass T.Text    -- ^ .IDENT
@@ -25,17 +35,50 @@ data CssDescriptor
   | WithAttrib T.Text T.Text
   deriving (Eq, Show)
 
+instance TextBuildable CssDescriptor where
+  tserialize d = case d of
+      OfClass c -> si '.' <> ft c
+      OfName  n -> ft n
+      OfId    i -> si '#' <> ft i
+      OfPseudoClass c -> si '#' <> ft c
+      AnyElem -> si '*'
+      WithAttrib a b -> mconcat [si '[', ft a, si '=', ft b, si ']']
+     where
+      ft = TB.fromText 
+      si = TB.singleton
+
 data CssSelector
   = Nearby          -- ^ '+'
   | DirectChildren  -- ^ '>'
   | AllOf [CssDescriptor]
   deriving (Eq, Show)
 
+instance TextBuildable CssSelector where
+  tserialize s = case s of
+      Nearby -> si '+'
+      DirectChildren -> si '>'
+      AllOf lst ->
+        mconcat . intersperse (si ' ') $ map tserialize lst
+    where
+      si = TB.singleton
+
 data CssRule = CssRule
     { cssRuleSelector :: ![[CssSelector]]
     , cssDeclarations :: ![CssDeclaration]
     }
     deriving (Eq, Show)
+
+instance TextBuildable CssRule where
+  tserialize (CssRule selectors decl) =
+      mconcat tselectors
+                 <> ft " {\n"
+                 <> mconcat (fmap tserializeDecl decl)
+                 <> ft "}\n"
+     where
+      ft = TB.fromText 
+      tserializeDecl d = ft "  " <> tserialize d <> ft ";\n"
+      tselectors =
+          intersperse (ft ",\n") . fmap tserialize $ concat selectors
 
 class CssMatcheable a where
   cssIdOf     :: a -> Maybe T.Text
@@ -82,11 +125,29 @@ data CssDeclaration
     = CssDeclaration T.Text [[CssElement]]
     deriving (Eq, Show)
 
+instance TextBuildable CssDeclaration where
+  tserialize (CssDeclaration n elems) =
+      mconcat $ ft n : ft ": " : intersperse (si ' ') finalElems
+     where
+      finalElems = map tserialize (concat elems)
+      ft = TB.fromText 
+      si = TB.singleton
+
+
 data Number
     = Num Float
     | Em Float
     | Percent Float
     deriving (Eq, Show)
+
+serializeNumber :: Number -> String
+serializeNumber n = case n of
+    Num c -> printf "%g" c
+    Em cc -> printf "%gem" cc
+    Percent p -> printf "%d%%" $ (floor $ 100 * p :: Int)
+
+instance TextBuildable Number where
+   tserialize = TB.fromText . T.pack . serializeNumber
 
 data CssElement
     = CssIdent    !T.Text
@@ -97,4 +158,19 @@ data CssElement
     | CssOpComa
     | CssOpSlash
     deriving (Eq, Show)
+
+instance TextBuildable CssElement where
+  tserialize e = case e of
+    CssIdent    n -> ft n
+    CssString   s -> si '"' <> ft s <> si '"'
+    CssNumber   n -> tserialize n
+    CssColor  (PixelRGBA8 r g b _) ->
+      ft . T.pack $ printf  "#%02X%02X%02X" r g b
+    CssFunction t els -> mconcat $ ft t : si '(' : args ++ [si ')']
+        where args = intersperse (ft ", ") (map tserialize els)
+    CssOpComa -> si ','
+    CssOpSlash -> si '/'
+    where
+      ft = TB.fromText 
+      si = TB.singleton
 

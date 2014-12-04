@@ -166,12 +166,6 @@ data Path
     | EndPath
     deriving (Eq, Show)
 
-serializeNumber :: Number -> String
-serializeNumber n = case n of
-  Num c -> printf "%g" c
-  Em cc -> printf "%gem" cc
-  Percent p -> printf "%d%%" $ (floor $ 100 * p :: Int)
-
 type Point = (Number, Number)
 
 toPoint :: Number -> Number -> Point
