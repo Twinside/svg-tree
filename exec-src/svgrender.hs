@@ -121,7 +121,7 @@ analyzeFolder cache folder = do
         (finalImage, _) <- renderSvgDocument cache Nothing d
         writePng (testFileOfPath p) finalImage
 
-        putStrLn $ "   => XMLize"
+        putStrLn "   => XMLize"
         saveXmlFile (svgTestFileOfPath p) d
 
 

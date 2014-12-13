@@ -144,7 +144,7 @@ serializeNumber :: Number -> String
 serializeNumber n = case n of
     Num c -> printf "%g" c
     Em cc -> printf "%gem" cc
-    Percent p -> printf "%d%%" $ (floor $ 100 * p :: Int)
+    Percent p -> printf "%d%%" (floor $ 100 * p :: Int)
 
 instance TextBuildable Number where
    tserialize = TB.fromText . T.pack . serializeNumber

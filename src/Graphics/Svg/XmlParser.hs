@@ -19,7 +19,7 @@ import Control.Monad( join )
 import Control.Monad.State.Strict( State, runState, modify, gets )
 import Data.Maybe( catMaybes )
 import Data.Monoid( mempty, Last( Last ), getLast )
-import Data.List( foldl', intersperse )
+import Data.List( foldl', intercalate )
 import Text.XML.Light.Proc( findAttrBy, elChildren, strContent )
 import Text.Read( readMaybe )
 import qualified Text.XML.Light as X
@@ -214,7 +214,7 @@ genericSerializeNode node =
   where
     generateAttribute attr = case _attributeSerializer attr node of
       Nothing -> []
-      Just str -> return $ X.Attr
+      Just str -> return X.Attr
         { X.attrKey = xName $ _attributeName attr
         , X.attrVal = str
         }
@@ -425,7 +425,7 @@ drawAttributesList =
         cssUniqueFloat strokeOpacity)
     ,(numericLastSetter "font-size" fontSize, cssUniqueNumber fontSize)
     ,(parserLastSetter "font-family" fontFamily (Just . commaSeparate)
-        (Just . concat . intersperse ", "),
+        (Just . intercalate ", "),
         cssIdentStringParser fontFamily (\s -> Last (Just $ commaSeparate s)))
         
     ,(parserLastSetter "fill-rule" fillRule parseFillRule
@@ -449,7 +449,7 @@ drawAttributesList =
 
 serializeDashArray :: [Number] -> String
 serializeDashArray =
-   concat . intersperse ", " . fmap serializeNumber 
+   intercalate ", " . fmap serializeNumber 
 
 instance XMLUpdatable DrawAttributes where
   xmlTagName _ = "DRAWATTRIBUTES"
@@ -675,7 +675,7 @@ instance XMLUpdatable TextInfo where
 
       rotateNotEmpty [] = Nothing
       rotateNotEmpty lst =
-          Just . concat . intersperse " " $ (printf "%g") <$> lst
+          Just . unwords $ printf "%g" <$> lst
 
 
 parseTextPathMethod :: String -> TextPathMethod
@@ -896,12 +896,12 @@ unparseDefs e@(nodeName -> "linearGradient") =
   withId e $ ElementLinearGradient . unparser
   where
     unparser ee =
-      (xmlUnparse ee) & linearGradientStops .~ parseGradientStops ee
+      xmlUnparse ee & linearGradientStops .~ parseGradientStops ee
 unparseDefs e@(nodeName -> "radialGradient") =
   withId e $ ElementRadialGradient . unparser
   where
     unparser ee =
-      (xmlUnparse ee) & radialGradientStops .~ parseGradientStops ee
+      xmlUnparse ee & radialGradientStops .~ parseGradientStops ee
 unparseDefs e = do
   el <- unparse e
   withId e (const $ ElementGeometry el)
@@ -986,7 +986,7 @@ unparse e@(nodeName -> "use") = do
 unparse _ = pure None
 
 unparseDocument :: X.Element -> Maybe Document
-unparseDocument e@(nodeName -> "svg") = Just $ Document 
+unparseDocument e@(nodeName -> "svg") = Just Document 
     { _viewBox =
         attributeFinder "viewBox" e >>= parse viewBox
     , _elements = elements

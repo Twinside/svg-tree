@@ -13,7 +13,6 @@ import Control.Applicative( (<$>), (<$)
                           , (<*>), (<*), (*>)
                           , (<|>)
                           )
-import Data.List( intersperse )
 import Data.Scientific( toRealFloat )
 import Data.Attoparsec.Text
     ( Parser
@@ -101,28 +100,26 @@ serializePoint :: R.Point -> String
 serializePoint (V2 x y) = printf "%g,%g" x y
 
 serializePoints :: [R.Point] -> String
-serializePoints = concat . intersperse " " . fmap serializePoint
+serializePoints = unwords . fmap serializePoint
 
 serializeCoords :: [Coord] -> String
-serializeCoords = concat . intersperse " " . fmap (printf "%g")
+serializeCoords = unwords . fmap (printf "%g")
 
 serializePointPair :: (R.Point, R.Point) -> String
 serializePointPair (a, b) = serializePoint a ++ " " ++ serializePoint b
 
 serializePointPairs :: [(R.Point, R.Point)] -> String
-serializePointPairs =
-    concat . intersperse " " . fmap serializePointPair
+serializePointPairs = unwords . fmap serializePointPair
 
 serializePointTriplet :: (R.Point, R.Point, R.Point) -> String
 serializePointTriplet (a, b, c) =
     serializePoint a ++ " " ++ serializePoint b ++ " " ++ serializePoint c
 
 serializePointTriplets :: [(R.Point, R.Point, R.Point)] -> String
-serializePointTriplets =
-    concat . intersperse " " . fmap serializePointTriplet
+serializePointTriplets = unwords . fmap serializePointTriplet
 
 serializeCommands :: [Path] -> String
-serializeCommands = concat . intersperse " " . fmap serializeCommand
+serializeCommands = unwords . fmap serializeCommand
 
 serializeCommand :: Path -> String
 serializeCommand p = case p of
@@ -150,8 +147,7 @@ serializeCommand p = case p of
   where
     serializeArg (a, b, c, d, e, V2 x y) =
         printf "%g %g %g %g %g %g,%g" a b c d e x y
-    serializeArgs =
-        concat . intersperse " " . fmap serializeArg 
+    serializeArgs = unwords . fmap serializeArg 
 
 
 

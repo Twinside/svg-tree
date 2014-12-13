@@ -31,6 +31,7 @@ module Graphics.Svg.Types
     , GradientStop( .. )
     , HasGradientStop( .. )
 
+    , MarkerAttribute( .. )
     , Marker( .. )
     , MarkerOrientation( .. )
     , MarkerUnit( .. )
@@ -124,7 +125,7 @@ module Graphics.Svg.Types
     ) where
 
 import Data.Function( on )
-import Data.List( inits, intersperse )
+import Data.List( inits )
 import qualified Data.Map as M
 import Data.Monoid( Monoid( .. ), Last( .. ), (<>) )
 import Data.Foldable( Foldable )
@@ -233,7 +234,7 @@ serializeTransformation t = case t of
 
 serializeTransformations :: [Transformation] -> String
 serializeTransformations =
-    concat . intersperse " " . fmap serializeTransformation
+    unwords . fmap serializeTransformation
 
 class WithDrawAttributes a where
     drawAttr :: Lens' a DrawAttributes
@@ -248,6 +249,11 @@ data TextAnchor
   = TextAnchorStart
   | TextAnchorMiddle
   | TextAnchorEnd
+  deriving (Eq, Show)
+
+data MarkerAttribute
+  = MarkerNone
+  | MarkerRef String
   deriving (Eq, Show)
 
 data DrawAttributes = DrawAttributes
@@ -270,6 +276,10 @@ data DrawAttributes = DrawAttributes
     , _fontFamily       :: !(Last [String])
     , _fontStyle        :: !(Last FontStyle)
     , _textAnchor       :: !(Last TextAnchor)
+
+    , _markerStart      :: !(Last MarkerAttribute)
+    , _markerMid        :: !(Last MarkerAttribute)
+    , _markerEnd        :: !(Last MarkerAttribute)
     }
     deriving (Eq, Show)
 
@@ -860,6 +870,10 @@ instance Monoid DrawAttributes where
         , _strokeOffset     = Last Nothing
         , _strokeDashArray  = Last Nothing
         , _textAnchor       = Last Nothing
+
+        , _markerStart      = Last Nothing
+        , _markerMid        = Last Nothing
+        , _markerEnd        = Last Nothing
         }
 
     mappend a b = DrawAttributes
@@ -881,6 +895,9 @@ instance Monoid DrawAttributes where
         , _fontFamily = (mappend `on` _fontFamily) a b
         , _fontStyle = (mappend `on` _fontStyle) a b
         , _textAnchor = (mappend `on` _textAnchor) a b
+        , _markerStart = (mappend `on` _markerStart) a b
+        , _markerMid = (mappend `on` _markerMid) a b
+        , _markerEnd = (mappend `on` _markerEnd) a b
         }
       where
         opacityMappend Nothing Nothing = Nothing

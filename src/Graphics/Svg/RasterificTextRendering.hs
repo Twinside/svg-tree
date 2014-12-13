@@ -1,8 +1,6 @@
-{-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE TupleSections #-}
 module Graphics.Svg.RasterificTextRendering( renderText ) where
 
-import Data.Monoid( mappend )
 import Control.Monad( foldM )
 import Control.Monad.IO.Class( liftIO )
 import Control.Monad.Identity( Identity )
@@ -16,7 +14,7 @@ import Control.Applicative( (<$>), (<*>), (<|>) )
 import Codec.Picture( PixelRGBA8( .. ) )
 import qualified Data.Foldable as F
 import qualified Data.Map as M
-import Data.Monoid( mempty, (<>), Last( .. ), First( .. ) )
+import Data.Monoid( mappend, mempty, (<>), Last( .. ), First( .. ) )
 import Data.Maybe( fromMaybe )
 import qualified Data.Text as T
 import Graphics.Rasterific.Linear( (^+^), (^-^) )
@@ -401,7 +399,7 @@ renderString ctxt mayPath anchor str = do
     toFillTextRange renderable = do
       mayTexture <- textureOf ctxt (_renderableAttributes renderable)
                         _fillColor _fillOpacity 
-      return $ TextRange
+      return TextRange
         { _textFont = _renderableFont renderable
         , _textSize = floor . pixelToPt $ _renderableSize renderable
         , _text     = fst <$> _renderableString renderable

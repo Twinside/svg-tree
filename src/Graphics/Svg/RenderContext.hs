@@ -22,7 +22,7 @@ data RenderContext = RenderContext
     , _renderViewBox      :: (R.Point, R.Point)
     , _contextDefinitions :: M.Map String Element
     , _fontCache          :: FontCache
-    , _subRender          :: (Document -> IO (Image PixelRGBA8, LoadedFonts))
+    , _subRender          :: Document -> IO (Image PixelRGBA8, LoadedFonts)
     }
 
 type LoadedFonts = M.Map FilePath Font
