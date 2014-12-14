@@ -5,6 +5,7 @@ module Graphics.Svg.Types
     ( Coord
     , Origin( .. )
     , Point
+    , RPoint
     , Document( .. )
     , Path( .. )
     , Cap( .. )
@@ -132,8 +133,6 @@ import Data.Foldable( Foldable )
 import qualified Data.Foldable as F
 import qualified Data.Text as T
 import Codec.Picture( PixelRGBA8( .. ) )
-import qualified Graphics.Rasterific.Transformations as RT
-import qualified Graphics.Rasterific as R
 import Control.Lens( Lens'
                    , lens
                    , makeClassy
@@ -144,36 +143,39 @@ import Control.Lens( Lens'
                    , (.~)
                    )
 import Graphics.Svg.CssTypes
+import Linear hiding ( angle )
 
 import Text.Printf
 
 type Coord = Float
+
+type RPoint = V2 Coord
 
 data Origin
     = OriginAbsolute
     | OriginRelative
     deriving (Eq, Show)
 
+type Point = (Number, Number)
+
 data Path
-    = MoveTo Origin [R.Point]
-    | LineTo Origin [R.Point]
+    = MoveTo Origin [RPoint]
+    | LineTo Origin [RPoint]
 
     | HorizontalTo  Origin [Coord]
     | VerticalTo    Origin [Coord]
 
     -- | Cubic vezier
-    | CurveTo  Origin [(R.Point, R.Point, R.Point)]
+    | CurveTo  Origin [(RPoint, RPoint, RPoint)]
     -- | Cubic bezier
-    | SmoothCurveTo  Origin [(R.Point, R.Point)]
+    | SmoothCurveTo  Origin [(RPoint, RPoint)]
     -- | Quadratic bezier
-    | QuadraticBezier  Origin [(R.Point, R.Point)]
+    | QuadraticBezier  Origin [(RPoint, RPoint)]
     -- | Quadratic bezier
-    | SmoothQuadraticBezierCurveTo  Origin [R.Point]
-    | ElipticalArc  Origin [(Coord, Coord, Coord, Coord, Coord, R.Point)]
+    | SmoothQuadraticBezierCurveTo  Origin [RPoint]
+    | ElipticalArc  Origin [(Coord, Coord, Coord, Coord, Coord, RPoint)]
     | EndPath
     deriving (Eq, Show)
-
-type Point = (Number, Number)
 
 toPoint :: Number -> Number -> Point
 toPoint = (,)
@@ -210,7 +212,8 @@ data FillRule
     deriving (Eq, Show)
 
 data Transformation
-    = TransformMatrix RT.Transformation
+    = TransformMatrix Coord Coord Coord
+                      Coord Coord Coord
     | Translate Float Float
     | Scale Float (Maybe Float)
     | Rotate Float (Maybe (Float, Float))
@@ -222,7 +225,7 @@ data Transformation
 serializeTransformation :: Transformation -> String
 serializeTransformation t = case t of
   TransformUnknown -> ""
-  TransformMatrix (RT.Transformation a b c d e f) ->
+  TransformMatrix a b c d e f ->
       printf "matrix(%g, %g, %g, %g, %g, %g)" a b c d e f
   Translate x y -> printf "translate(%g, %g)" x y
   Scale x Nothing -> printf "scale(%g)" x
@@ -287,7 +290,7 @@ makeClassy ''DrawAttributes
 
 data PolyLine = PolyLine
   { _polyLineDrawAttributes :: DrawAttributes 
-  , _polyLinePoints :: [R.Point]
+  , _polyLinePoints :: [RPoint]
   }
   deriving (Eq, Show)
 
@@ -304,7 +307,7 @@ instance WithDrawAttributes PolyLine where
 
 data Polygon = Polygon
   { _polygonDrawAttributes :: DrawAttributes
-  , _polygonPoints :: [R.Point]
+  , _polygonPoints :: [RPoint]
   }
   deriving (Eq, Show)
 

@@ -1,6 +1,6 @@
-module Graphics.Svg ( LoadedFonts
-                    , loadSvgFile
-                    , renderSvgDocument
+module Graphics.Svg ( loadSvgFile
+                    , cssApply 
+                    , applyCSSRules
                     , xmlOfDocument
                     , saveXmlFile
                     , documentSize
@@ -10,21 +10,13 @@ import Control.Applicative( (<$>) )
 import Data.List( foldl' )
 import qualified Data.Text as T
 import Text.XML.Light.Input( parseXMLDoc )
-import Text.XML.Light.Output( ppcTopElement
-                            , prettyConfigPP
-                            {-, showTopElement-}
-                            )
+import Text.XML.Light.Output( ppcTopElement, prettyConfigPP )
+import Control.Lens
 
-import Control.Lens hiding( transform, children, elements, element )
-
-import qualified Graphics.Svg.RasterificRender as RR
 import Graphics.Svg.Types
 import Graphics.Svg.CssTypes
-import Graphics.Svg.RenderContext
 import Graphics.Svg.XmlParser
 
-import Graphics.Text.TrueType
-import Codec.Picture( Image, PixelRGBA8( .. ) )
 {-import Graphics.Svg.CssParser-}
 
 loadSvgFile :: FilePath -> IO (Maybe Document)
@@ -35,11 +27,6 @@ loadSvgFile filename = do
 saveXmlFile :: FilePath -> Document -> IO ()
 saveXmlFile filePath =
     writeFile filePath . ppcTopElement prettyConfigPP . xmlOfDocument
-
-renderSvgDocument :: FontCache -> Maybe (Int, Int) -> Document
-                  -> IO (Image PixelRGBA8, LoadedFonts)
-renderSvgDocument cache size =
-    RR.renderSvgDocument cache size . applyCSSRules 
 
 cssDeclApplyer :: DrawAttributes -> CssDeclaration
                -> DrawAttributes 

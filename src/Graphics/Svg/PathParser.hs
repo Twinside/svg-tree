@@ -24,10 +24,9 @@ import Data.Attoparsec.Text
 import Data.Attoparsec.Combinator( option
                                  , sepBy
                                  , sepBy1 )
+
+import Linear hiding ( angle, point )
 import Graphics.Svg.Types
-import Graphics.Rasterific.Linear( V2( V2 ) )
-import qualified Graphics.Rasterific as R
-import qualified Graphics.Rasterific.Transformations as RT
 import qualified Data.Text as T
 import Text.Printf( printf )
 
@@ -52,10 +51,10 @@ serializeViewBox (a, b, c, d) = printf "%d %d %d %d" a b c d
 commaWsp :: Parser ()
 commaWsp = skipSpace *> option () (string "," *> return ()) <* skipSpace
 
-point :: Parser R.Point
+point :: Parser RPoint
 point = V2 <$> num <* commaWsp <*> num
 
-pointData :: Parser [R.Point]
+pointData :: Parser [RPoint]
 pointData = point `sepBy` commaWsp
 
 command :: Parser Path
@@ -96,26 +95,26 @@ command =  (MoveTo OriginAbsolute <$ string "M" <*> pointList)
                                   <*> numComma
                                   <*> point
 
-serializePoint :: R.Point -> String
+serializePoint :: RPoint -> String
 serializePoint (V2 x y) = printf "%g,%g" x y
 
-serializePoints :: [R.Point] -> String
+serializePoints :: [RPoint] -> String
 serializePoints = unwords . fmap serializePoint
 
 serializeCoords :: [Coord] -> String
 serializeCoords = unwords . fmap (printf "%g")
 
-serializePointPair :: (R.Point, R.Point) -> String
+serializePointPair :: (RPoint, RPoint) -> String
 serializePointPair (a, b) = serializePoint a ++ " " ++ serializePoint b
 
-serializePointPairs :: [(R.Point, R.Point)] -> String
+serializePointPairs :: [(RPoint, RPoint)] -> String
 serializePointPairs = unwords . fmap serializePointPair
 
-serializePointTriplet :: (R.Point, R.Point, R.Point) -> String
+serializePointTriplet :: (RPoint, RPoint, RPoint) -> String
 serializePointTriplet (a, b, c) =
     serializePoint a ++ " " ++ serializePoint b ++ " " ++ serializePoint c
 
-serializePointTriplets :: [(R.Point, R.Point, R.Point)] -> String
+serializePointTriplets :: [(RPoint, RPoint, RPoint)] -> String
 serializePointTriplets = unwords . fmap serializePointTriplet
 
 serializeCommands :: [Path] -> String
@@ -202,7 +201,7 @@ matrixParser = do
   args <- functionParser "matrix"
   return $ case args of
     [a, b, c, d, e, f] ->
-        TransformMatrix $ RT.Transformation a b c d e f
+        TransformMatrix a b c d e f
     _ -> TransformUnknown
 
 rotateParser :: Parser Transformation
