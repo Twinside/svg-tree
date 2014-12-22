@@ -1,43 +1,58 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+-- | This module define all the types used in the definition
+-- of a svg scene.
+--
+-- Most of the types are lensified.
 module Graphics.Svg.Types
-    ( Coord
+    ( -- * Basic building types
+      Coord
     , Origin( .. )
     , Point
     , RPoint
-    , Document( .. )
     , Path( .. )
+    , Transformation( .. )
+      -- ** Building helpers
+    , toPoint
+    , serializeNumber
+    , serializeTransformation
+    , serializeTransformations
+
+      -- * Drawing control types
     , Cap( .. )
     , LineJoin( .. )
     , Tree( .. )
     , Number( .. )
-    , Transformation( .. )
     , Spread( .. )
     , Texture( .. )
     , Element( .. )
     , FillRule( .. )
     , FontStyle( .. )
-    , toPoint
+
+    , WithDefaultSvg( .. )
+
+      -- * Main type
+    , Document( .. )
     , documentSize
-    , serializeNumber
-    , serializeTransformation
-    , serializeTransformations
 
-    , GradientUnits( .. )
-
+      -- * Drawing attributes
     , DrawAttributes( .. )
     , HasDrawAttributes( .. )
+    , WithDrawAttributes( .. )
 
-    , GradientStop( .. )
-    , HasGradientStop( .. )
-
+      -- * Marker definition
     , MarkerAttribute( .. )
     , Marker( .. )
     , MarkerOrientation( .. )
     , MarkerUnit( .. )
     , HasMarker( .. )
     , defaultMarker
+
+      -- * Gradient definition
+    , GradientUnits( .. )
+    , GradientStop( .. )
+    , HasGradientStop( .. )
 
     , LinearGradient( .. )
     , defaultLinearGradient
@@ -47,12 +62,13 @@ module Graphics.Svg.Types
     , defaultRadialGradient
     , HasRadialGradient( .. )
 
-
+      -- * Pattern definition
     , Pattern( .. )
     , PatternUnit( .. )
     , defaultPattern
     , HasPattern( .. )
 
+      -- * SVG drawing primitives
     , Rectangle( .. )
     , defaultRectangle
     , HasRectangle( .. )
@@ -73,15 +89,6 @@ module Graphics.Svg.Types
     , defaultPathPrim
     , HasPathPrim( .. )
 
-    , Group( .. )
-    , defaultGroup
-    , groupDrawAttributes
-    , groupChildren
-    , groupViewBox
-
-    , Symbol( .. )
-    , groupOfSymbol
-
     , Circle( .. )
     , defaultCircle
     , HasCircle( .. )
@@ -94,6 +101,17 @@ module Graphics.Svg.Types
     , defaultUse
     , HasUse( .. )
 
+      -- * Grouping primitives
+    , Group( .. )
+    , defaultGroup
+    , groupDrawAttributes
+    , groupChildren
+    , groupViewBox
+
+    , Symbol( .. )
+    , groupOfSymbol
+
+      -- * Text related types
     , Text( .. )
     , defaultText
     , HasText( .. )
@@ -118,7 +136,7 @@ module Graphics.Svg.Types
 
     , TextAdjust( .. )
 
-    , WithDrawAttributes( .. )
+      -- * MISC functions
     , isPathArc
     , isPathWithArc
     , nameOfTree
@@ -147,33 +165,46 @@ import Linear hiding ( angle )
 
 import Text.Printf
 
+-- | Basic coordiante type.
 type Coord = Float
 
+-- | Real Point, fully determined and not
+-- dependant of the rendering context.
 type RPoint = V2 Coord
 
-data Origin
-    = OriginAbsolute
-    | OriginRelative
-    deriving (Eq, Show)
-
+-- | Possibly context dependant point.
 type Point = (Number, Number)
 
+-- | Tell if a path command is absolute (in the current
+-- user coordiante) or relative to the previous poitn.
+data Origin
+  = OriginAbsolute
+  | OriginRelative
+  deriving (Eq, Show)
+
+-- | Path command definition.
 data Path
+      -- | 'M' or 'm' command
     = MoveTo Origin [RPoint]
+      -- | Line to, 'L' or 'l' Svg path command.
     | LineTo Origin [RPoint]
 
+      -- | Equivalent to the 'H' or 'h' svg path command.
     | HorizontalTo  Origin [Coord]
+      -- | Equivalent to the 'V' or 'v' svg path command.
     | VerticalTo    Origin [Coord]
 
-    -- | Cubic vezier
+    -- | Cubic bezier, 'C' or 'c' command
     | CurveTo  Origin [(RPoint, RPoint, RPoint)]
-    -- | Cubic bezier
+    -- | Smooth cubic bezier, equivalent to 'S' or 's' command
     | SmoothCurveTo  Origin [(RPoint, RPoint)]
-    -- | Quadratic bezier
+    -- | Quadratic bezier, 'Q' or 'q' command
     | QuadraticBezier  Origin [(RPoint, RPoint)]
-    -- | Quadratic bezier
+    -- | Quadratic bezier, 'T' or 't' command
     | SmoothQuadraticBezierCurveTo  Origin [RPoint]
+      -- | Eliptical arc, 'A' or 'a' command.
     | ElipticalArc  Origin [(Coord, Coord, Coord, Coord, Coord, RPoint)]
+      -- | Close the path, 'Z' or 'z' svg path command.
     | EndPath
     deriving (Eq, Show)
 
@@ -239,18 +270,46 @@ serializeTransformations :: [Transformation] -> String
 serializeTransformations =
     unwords . fmap serializeTransformation
 
+-- | Class helping find the drawing attributes for all
+-- the SVG attributes.
 class WithDrawAttributes a where
+    -- | Lens which can be used to read/write primitives.
     drawAttr :: Lens' a DrawAttributes
 
-data FontStyle
-    = FontStyleNormal
-    | FontStyleItalic
-    | FontStyleOblique
-    deriving (Eq, Show)
+-- | Define an empty 'default' element for the SVG tree.
+-- It is used as base when parsing the element from XML.
+class WithDefaultSvg a where
+    -- | The default element.
+    defaultSvg :: a
 
+-- | Classify the font style, used to search a matching
+-- font in the FontCache.
+data FontStyle
+  = FontStyleNormal
+  | FontStyleItalic
+  | FontStyleOblique
+  deriving (Eq, Show)
+
+-- | Tell where to anchor the text, where the position
+-- given is realative to the text.
 data TextAnchor
+    -- | The text with left aligned, or start at the postion
+    -- If the point is the '*' then the text will be printed
+    -- this way:
+    --
+    -- >  *THE_TEXT_TO_PRINT
+    --
   = TextAnchorStart
+    -- | The text is middle aligned, so the text will be at
+    -- the left and right of the position:
+    --
+    -- >   THE_TEXT*TO_PRINT
+    --
   | TextAnchorMiddle
+    -- | The text is right aligned.
+    --
+    -- >   THE_TEXT_TO_PRINT*
+    --
   | TextAnchorEnd
   deriving (Eq, Show)
 
@@ -259,6 +318,11 @@ data MarkerAttribute
   | MarkerRef String
   deriving (Eq, Show)
 
+-- | This type define how to draw any primitives,
+-- which color to use, how to stroke the primitives
+-- and the potential transformations to use.
+--
+-- All these attributes are propagated to the children.
 data DrawAttributes = DrawAttributes
     { _strokeWidth      :: !(Last Number)
     , _strokeColor      :: !(Last Texture)
@@ -288,8 +352,12 @@ data DrawAttributes = DrawAttributes
 
 makeClassy ''DrawAttributes
 
+-- | This primitive describe an unclosed suite of
+-- segments.
 data PolyLine = PolyLine
-  { _polyLineDrawAttributes :: DrawAttributes 
+  { -- | drawing attributes of the polyline.
+    _polyLineDrawAttributes :: DrawAttributes 
+    -- | Geometry definition of the polyline.
   , _polyLinePoints :: [RPoint]
   }
   deriving (Eq, Show)
