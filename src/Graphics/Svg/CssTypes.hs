@@ -47,10 +47,11 @@ instance TextBuildable CssDescriptor where
       ft = TB.fromText 
       si = TB.singleton
 
+-- | Define complex selector.
 data CssSelector
-  = Nearby          -- ^ '+'
-  | DirectChildren  -- ^ '>'
-  | AllOf [CssDescriptor]
+  = Nearby          -- ^ Correspond to the `+` CSS selector.
+  | DirectChildren  -- ^ Correspond to the `>` CSS selectro.
+  | AllOf [CssDescriptor] -- ^ Grouping construct.
   deriving (Eq, Show)
 
 instance TextBuildable CssSelector where
@@ -134,12 +135,16 @@ instance TextBuildable CssDeclaration where
       si = TB.singleton
 
 
+-- | Encode complex number possibly dependant to the current
+-- render size.
 data Number
-    = Num Float
-    | Em Float
-    | Percent Float
-    deriving (Eq, Show)
+  = Num Float       -- ^ Simple coordinate in current user coordinate.
+  | Em Float        -- ^ Number relative to the current font size.
+  | Percent Float   -- ^ Number relative to the current viewport size.
+  deriving (Eq, Show)
 
+-- | Encode the number to string which can be used in a
+-- CSS or a svg attributes.
 serializeNumber :: Number -> String
 serializeNumber n = case n of
     Num c -> printf "%g" c

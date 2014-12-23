@@ -5,3 +5,6 @@ all:
 lint:
 	hlint .
 
+doc:
+	cabal haddock
+

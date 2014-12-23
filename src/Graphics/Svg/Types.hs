@@ -1,6 +1,9 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE FlexibleInstances #-}
 -- | This module define all the types used in the definition
 -- of a svg scene.
 --
@@ -41,100 +44,97 @@ module Graphics.Svg.Types
     , HasDrawAttributes( .. )
     , WithDrawAttributes( .. )
 
+      -- * SVG drawing primitives
+      -- ** Rectangle
+    , Rectangle( .. )
+    , HasRectangle( .. )
+
+      -- ** Line
+    , Line( .. )
+    , HasLine( .. )
+
+      -- ** Polygon
+    , Polygon( .. )
+    , HasPolygon( .. )
+
+      -- ** Polyline
+    , PolyLine( .. )
+    , HasPolyLine( .. )
+
+      -- ** Path
+    , PathPrim( .. )
+    , HasPathPrim( .. )
+
+      -- ** Circle
+    , Circle( .. )
+    , HasCircle( .. )
+
+      -- ** Ellipse
+    , Ellipse( .. )
+    , HasEllipse( .. )
+
+      -- ** Use
+    , Use( .. )
+    , HasUse( .. )
+
+      -- * Grouping primitives
+      -- ** Group
+    , Group( .. )
+    , HasGroup( .. )
+
+      -- ** Symbol
+    , Symbol( .. )
+    , groupOfSymbol
+
+      -- * Text related types
+      -- ** Text
+    , Text( .. )
+    , HasText( .. )
+    , TextAnchor( .. )
+
+      -- ** Text path
+    , TextPath( .. )
+    , HasTextPath( .. )
+
+    , TextPathSpacing( .. )
+    , TextPathMethod( .. )
+
+      -- ** Text span.
+    , TextSpanContent( .. )
+
+    , TextSpan( .. )
+    , HasTextSpan( .. )
+
+    , TextInfo( .. )
+    , HasTextInfo( .. )
+
+    , TextAdjust( .. )
+
       -- * Marker definition
     , MarkerAttribute( .. )
     , Marker( .. )
     , MarkerOrientation( .. )
     , MarkerUnit( .. )
     , HasMarker( .. )
-    , defaultMarker
 
       -- * Gradient definition
     , GradientUnits( .. )
     , GradientStop( .. )
     , HasGradientStop( .. )
 
+      -- ** Linear Gradient
     , LinearGradient( .. )
-    , defaultLinearGradient
     , HasLinearGradient( .. )
 
+      -- ** Radial Gradient
     , RadialGradient( .. )
-    , defaultRadialGradient
     , HasRadialGradient( .. )
 
       -- * Pattern definition
     , Pattern( .. )
     , PatternUnit( .. )
-    , defaultPattern
     , HasPattern( .. )
 
-      -- * SVG drawing primitives
-    , Rectangle( .. )
-    , defaultRectangle
-    , HasRectangle( .. )
-
-    , Line( .. )
-    , defaultLine
-    , HasLine( .. )
-
-    , Polygon( .. )
-    , defaultPolygon
-    , HasPolygon( .. )
-
-    , PolyLine( .. )
-    , defaultPolyLine
-    , HasPolyLine( .. )
-
-    , PathPrim( .. )
-    , defaultPathPrim
-    , HasPathPrim( .. )
-
-    , Circle( .. )
-    , defaultCircle
-    , HasCircle( .. )
-
-    , Ellipse( .. )
-    , defaultEllipse
-    , HasEllipse( .. )
-
-    , Use( .. )
-    , defaultUse
-    , HasUse( .. )
-
-      -- * Grouping primitives
-    , Group( .. )
-    , defaultGroup
-    , groupDrawAttributes
-    , groupChildren
-    , groupViewBox
-
-    , Symbol( .. )
-    , groupOfSymbol
-
-      -- * Text related types
-    , Text( .. )
-    , defaultText
-    , HasText( .. )
-
-    , TextPath( .. )
-    , defaultTextPath 
-    , HasTextPath( .. )
-
-    , TextPathSpacing( .. )
-    , TextPathMethod( .. )
-    , TextAnchor( .. )
-
-    , TextSpanContent( .. )
-
-    , TextSpan( .. )
-    , defaultTextSpan
-    , HasTextSpan( .. )
-
-    , TextInfo( .. )
-    , defaultTextInfo
-    , HasTextInfo( .. )
-
-    , TextAdjust( .. )
 
       -- * MISC functions
     , isPathArc
@@ -178,8 +178,8 @@ type Point = (Number, Number)
 -- | Tell if a path command is absolute (in the current
 -- user coordiante) or relative to the previous poitn.
 data Origin
-  = OriginAbsolute
-  | OriginRelative
+  = OriginAbsolute -- ^ Next point in absolute coordinate
+  | OriginRelative -- ^ Next point relative to the previous
   deriving (Eq, Show)
 
 -- | Path command definition.
@@ -208,51 +208,77 @@ data Path
     | EndPath
     deriving (Eq, Show)
 
+-- | Little helper function to build a point.
 toPoint :: Number -> Number -> Point
 toPoint = (,)
 
+-- | Tell if the path command is an ElipticalArc.
 isPathArc :: Path -> Bool
 isPathArc (ElipticalArc _ _) = True
 isPathArc _ = False
 
+-- | Tell if a full path contain an ElipticalArc.
 isPathWithArc :: Foldable f => f Path -> Bool
 isPathWithArc = F.any isPathArc
 
 
+-- | Describe how the line should be terminated
+-- when stroking them. Describe the values of the
+-- `stroke-linecap` attribute.
+-- See `_strokeLineCap`
 data Cap
-    = CapRound
-    | CapButt
-    | CapSquare
-    deriving (Eq, Show)
+  = CapRound -- ^ End with a round (`round` value)
+  | CapButt  -- ^ Define straight just at the end (`butt` value)
+  | CapSquare -- ^ Straight further of the ends (`square` value)
+  deriving (Eq, Show)
 
+-- | Define the possible values of the `stroke-linejoin`
+-- attribute.
+-- see `_strokeLineJoin`
 data LineJoin
-    = JoinMiter
-    | JoinBevel
-    | JoinRound
+    = JoinMiter -- ^ `miter` value
+    | JoinBevel -- ^ `bevel` value
+    | JoinRound -- ^ `round` value
     deriving (Eq, Show)
 
+-- | Describe the different value which can be used
+-- in the `fill` or `stroke` attributes.
 data Texture
-    = ColorRef   PixelRGBA8
-    | TextureRef String
-    | FillNone
-    deriving (Eq, Show)
+  = ColorRef   PixelRGBA8 -- ^ Direct solid color (#rrggbb, #rgb)
+  | TextureRef String     -- ^ Link to a complex texture (url(#name))
+  | FillNone              -- ^ Equivalent to the `none` value.
+  deriving (Eq, Show)
 
+-- | Describe the possile filling algorithms.
+-- Map the values of the `fill-rule` attributes.
 data FillRule
-    = FillEvenOdd
-    | FillNonZero
+    = FillEvenOdd -- ^ Correspond to the `evenodd` value.
+    | FillNonZero -- ^ Correspond to the `nonzero` value.
     deriving (Eq, Show)
 
+-- | Describe the content of the `transformation` attribute.
+-- see `_transform` and `transform`.
 data Transformation
-    = TransformMatrix Coord Coord Coord
+    = -- | Directly encode the translation matrix.
+      TransformMatrix Coord Coord Coord
                       Coord Coord Coord
+      -- | Translation along a vector
     | Translate Float Float
+      -- | Scaling on both axis or on X axis and Y axis.
     | Scale Float (Maybe Float)
+      -- | Rotation around `(0, 0)` or around an optional
+      -- point.
     | Rotate Float (Maybe (Float, Float))
+      -- | Skew transformation along the X axis.
     | SkewX Float
+      -- | Skew transformation along the Y axis.
     | SkewY Float
+      -- | Unkown transformation, like identity.
     | TransformUnknown
     deriving (Eq, Show)
 
+-- | Convert the Transformation to a string which can be
+-- directly used in a svg attributes.
 serializeTransformation :: Transformation -> String
 serializeTransformation t = case t of
   TransformUnknown -> ""
@@ -266,6 +292,8 @@ serializeTransformation t = case t of
   SkewX x -> printf "skewX(%g)" x
   SkewY y -> printf "skewY(%g)" y
 
+-- | Transform a list of transformations to a string for svg
+-- `transform` attributes.
 serializeTransformations :: [Transformation] -> String
 serializeTransformations =
     unwords . fmap serializeTransformation
@@ -299,23 +327,30 @@ data TextAnchor
     --
     -- >  *THE_TEXT_TO_PRINT
     --
+    -- Equivalent to the `start` value.
   = TextAnchorStart
     -- | The text is middle aligned, so the text will be at
     -- the left and right of the position:
     --
     -- >   THE_TEXT*TO_PRINT
     --
+    -- Equivalent to the `middle` value.
   | TextAnchorMiddle
     -- | The text is right aligned.
     --
     -- >   THE_TEXT_TO_PRINT*
     --
+    -- Equivalent to the `end` value.
   | TextAnchorEnd
   deriving (Eq, Show)
 
+
+-- | Correspond to the possible values of the
+-- attributes `marker-start`, `marker-mid` and
+-- `marker-end`.
 data MarkerAttribute
-  = MarkerNone
-  | MarkerRef String
+  = MarkerNone  -- ^ Value for `none`
+  | MarkerRef String -- ^ Equivalent to `url()` attribute.
   deriving (Eq, Show)
 
 -- | This type define how to draw any primitives,
@@ -324,230 +359,351 @@ data MarkerAttribute
 --
 -- All these attributes are propagated to the children.
 data DrawAttributes = DrawAttributes
-    { _strokeWidth      :: !(Last Number)
+    { -- | Attribute corresponding to the `stroke-width`
+      -- SVG attribute.
+      _strokeWidth      :: !(Last Number)
+      -- | Correspond to the `stroke` attribute.
     , _strokeColor      :: !(Last Texture)
+      -- | Define the `stroke-opacity` attribute, the transparency
+      -- for the "border".
     , _strokeOpacity    :: !(Maybe Float)
+      -- | Correspond to the `stroke-linecap` SVG
+      -- attribute
     , _strokeLineCap    :: !(Last Cap)
+      -- | Correspond to the `stroke-linejoin` SVG
+      -- attribute
     , _strokeLineJoin   :: !(Last LineJoin)
+      -- | Define the distance of the miter join, correspond
+      -- to the `stroke-miterlimit` attritbue.
     , _strokeMiterLimit :: !(Last Float)
+      -- | Define the filling color of the elements. Corresponding
+      -- to the `fill` attribute.
     , _fillColor        :: !(Last Texture)
+      -- | Define the `fill-opacity` attribute, the transparency
+      -- for the "content".
     , _fillOpacity      :: !(Maybe Float)
+
+      -- | Content of the `transform` attribute
     , _transform        :: !(Maybe [Transformation])
+      -- | Define the `fill-rule` used during the rendering.
     , _fillRule         :: !(Last FillRule)
+      -- | Map to the `class` attribute. Used for the CSS
+      -- rewriting.
     , _attrClass        :: !(Last String)
+      -- | Map to the `id` attribute. Used for the CSS
+      -- rewriting.
     , _attrId           :: !(Maybe String)
+      -- | Define the start distance of the dashing pattern.
+      -- Correspond to the `stroke-dashoffset` attribute.
     , _strokeOffset     :: !(Last Number)
+      -- | Define the dashing pattern for the lines. Correspond
+      -- to the `stroke-dasharray` attribute.
     , _strokeDashArray  :: !(Last [Number])
-
+      -- | Current size of the text, correspond to the
+      -- `font-size` SVG attribute.
     , _fontSize         :: !(Last Number)
+      -- | Define the possible fonts to be used for text rendering.
+      -- Map to the `font-family` attribute.
     , _fontFamily       :: !(Last [String])
+      -- | Map to the `font-style` attribute.
     , _fontStyle        :: !(Last FontStyle)
+      -- | Define how to interpret the text position, correspond
+      -- to the `text-anchor` attribute.
     , _textAnchor       :: !(Last TextAnchor)
-
+      -- | Define the marker used for the start of the line.
+      -- Correspond to the `marker-start` attribute.
     , _markerStart      :: !(Last MarkerAttribute)
+      -- | Define the marker used for every point of the
+      -- polyline/path Correspond to the `marker-mid`
+      -- attribute.
     , _markerMid        :: !(Last MarkerAttribute)
+      -- | Define the marker used for the end of the line.
+      -- Correspond to the `marker-end` attribute.
     , _markerEnd        :: !(Last MarkerAttribute)
     }
     deriving (Eq, Show)
 
+-- | Lenses for the DrawAttributes type.
 makeClassy ''DrawAttributes
 
 -- | This primitive describe an unclosed suite of
--- segments.
+-- segments. Correspond to the `<polyline>` tag.
 data PolyLine = PolyLine
   { -- | drawing attributes of the polyline.
     _polyLineDrawAttributes :: DrawAttributes 
+
     -- | Geometry definition of the polyline.
+    -- correspond to the `points` attribute
   , _polyLinePoints :: [RPoint]
   }
   deriving (Eq, Show)
 
+-- | Lenses for the PolyLine type.
 makeClassy ''PolyLine
 
-defaultPolyLine :: PolyLine
-defaultPolyLine = PolyLine
-  { _polyLineDrawAttributes = mempty
-  , _polyLinePoints = []
-  }
+instance WithDefaultSvg PolyLine where
+  defaultSvg = PolyLine
+    { _polyLineDrawAttributes = mempty
+    , _polyLinePoints = []
+    }
+
 
 instance WithDrawAttributes PolyLine where
     drawAttr = polyLineDrawAttributes
 
+-- | Primitive decriving polygon composed
+-- of segements. Correspond to the `<polygon>`
+-- tag
 data Polygon = Polygon
-  { _polygonDrawAttributes :: DrawAttributes
+  { -- | Drawing attributes for the polygon.
+    _polygonDrawAttributes :: DrawAttributes
+    -- | Points of the polygon. Correspond to
+    -- the `points` attributes.
   , _polygonPoints :: [RPoint]
   }
   deriving (Eq, Show)
 
+-- | Lenses for the Polygon type
 makeClassy ''Polygon
 
 instance WithDrawAttributes Polygon where
     drawAttr = polygonDrawAttributes
 
-defaultPolygon :: Polygon
-defaultPolygon = Polygon
-  { _polygonDrawAttributes = mempty
-  , _polygonPoints = []
-  }
+instance WithDefaultSvg Polygon where
+  defaultSvg = Polygon
+    { _polygonDrawAttributes = mempty
+    , _polygonPoints = []
+    }
 
-
+-- | Define a simple line. Correspond to the
+-- `<line>` tag.
 data Line = Line
-  { _lineDrawAttributes :: DrawAttributes
+  { -- | Drawing attributes of line.
+    _lineDrawAttributes :: DrawAttributes
+    -- | First point of the the line, correspond
+    -- to the `x1` and `y1` attributes.
   , _linePoint1 :: Point
+    -- | Second point of the the line, correspond
+    -- to the `x2` and `y2` attributes.
   , _linePoint2 :: Point
   }
   deriving (Eq, Show)
 
+-- | Lenses for the Line type.
 makeClassy ''Line
 
 instance WithDrawAttributes Line where
     drawAttr = lineDrawAttributes
 
-defaultLine :: Line
-defaultLine = Line
-  { _lineDrawAttributes = mempty
-  , _linePoint1 = zeroPoint
-  , _linePoint2 = zeroPoint
-  }
-  where zeroPoint = (Num 0, Num 0)
+instance WithDefaultSvg Line where
+  defaultSvg = Line
+    { _lineDrawAttributes = mempty
+    , _linePoint1 = zeroPoint
+    , _linePoint2 = zeroPoint
+    }
+    where zeroPoint = (Num 0, Num 0)
 
+-- | Define a rectangle. Correspond to
+-- `<rectangle>` svg tag.
 data Rectangle = Rectangle 
-  { _rectDrawAttributes  :: DrawAttributes
+  { -- | Rectangle drawing attributes.
+    _rectDrawAttributes  :: DrawAttributes
+    -- | Upper left corner of the rectangle, correspond
+    -- to the attributes `x` and `y`.
   , _rectUpperLeftCorner :: Point
+    -- | Rectangle width, correspond, strangely, to
+    -- the `width` attribute.
   , _rectWidth           :: Number
+    -- | Rectangle height, correspond, amazingly, to
+    -- the `height` attribute.
   , _rectHeight          :: Number
+    -- | Define the rounded corner radius radius
+    -- of the rectangle. Correspond to the `rx` and
+    -- `ry` attributes.
   , _rectCornerRadius    :: (Number, Number)
   }
   deriving (Eq, Show)
 
+-- | Lenses for the Rectangle type.
 makeClassy ''Rectangle
 
 instance WithDrawAttributes Rectangle where
     drawAttr = rectDrawAttributes
 
-defaultRectangle :: Rectangle
-defaultRectangle = Rectangle
-  { _rectDrawAttributes  = mempty
-  , _rectUpperLeftCorner = (Num 0, Num 0)
-  , _rectWidth           = Num 0
-  , _rectHeight          = Num 0
-  , _rectCornerRadius    = (Num 0, Num 0)
-  }
+instance WithDefaultSvg Rectangle where
+  defaultSvg = Rectangle
+    { _rectDrawAttributes  = mempty
+    , _rectUpperLeftCorner = (Num 0, Num 0)
+    , _rectWidth           = Num 0
+    , _rectHeight          = Num 0
+    , _rectCornerRadius    = (Num 0, Num 0)
+    }
 
+-- | Type mapping the `<path>` svg tag.
 data PathPrim = PathPrim
-  { _pathDrawAttributes :: DrawAttributes
+  { -- | Drawing attributes of the path.
+    _pathDrawAttributes :: DrawAttributes
+    -- | Definition of the path, correspond to the
+    -- `d` attributes.
   , _pathDefinition :: [Path]
   }
   deriving (Eq, Show)
 
-makeClassy '' PathPrim
+-- | Lenses for the PathPrim type
+makeClassy ''PathPrim
 
 instance WithDrawAttributes PathPrim where
-    drawAttr = pathDrawAttributes
+  drawAttr = pathDrawAttributes
 
-defaultPathPrim :: PathPrim
-defaultPathPrim = PathPrim
-  { _pathDrawAttributes = mempty
-  , _pathDefinition = []
-  }
+instance WithDefaultSvg PathPrim where
+  defaultSvg = PathPrim
+    { _pathDrawAttributes = mempty
+    , _pathDefinition = []
+    }
 
+-- | Define a SVG group, corresponding `<g>` tag.
 data Group a = Group
-  { _groupDrawAttributes :: !DrawAttributes
+  { -- | Group drawing attributes, propagated to all of its
+    -- children.
+    _groupDrawAttributes :: !DrawAttributes
+    -- | Content of the group, corresponding to all the tags
+    -- inside the `<g>` tag.
   , _groupChildren  :: ![a]
+    -- | Mapped to the attribute `viewBox`
   , _groupViewBox   :: !(Maybe (Int, Int, Int, Int))
   }
   deriving (Eq, Show)
 
-makeLenses ''Group
+-- | Lenses associated to the Group type.
+makeClassy ''Group
 
 instance WithDrawAttributes (Group a) where
     drawAttr = groupDrawAttributes
 
+instance WithDefaultSvg (Group a) where
+  defaultSvg = Group
+    { _groupDrawAttributes = mempty
+    , _groupChildren  = []
+    , _groupViewBox = Nothing
+    }
+
+-- | Define the `<symbol>` tag, equivalent to
+-- a named group.
 newtype Symbol a =
     Symbol { _groupOfSymbol :: Group a }
 
+-- | Lenses associated with the Symbol type.
 makeLenses ''Symbol
 
 instance WithDrawAttributes (Symbol a) where
-    drawAttr = groupOfSymbol . drawAttr
+  drawAttr = groupOfSymbol . drawAttr
 
-defaultGroup :: Group a
-defaultGroup = Group
-  { _groupDrawAttributes = mempty
-  , _groupChildren  = []
-  , _groupViewBox = Nothing
-  }
+instance WithDefaultSvg (Symbol a) where
+  defaultSvg = Symbol defaultSvg
 
+-- | Define a `<circle>`.
 data Circle = Circle
-  { _circleDrawAttributes :: DrawAttributes
+  { -- | Drawing attributes of the circle.
+    _circleDrawAttributes :: DrawAttributes
+    -- | Define the center of the circle, describe
+    -- the `cx` and `cy` attributes.
   , _circleCenter   :: Point
+    -- | Radius of the circle, equivalent to the `r`
+    -- attribute.
   , _circleRadius   :: Number
   }
   deriving (Eq, Show)
 
+-- | Lenses for the Circle type.
 makeClassy ''Circle
 
 instance WithDrawAttributes Circle where
     drawAttr = circleDrawAttributes
 
-defaultCircle :: Circle
-defaultCircle = Circle
-  { _circleDrawAttributes = mempty
-  , _circleCenter = (Num 0, Num 0)
-  , _circleRadius = Num 0
-  }
+instance WithDefaultSvg Circle where
+  defaultSvg = Circle
+    { _circleDrawAttributes = mempty
+    , _circleCenter = (Num 0, Num 0)
+    , _circleRadius = Num 0
+    }
 
+-- | Define an `<ellipse>`
 data Ellipse = Ellipse
-  { _ellipseDrawAttributes :: DrawAttributes
+  {  -- | Drawing attributes of the ellipse.
+    _ellipseDrawAttributes :: DrawAttributes
+    -- | Center of the ellipse, map to the `cx`
+    -- and `cy` attributes.
   , _ellipseCenter :: Point
+    -- | Radius along the X axis, map the
+    -- `rx` attribute.
   , _ellipseXRadius :: Number
+    -- | Radius along the Y axis, map the
+    -- `ry` attribute.
   , _ellipseYRadius :: Number
   }
   deriving (Eq, Show)
 
+-- | Lenses for the ellipse type.
 makeClassy ''Ellipse
 
 instance WithDrawAttributes Ellipse where
   drawAttr = ellipseDrawAttributes
 
-defaultEllipse :: Ellipse
-defaultEllipse = Ellipse
-  { _ellipseDrawAttributes = mempty
-  , _ellipseCenter = (Num 0, Num 0)
-  , _ellipseXRadius = Num 0
-  , _ellipseYRadius = Num 0
-  }
+instance WithDefaultSvg Ellipse where
+  defaultSvg = Ellipse
+    { _ellipseDrawAttributes = mempty
+    , _ellipseCenter = (Num 0, Num 0)
+    , _ellipseXRadius = Num 0
+    , _ellipseYRadius = Num 0
+    }
 
+-- | Define an `<use>` for a named content.
+-- Every named content can be reused in the
+-- document using this element.
 data Use = Use
-  { _useBase   :: Point
+  { -- | Position where to draw the "used" element.
+    -- Correspond to the `x` and `y` attributes.
+    _useBase   :: Point
+    -- | Referenced name, correspond to `xlink:href`
+    -- attribute.
   , _useName   :: String
+    -- | Define the width of the region where
+    -- to place the element. Map to the `width`
+    -- attribute.
   , _useWidth  :: Maybe Number
+    -- | Define the height of the region where
+    -- to place the element. Map to the `height`
+    -- attribute.
   , _useHeight :: Maybe Number
+    -- | Use draw attributes.
   , _useDrawAttributes :: DrawAttributes
   }
   deriving (Eq, Show)
 
+-- | Lenses for the Use type.
 makeClassy ''Use
 
 instance WithDrawAttributes Use where
   drawAttr = useDrawAttributes
 
-defaultUse :: Use
-defaultUse = Use
-  { _useBase   = (Num 0, Num 0)
-  , _useName   = ""
-  , _useWidth  = Nothing
-  , _useHeight = Nothing
-  , _useDrawAttributes = mempty
-  }
+instance WithDefaultSvg Use where
+  defaultSvg = Use
+    { _useBase   = (Num 0, Num 0)
+    , _useName   = ""
+    , _useWidth  = Nothing
+    , _useHeight = Nothing
+    , _useDrawAttributes = mempty
+    }
 
+-- | Define position information associated to
+-- `<text>` or `<tspan>` svg tag.
 data TextInfo = TextInfo
-  { _textInfoX      :: ![Number]
-  , _textInfoY      :: ![Number]
-  , _textInfoDX     :: ![Number]
-  , _textInfoDY     :: ![Number]
-  , _textInfoRotate :: ![Float]
-  , _textInfoLength :: !(Maybe Number)
+  { _textInfoX      :: ![Number] -- ^ `x` attribute.
+  , _textInfoY      :: ![Number] -- ^ `y` attribute.
+  , _textInfoDX     :: ![Number] -- ^ `dx` attribute.
+  , _textInfoDY     :: ![Number] -- ^ `dy` attribute.
+  , _textInfoRotate :: ![Float] -- ^ `rotate` attribute.
+  , _textInfoLength :: !(Maybe Number) -- ^ `textLength` attribute.
   }
   deriving (Eq, Show)
 
@@ -560,85 +716,112 @@ instance Monoid TextInfo where
                 (r1 <> r2)
                 (getLast $ Last l1 <> Last l2)
 
+-- | Lenses for the TextInfo type.
 makeClassy ''TextInfo
 
-defaultTextInfo :: TextInfo
-defaultTextInfo = mempty
+instance WithDefaultSvg TextInfo where
+  defaultSvg = mempty
 
+-- | Define the content of a `<tspan>` tag.
 data TextSpanContent
-    = SpanText    !T.Text
-    | SpanTextRef !String
-    | SpanSub     !TextSpan
+    = SpanText    !T.Text -- ^ Raw text
+    | SpanTextRef !String -- ^ Equivalent to a `<tref>`
+    | SpanSub     !TextSpan -- ^ Define a `<tspan>`
     deriving (Eq, Show)
 
+-- | Define a `<tspan>` tag.
 data TextSpan = TextSpan
-  { _spanInfo           :: !TextInfo
+  { -- | Placing information for the text.
+    _spanInfo           :: !TextInfo
+    -- | Drawing attributes for the text span.
   , _spanDrawAttributes :: !DrawAttributes
+    -- | Content of the span.
   , _spanContent        :: ![TextSpanContent]
   }
   deriving (Eq, Show)
 
+-- | Lenses for the TextSpan type.
 makeClassy ''TextSpan
 
-defaultTextSpan :: TextSpan
-defaultTextSpan = TextSpan
-  { _spanInfo = defaultTextInfo
-  , _spanDrawAttributes = mempty
-  , _spanContent        = mempty
-  }
+instance WithDefaultSvg TextSpan where
+  defaultSvg = TextSpan
+    { _spanInfo = defaultSvg
+    , _spanDrawAttributes = mempty
+    , _spanContent        = mempty
+    }
 
+-- | Describe the content of the `method` attribute on
+-- text path.
 data TextPathMethod
-  = TextPathAlign
-  | TextPathStretch
+  = TextPathAlign   -- ^ Map to the `align` value.
+  | TextPathStretch -- ^ Map to the `stretch` value.
   deriving (Eq, Show)
 
+-- | Describe the content of the `spacing` text path
+-- attribute.
 data TextPathSpacing
-  = TextPathSpacingExact
-  | TextPathSpacingAuto
+  = TextPathSpacingExact -- ^ Map to the `exact` value.
+  | TextPathSpacingAuto  -- ^ Map to the `auto` value.
   deriving (Eq, Show)
 
+-- | Describe the `<textpath>` SVG tag.
 data TextPath = TextPath
-  { _textPathStartOffset :: !Number
+  { -- | Define the beginning offset on the path,
+    -- the `startOffset` attribute.
+    _textPathStartOffset :: !Number
+    -- | Define the `xlink:href` attribute.
   , _textPathName        :: !String
-  , _textPathData        :: ![Path]
+    -- | Correspond to the `method` attribute.
   , _textPathMethod      :: !TextPathMethod
+    -- | Correspond to the `spacing` attribute.
   , _textPathSpacing     :: !TextPathSpacing
+    -- | Real content of the path.
+  , _textPathData        :: ![Path]
   }
   deriving (Eq, Show)
 
+-- | Lenses for the TextPath type.
 makeClassy ''TextPath
 
-defaultTextPath :: TextPath
-defaultTextPath = TextPath
-  { _textPathStartOffset = Num 0
-  , _textPathName        = mempty
-  , _textPathMethod      = TextPathAlign
-  , _textPathSpacing     = TextPathSpacingExact
-  , _textPathData        = []
-  }
+instance WithDefaultSvg TextPath where
+  defaultSvg = TextPath
+    { _textPathStartOffset = Num 0
+    , _textPathName        = mempty
+    , _textPathMethod      = TextPathAlign
+    , _textPathSpacing     = TextPathSpacingExact
+    , _textPathData        = []
+    }
 
+-- | Define the possible values of the `lengthAdjust`
+-- attribute.
 data TextAdjust
-  = TextAdjustSpacing
-  | TextAdjustSpacingAndGlyphs
+  = TextAdjustSpacing -- ^ Value `spacing`
+  | TextAdjustSpacingAndGlyphs -- ^ Value `spacingAndGlyphs`
   deriving (Eq, Show)
 
+-- | Define the global `<tag>` SVG tag.
 data Text = Text
-  { _textAdjust   :: !TextAdjust
+  { -- | Define the `lengthAdjust` attribute.
+    _textAdjust   :: !TextAdjust
+    -- | Root of the text content.
   , _textRoot     :: !TextSpan
   }
   deriving (Eq, Show)
 
+-- | Lenses for the Text type.
 makeClassy ''Text
 
 instance WithDrawAttributes Text where
   drawAttr = textRoot . spanDrawAttributes
 
-defaultText :: Text
-defaultText = Text
-  { _textRoot = defaultTextSpan
-  , _textAdjust = TextAdjustSpacing
-  }
+instance WithDefaultSvg Text where
+  defaultSvg = Text
+    { _textRoot = defaultSvg
+    , _textAdjust = TextAdjustSpacing
+    }
 
+-- | Main type for the scene description, reorient to
+-- specific type describing each tag.
 data Tree
     = None
     | UseTree       !Use  !Tree
@@ -654,47 +837,68 @@ data Tree
     | TextArea      !(Maybe TextPath) !Text
     deriving (Eq, Show)
 
+-- | Define the orientation, associated to the
+-- `orient` attribute on the Marker
 data MarkerOrientation
-  = OrientationAuto
-  | OrientationAngle Coord
+  = OrientationAuto        -- ^ Auto value
+  | OrientationAngle Coord -- ^ Specific angle.
   deriving (Eq, Show)
 
+-- | Define the content of the `markerUnits` attribute
+-- on the Marker.
 data MarkerUnit
-  = MarkerUnitStrokeWidth
-  | MarkerUnitUserSpaceOnUse
+  = MarkerUnitStrokeWidth    -- ^ Value `strokeWidth`
+  | MarkerUnitUserSpaceOnUse -- ^ Value `userSpaceOnUse`
   deriving (Eq, Show)
 
+-- | Define the `<marker>` tag.
 data Marker = Marker
-  { _markerDrawAttributes :: DrawAttributes
+  { -- | Draw attributes of the marker.
+    _markerDrawAttributes :: DrawAttributes
+    -- | Define the reference point of the marker.
+    -- correspond to the `refX` and `refY` attributes.
   , _markerRefPoint :: (Number, Number)
+    -- | Define the width of the marker. Correspond to
+    -- the `markerWidth` attribute.
   , _markerWidth    :: Number
+    -- | Define the height of the marker. Correspond to
+    -- the `markerHeight` attribute.
   , _markerHeight   :: Number
+    -- | Correspond to the `orient` attribute.
   , _markerOrient   :: Maybe MarkerOrientation
+    -- | Map the `markerUnits` attribute.
   , _markerUnits    :: Maybe MarkerUnit
+    -- | Elements defining the marker.
   , _markerElements :: [Tree]
   }
   deriving (Eq, Show)
 
+-- | Lenses for the Marker type.
 makeClassy ''Marker
 
 instance WithDrawAttributes Marker where
     drawAttr = markerDrawAttributes
 
-defaultMarker :: Marker
-defaultMarker = Marker
-  { _markerDrawAttributes = mempty
-  , _markerRefPoint = (Num 0, Num 0)
-  , _markerWidth = Num 0
-  , _markerHeight = Num 0
-  , _markerOrient = Nothing -- MarkerOrientation
-  , _markerUnits = Nothing -- MarkerUnitStrokeWidth
-  , _markerElements = []
-  }
+instance WithDefaultSvg Marker where
+  defaultSvg = Marker
+    { _markerDrawAttributes = mempty
+    , _markerRefPoint = (Num 0, Num 0)
+    , _markerWidth = Num 0
+    , _markerHeight = Num 0
+    , _markerOrient = Nothing -- MarkerOrientation
+    , _markerUnits = Nothing -- MarkerUnitStrokeWidth
+    , _markerElements = []
+    }
 
+-- | Insert element in the first sublist in the list of list.
 appNode :: [[a]] -> a -> [[a]]
 appNode [] e = [[e]]
 appNode (curr:above) e = (e:curr) : above
 
+-- | Map a tree while propagating context information.
+-- The function passed in parameter receive a list
+-- representing the the path used to go arrive to the
+-- current node.
 zipTree :: ([[Tree]] -> Tree) -> Tree -> Tree
 zipTree f = dig [] where
   dig prev e@None = f $ appNode prev e
@@ -720,7 +924,8 @@ zipTree f = dig [] where
         [dig (c:prev) child
             | (child, c) <- zip groupChild $ inits groupChild]
 
-
+-- | For every element of a svg tree, associate
+-- it's SVG tag name.
 nameOfTree :: Tree -> T.Text
 nameOfTree v =
   case v of
@@ -770,106 +975,177 @@ setDrawAttrOfTree v attr = case v of
 instance WithDrawAttributes Tree where
     drawAttr = lens drawAttrOfTree setDrawAttrOfTree
 
+instance WithDefaultSvg Tree where
+    defaultSvg = None
+
+-- | Define the possible values of the `gradientUnits`,
+-- used in the definition of the gradients.
 data GradientUnits
-    = GradientUserSpace
-    | GradientBoundingBox
+    = GradientUserSpace   -- ^ `userSpaceOnUse` value
+    | GradientBoundingBox -- ^ `objectBoundingBox` value
     deriving (Eq, Show)
 
+-- | Define the possible values for the `spreadMethod`
+-- values used for the gradient definitions.
 data Spread
-    = SpreadRepeat
-    | SpreadPad
-    | SpreadReflect
+    = SpreadRepeat  -- ^ `reapeat` value
+    | SpreadPad     -- ^ `pad` value
+    | SpreadReflect -- ^ `reflect value`
     deriving (Eq, Show)
 
+-- | Define a color stop for the gradients. Represent
+-- the `<stop>` SVG tag.
 data GradientStop = GradientStop 
-    { _gradientOffset :: Float
+    { -- | Gradient offset between 0 and 1, correspond
+      -- to the `offset` attribute.
+      _gradientOffset :: Float
+      -- | Color of the gradient stop. Correspond
+      -- to the `stop-color` attribute.
     , _gradientColor  :: PixelRGBA8
     }
     deriving (Eq, Show)
 
+-- | Lenses for the GradientStop type.
 makeClassy ''GradientStop
 
+instance WithDefaultSvg GradientStop where
+  defaultSvg = GradientStop 
+    { _gradientOffset = 0.0
+    , _gradientColor  = PixelRGBA8 0 0 0 255
+    }
+
+-- | Define a `<linearGradient>` tag.
 data LinearGradient = LinearGradient
-    { _linearGradientUnits  :: GradientUnits
+    { -- | Define coordinate system of the gradient,
+      -- associated to the `gradientUnits` attribute.
+      _linearGradientUnits  :: GradientUnits
+      -- | Point defining the beginning of the line gradient.
+      -- Associated to the `x1` and `y1` attribute.
     , _linearGradientStart  :: Point
+      -- | Point defining the end of the line gradient.
+      -- Associated to the `x2` and `y2` attribute.
     , _linearGradientStop   :: Point
+      -- | Define how to handle the values outside
+      -- the gradient start and stop. Associated to the
+      -- `spreadMethod` attribute.
     , _linearGradientSpread :: Spread
+      -- | Define the transformation to apply to the
+      -- gradient points. Associated to the `gradientTransform`
+      -- attribute.
     , _linearGradientTransform :: [Transformation]
+      -- | List of color stops of the linear gradient.
     , _linearGradientStops  :: [GradientStop]
     }
     deriving (Eq, Show)
 
+-- | Lenses for the LinearGradient type.
 makeClassy ''LinearGradient
 
-defaultLinearGradient :: LinearGradient
-defaultLinearGradient = LinearGradient
-  { _linearGradientUnits     = GradientBoundingBox
-  , _linearGradientStart     = (Percent 0, Percent 0)
-  , _linearGradientStop      = (Percent 1, Percent 0)
-  , _linearGradientSpread    = SpreadPad
-  , _linearGradientTransform = []
-  , _linearGradientStops     = []
-  }
+instance WithDefaultSvg LinearGradient where
+  defaultSvg = LinearGradient
+    { _linearGradientUnits     = GradientBoundingBox
+    , _linearGradientStart     = (Percent 0, Percent 0)
+    , _linearGradientStop      = (Percent 1, Percent 0)
+    , _linearGradientSpread    = SpreadPad
+    , _linearGradientTransform = []
+    , _linearGradientStops     = []
+    }
 
-
+-- | Define a `<radialGradient>` tag.
 data RadialGradient = RadialGradient
-  { _radialGradientUnits   :: GradientUnits
+  { -- | Define coordinate system of the gradient,
+    -- associated to the `gradientUnits` attribute.
+    _radialGradientUnits   :: GradientUnits
+    -- | Center of the radial gradient. Associated to
+    -- the `cx` and `cy` attributes.
   , _radialGradientCenter  :: Point
+    -- | Radius of the radial gradient. Associated to
+    -- the `r` attribute.
   , _radialGradientRadius  :: Number
+    -- | X coordinate of the focus point of the radial
+    -- gradient. Associated to the `fx` attribute.
   , _radialGradientFocusX  :: Maybe Number
+    -- | Y coordinate of the focus point of the radial
+    -- gradient. Associated to the `fy` attribute.
   , _radialGradientFocusY  :: Maybe Number
+    -- | Define how to handle the values outside
+    -- the gradient start and stop. Associated to the
+    -- `spreadMethod` attribute.
   , _radialGradientSpread  :: Spread
+    -- | Define the transformation to apply to the
+    -- gradient points. Associated to the `gradientTransform`
+    -- attribute.
   , _radialGradientTransform :: [Transformation]
+    -- | List of color stops of the radial gradient.
   , _radialGradientStops   :: [GradientStop]
   }
   deriving (Eq, Show)
 
+-- | Lenses for the RadialGradient type.
 makeClassy ''RadialGradient
 
-defaultRadialGradient :: RadialGradient
-defaultRadialGradient = RadialGradient
-  { _radialGradientUnits   = GradientBoundingBox
-  , _radialGradientCenter  = (Percent 0.5, Percent 0.5)
-  , _radialGradientRadius  = Percent 0.5
-  , _radialGradientFocusX  = Nothing
-  , _radialGradientFocusY  = Nothing
-  , _radialGradientSpread  = SpreadPad
-  , _radialGradientTransform = []
-  , _radialGradientStops   = []
-  }
+instance WithDefaultSvg RadialGradient where
+  defaultSvg = RadialGradient
+    { _radialGradientUnits   = GradientBoundingBox
+    , _radialGradientCenter  = (Percent 0.5, Percent 0.5)
+    , _radialGradientRadius  = Percent 0.5
+    , _radialGradientFocusX  = Nothing
+    , _radialGradientFocusY  = Nothing
+    , _radialGradientSpread  = SpreadPad
+    , _radialGradientTransform = []
+    , _radialGradientStops   = []
+    }
 
+-- | Define the possible values of the `patternUnit`
+-- attribute.
 data PatternUnit
   = PatternUnitUserSpaceOnUse
   | PatternUnitObjectBoundingBox
   deriving (Eq, Show)
 
+-- | Define a `<pattern>` tag.
 data Pattern = Pattern
-    { _patternDrawAttributes :: DrawAttributes
+    { -- | Pattern drawing attributes.
+      _patternDrawAttributes :: DrawAttributes
+      -- | Possible `viewBox`.
     , _patternViewBox  :: Maybe (Int, Int, Int, Int)
+      -- | Width of the pattern tile, mapped to the
+      -- `width` attribute
     , _patternWidth    :: Number
+      -- | Height of the pattern tile, mapped to the
+      -- `height` attribute
     , _patternHeight   :: Number
+      -- | Pattern tile base, mapped to the `x` and
+      -- `y` attributes.
     , _patternPos      :: Point
+      -- | Elements used in the pattern.
     , _patternElements :: [Tree]
+      -- | Define the cordinate system to use for
+      -- the pattern. Mapped to the `patternUnits`
+      -- attribute.
     , _patternUnit     :: PatternUnit
     }
     deriving Show
 
+-- | Lenses for the Patter type.
 makeClassy ''Pattern
 
 instance WithDrawAttributes Pattern where
     drawAttr = patternDrawAttributes
 
-defaultPattern :: Pattern
-defaultPattern = Pattern
-  { _patternViewBox  = Nothing
-  , _patternWidth    = Num 0
-  , _patternHeight   = Num 0
-  , _patternPos      = (Num 0, Num 0)
-  , _patternElements = []
-  , _patternUnit = PatternUnitObjectBoundingBox
-  , _patternDrawAttributes = mempty
-  }
+instance WithDefaultSvg Pattern where
+  defaultSvg = Pattern
+    { _patternViewBox  = Nothing
+    , _patternWidth    = Num 0
+    , _patternHeight   = Num 0
+    , _patternPos      = (Num 0, Num 0)
+    , _patternElements = []
+    , _patternUnit = PatternUnitObjectBoundingBox
+    , _patternDrawAttributes = mempty
+    }
 
+-- | Sum types helping keeping track of all the namable
+-- elemens in a SVG document.
 data Element
     = ElementLinearGradient LinearGradient
     | ElementRadialGradient RadialGradient
@@ -878,17 +1154,8 @@ data Element
     | ElementMarker Marker
     deriving Show
 
-{-
-instance Show SvgElement where
-    show (ElementLinearGradient grad) =
-        "ElementLinearGradient " ++ show grad
-    show (ElementRadialGradient grad) =
-        "ElementRadialGradient  " ++ show grad
-    show (ElementGeometry tree) =
-        "ElementGeometry " ++ show tree
-    show (Pattern ) = "ElementPicture ()"
-    -}
-
+-- | Represent a full svg document with style,
+-- geometry and named elements.
 data Document = Document
     { _viewBox     :: Maybe (Int, Int, Int, Int)
     , _width       :: Maybe Number
@@ -901,6 +1168,8 @@ data Document = Document
     }
     deriving Show
 
+-- | Calculate the document size in function of the
+-- different available attributes in the document.
 documentSize :: Document -> (Int, Int)
 documentSize Document { _width = Just (Num w)
                             , _height = Just (Num h) } = (floor w, floor h)
@@ -976,6 +1245,8 @@ instance Monoid DrawAttributes where
         opacityMappend Nothing (Just v) = Just v
         opacityMappend (Just v) (Just v2) = Just $ v * v2
 
+instance WithDefaultSvg DrawAttributes where
+  defaultSvg = mempty
 
 instance CssMatcheable Tree where
   cssAttribOf _ _ = Nothing

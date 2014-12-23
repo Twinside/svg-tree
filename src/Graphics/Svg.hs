@@ -5,7 +5,6 @@ module Graphics.Svg ( loadSvgFile
                     , applyCSSRules
                     , xmlOfDocument
                     , saveXmlFile
-                    , documentSize
                     , module Graphics.Svg.Types
                     ) where
 

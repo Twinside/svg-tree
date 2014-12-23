@@ -26,7 +26,6 @@ import qualified Text.XML.Light as X
 import qualified Data.Text as T
 import qualified Data.Map as M
 import Data.Attoparsec.Text( Parser, parseOnly, many1 )
-import Codec.Picture( PixelRGBA8( .. ) )
 import Graphics.Svg.Types
 import Graphics.Svg.PathParser
 import Graphics.Svg.ColorParser
@@ -194,10 +193,9 @@ data SvgAttributeLens t = SvgAttributeLens
   , _attributeSerializer :: t -> Maybe String
   }
 
-class XMLUpdatable treeNode where
+class (WithDefaultSvg treeNode) => XMLUpdatable treeNode where
   xmlTagName :: treeNode -> String
   attributes :: [SvgAttributeLens treeNode]
-  defaultSvg :: treeNode
 
   serializeTreeNode :: treeNode -> X.Element
 
@@ -453,7 +451,6 @@ serializeDashArray =
 
 instance XMLUpdatable DrawAttributes where
   xmlTagName _ = "DRAWATTRIBUTES"
-  defaultSvg = mempty
   attributes = styleAttribute : fmap fst drawAttributesList
   serializeTreeNode = genericSerializeNode
 
@@ -476,7 +473,6 @@ styleAttribute = SvgAttributeLens
 
 instance XMLUpdatable Rectangle where
   xmlTagName _ = "rect"
-  defaultSvg = defaultRectangle
   serializeTreeNode = genericSerializeWithDrawAttr
   attributes =
     [numericSetter "width" rectWidth
@@ -489,7 +485,6 @@ instance XMLUpdatable Rectangle where
 
 instance XMLUpdatable Line where
   xmlTagName _ = "line"
-  defaultSvg = defaultLine
   serializeTreeNode = genericSerializeWithDrawAttr
   attributes =
     [numericSetter "x1" $ linePoint1._1
@@ -500,7 +495,6 @@ instance XMLUpdatable Line where
 
 instance XMLUpdatable Ellipse where
   xmlTagName _ = "ellipse"
-  defaultSvg = defaultEllipse
   serializeTreeNode = genericSerializeWithDrawAttr
   attributes =
     [numericSetter "cx" $ ellipseCenter._1
@@ -511,7 +505,6 @@ instance XMLUpdatable Ellipse where
 
 instance XMLUpdatable Circle where
   xmlTagName _ = "circle"
-  defaultSvg = defaultCircle
   serializeTreeNode = genericSerializeWithDrawAttr
   attributes =
     [numericSetter "cx" $ circleCenter._1
@@ -521,7 +514,6 @@ instance XMLUpdatable Circle where
 
 instance XMLUpdatable Polygon where
   xmlTagName _ = "polygon"
-  defaultSvg = defaultPolygon
   serializeTreeNode = genericSerializeWithDrawAttr
   attributes =
     [parserSetter "points" polygonPoints
@@ -530,7 +522,6 @@ instance XMLUpdatable Polygon where
 
 instance XMLUpdatable PolyLine where
   xmlTagName _ =  "polyline"
-  defaultSvg = defaultPolyLine
   serializeTreeNode = genericSerializeWithDrawAttr
   attributes = 
     [parserSetter "points" polyLinePoints
@@ -539,7 +530,6 @@ instance XMLUpdatable PolyLine where
 
 instance XMLUpdatable PathPrim where
   xmlTagName _ =  "path"
-  defaultSvg = defaultPathPrim
   serializeTreeNode = genericSerializeWithDrawAttr
   attributes =
     [parserSetter "d" pathDefinition
@@ -548,7 +538,6 @@ instance XMLUpdatable PathPrim where
 
 instance XMLUpdatable LinearGradient where
   xmlTagName _ = "linearGradient"
-  defaultSvg = defaultLinearGradient
   serializeTreeNode node =
      updateWithAccessor _linearGradientStops node $ genericSerializeNode node
         
@@ -570,7 +559,6 @@ instance XMLUpdatable LinearGradient where
 
 instance XMLUpdatable Tree where
   xmlTagName _ = "TREE"
-  defaultSvg = None
   attributes = []
   serializeTreeNode e = case e of
     None -> X.blank_element
@@ -601,12 +589,10 @@ instance XMLUpdatable (Group Tree) where
   serializeTreeNode node =
      updateWithAccessor (filter isNotNone . _groupChildren) node $
         genericSerializeWithDrawAttr node
-  defaultSvg = defaultGroup
   attributes = []
 
 instance XMLUpdatable (Symbol Tree) where
   xmlTagName _ = "symbol"
-  defaultSvg = Symbol defaultSvg
   serializeTreeNode node =
      updateWithAccessor (filter isNotNone . _groupChildren . _groupOfSymbol) node $
         genericSerializeWithDrawAttr node
@@ -619,7 +605,6 @@ instance XMLUpdatable (Symbol Tree) where
 
 instance XMLUpdatable RadialGradient where
   xmlTagName _ = "radialGradient"
-  defaultSvg = defaultRadialGradient
   serializeTreeNode node =
      updateWithAccessor _radialGradientStops node $ genericSerializeNode node
   attributes =
@@ -641,7 +626,6 @@ instance XMLUpdatable RadialGradient where
 
 instance XMLUpdatable Use where
   xmlTagName _ = "use"
-  defaultSvg = defaultUse
   serializeTreeNode = genericSerializeWithDrawAttr
   attributes =
     [numericSetter "x" $ useBase._1
@@ -657,7 +641,6 @@ dropSharp a = a
 
 instance XMLUpdatable TextInfo where
   xmlTagName _ = "tspan"
-  defaultSvg = defaultTextInfo
   serializeTreeNode = genericSerializeNode
   attributes =
     [parserSetter "x" textInfoX (parse dashArray) dashNotEmpty
@@ -682,7 +665,7 @@ parseTextPathMethod :: String -> TextPathMethod
 parseTextPathMethod s = case s of
   "align" -> TextPathAlign
   "stretch" -> TextPathStretch
-  _ -> _textPathMethod defaultTextPath
+  _ -> _textPathMethod defaultSvg
 
 serializeTextPathMethod :: TextPathMethod -> String
 serializeTextPathMethod m = case m of
@@ -693,7 +676,7 @@ parseTextPathSpacing :: String -> TextPathSpacing
 parseTextPathSpacing s = case s of
   "auto" -> TextPathSpacingAuto
   "exact" -> TextPathSpacingExact
-  _ -> _textPathSpacing defaultTextPath
+  _ -> _textPathSpacing defaultSvg
 
 serializeTextPathSpacing :: TextPathSpacing -> String
 serializeTextPathSpacing s = case s of
@@ -702,7 +685,6 @@ serializeTextPathSpacing s = case s of
 
 instance XMLUpdatable TextPath where
   xmlTagName _ =  "textPath"
-  defaultSvg = defaultTextPath
   serializeTreeNode = genericSerializeNode
   attributes =
     [numericSetter "startOffset" textPathStartOffset
@@ -717,7 +699,6 @@ instance XMLUpdatable TextPath where
 
 instance XMLUpdatable Text where
   xmlTagName _ = "text"
-  defaultSvg = defaultText
   serializeTreeNode = serializeText
   attributes =
       [parserSetter "lengthAdjust" textAdjust 
@@ -727,7 +708,6 @@ instance XMLUpdatable Text where
 
 instance XMLUpdatable Pattern where
   xmlTagName _ = "pattern"
-  defaultSvg = defaultPattern
   serializeTreeNode node =
      updateWithAccessor _patternElements node $ genericSerializeNode node
   attributes =
@@ -745,7 +725,6 @@ instance XMLUpdatable Pattern where
 
 instance XMLUpdatable Marker where
   xmlTagName _ = "marker"
-  defaultSvg = defaultMarker
   serializeTreeNode node =
      updateWithAccessor _markerElements node $ genericSerializeNode node
   attributes =
@@ -847,7 +826,6 @@ gradientOffsetSetter = SvgAttributeLens "offset" setter serialize
 
 instance XMLUpdatable GradientStop where
     xmlTagName _ = "stop"
-    defaultSvg = GradientStop 0 (PixelRGBA8 0 0 0 255)
     serializeTreeNode = genericSerializeNode
     attributes =
         [gradientOffsetSetter
@@ -1004,6 +982,7 @@ unparseDocument e@(nodeName -> "svg") = Just Document
         attributeFinder n e >>= parse complexNumber
 unparseDocument _ = Nothing   
 
+-- | Transform a SVG document to a XML node.
 xmlOfDocument :: Document -> X.Element
 xmlOfDocument doc =
     X.node (X.unqual "svg") (attrs, descTag ++ styleTag ++ defsTag ++ children)
