@@ -562,7 +562,7 @@ instance XMLUpdatable Tree where
   attributes = []
   serializeTreeNode e = case e of
     None -> X.blank_element
-    UseTree u _ -> serializeTreeNode u
+    UseTree u -> serializeTreeNode u
     GroupTree g -> serializeTreeNode g
     SymbolTree s -> serializeTreeNode s
     Path p -> serializeTreeNode p
@@ -598,7 +598,7 @@ instance XMLUpdatable (Symbol Tree) where
         genericSerializeWithDrawAttr node
   attributes =
         [parserMaySetter "viewBox" (groupOfSymbol . groupViewBox)
-            (parse viewBox)
+            (parse viewBoxParser)
             (Just . serializeViewBox)
         ]
 
@@ -712,7 +712,7 @@ instance XMLUpdatable Pattern where
      updateWithAccessor _patternElements node $ genericSerializeNode node
   attributes =
     [parserMaySetter "viewBox" patternViewBox 
-        (parse viewBox)
+        (parse viewBoxParser)
         (Just . serializeViewBox)
     ,parserSetter "patternUnits" patternUnit
         parsePatternUnit
@@ -951,23 +951,15 @@ unparse e@(nodeName -> "line") =
   pure . LineTree $ xmlUnparseWithDrawAttr e
 unparse e@(nodeName -> "path") =
   pure . Path $ xmlUnparseWithDrawAttr e
-unparse e@(nodeName -> "use") = do
-  let useInfo = xmlUnparseWithDrawAttr e
-  element <- gets $ M.lookup (_useName useInfo) . symbols
-  case element of
-    Nothing -> pure None
-    Just (ElementLinearGradient _) -> pure None
-    Just (ElementRadialGradient _) -> pure None
-    Just (ElementPattern _) -> pure None
-    Just (ElementMarker _) -> pure None
-    Just (ElementGeometry g) -> pure $ UseTree useInfo g
+unparse e@(nodeName -> "use") = 
+    pure . UseTree $ xmlUnparseWithDrawAttr e
 unparse _ = pure None
 
 unparseDocument :: X.Element -> Maybe Document
 unparseDocument e@(nodeName -> "svg") = Just Document 
     { _viewBox =
-        attributeFinder "viewBox" e >>= parse viewBox
-    , _elements = elements
+        attributeFinder "viewBox" e >>= parse viewBoxParser
+    , _elements = parsedElements
     , _width = lengthFind "width"
     , _height = lengthFind "height"
     , _definitions = symbols named
@@ -976,7 +968,7 @@ unparseDocument e@(nodeName -> "svg") = Just Document
     , _styleText = cssText named
     }
   where
-    (elements, named) =
+    (parsedElements, named) =
         runState (mapM unparse $ elChildren e) emptyState
     lengthFind n =
         attributeFinder n e >>= parse complexNumber

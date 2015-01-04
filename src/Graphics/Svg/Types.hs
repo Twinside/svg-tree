@@ -37,6 +37,7 @@ module Graphics.Svg.Types
 
       -- * Main type
     , Document( .. )
+    , HasDocument( .. )
     , documentSize
 
       -- * Drawing attributes
@@ -824,7 +825,7 @@ instance WithDefaultSvg Text where
 -- specific type describing each tag.
 data Tree
     = None
-    | UseTree       !Use  !Tree
+    | UseTree       !Use
     | GroupTree     !(Group Tree)
     | SymbolTree    !(Group Tree)
     | Path          !PathPrim
@@ -902,8 +903,7 @@ appNode (curr:above) e = (e:curr) : above
 zipTree :: ([[Tree]] -> Tree) -> Tree -> Tree
 zipTree f = dig [] where
   dig prev e@None = f $ appNode prev e
-  dig prev e@(UseTree u sub) =
-      f . appNode prev . UseTree u $ dig ([] : appNode prev e) sub
+  dig prev e@(UseTree _) = f $ appNode prev e
   dig prev e@(GroupTree g) =
       f . appNode prev . GroupTree $ zipGroup (appNode prev e) g
   dig prev e@(SymbolTree g) =
@@ -930,7 +930,7 @@ nameOfTree :: Tree -> T.Text
 nameOfTree v =
   case v of
    None     -> ""
-   UseTree _ _     -> "use"
+   UseTree _       -> "use"
    GroupTree _     -> "g"
    SymbolTree _    -> "symbol"
    Path _      -> "path"
@@ -945,7 +945,7 @@ nameOfTree v =
 drawAttrOfTree :: Tree -> DrawAttributes
 drawAttrOfTree v = case v of
   None -> mempty
-  UseTree e _ -> e ^. drawAttr
+  UseTree e -> e ^. drawAttr
   GroupTree e -> e ^. drawAttr
   SymbolTree e -> e ^. drawAttr
   Path e -> e ^. drawAttr
@@ -960,7 +960,7 @@ drawAttrOfTree v = case v of
 setDrawAttrOfTree :: Tree -> DrawAttributes -> Tree
 setDrawAttrOfTree v attr = case v of
   None -> None
-  UseTree e t -> UseTree (e & drawAttr .~ attr) t
+  UseTree e -> UseTree $ e & drawAttr .~ attr
   GroupTree e -> GroupTree $ e & drawAttr .~ attr
   SymbolTree e -> SymbolTree $ e & drawAttr .~ attr
   Path e -> Path $ e & drawAttr .~ attr
@@ -1167,6 +1167,9 @@ data Document = Document
     , _styleRules  :: [CssRule]
     }
     deriving Show
+
+-- | Lenses associated to a SVG document.
+makeClassy ''Document
 
 -- | Calculate the document size in function of the
 -- different available attributes in the document.

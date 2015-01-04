@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Graphics.Svg.PathParser( transformParser
                               , command
-                              , viewBox
+                              , viewBoxParser
                               , pointData
                               , serializePoints
                               , serializeCommand
@@ -39,8 +39,8 @@ num = realToFrac <$> (skipSpace *> plusMinus <* skipSpace)
                  <|> string "+" *> doubleNumber
                  <|> doubleNumber
 
-viewBox :: Parser (Int, Int, Int, Int)
-viewBox = (,,,)
+viewBoxParser :: Parser (Int, Int, Int, Int)
+viewBoxParser = (,,,)
        <$> iParse <*> iParse <*> iParse <*> iParse
   where
     iParse = floor <$> num <* skipSpace
