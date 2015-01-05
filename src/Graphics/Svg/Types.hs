@@ -92,6 +92,7 @@ module Graphics.Svg.Types
     , Text( .. )
     , HasText( .. )
     , TextAnchor( .. )
+    , textAt
 
       -- ** Text path
     , TextPath( .. )
@@ -811,6 +812,18 @@ data Text = Text
 
 -- | Lenses for the Text type.
 makeClassy ''Text
+
+-- | Little helper to create a SVG text at a given
+-- baseline position.
+textAt :: Point -> T.Text -> Text
+textAt (x, y) txt = Text TextAdjustSpacing tspan where
+  tspan = defaultSvg
+        { _spanContent = [SpanText txt]
+        , _spanInfo = defaultSvg
+                    { _textInfoX = [x]
+                    , _textInfoY = [y]
+                    }
+        }
 
 instance WithDrawAttributes Text where
   drawAttr = textRoot . spanDrawAttributes
