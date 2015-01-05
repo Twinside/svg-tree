@@ -10,6 +10,7 @@ module Graphics.Svg.CssParser
     , dashArray
     , numberList
     , num
+    , cssRulesOfText
     )
     where
 
@@ -31,8 +32,8 @@ import Data.Attoparsec.Text
     , sepBy1
     , (<?>)
     , skipMany
-    {-, satisfy-}
     , notChar
+    , parseOnly
     )
 import qualified Data.Attoparsec.Text as AT
 
@@ -267,4 +268,9 @@ term = checkRgb <$> function
     function = CssFunction
        <$> ident <* char '('
        <*> (term `sepBy` comma) <* char ')' <* skipSpace
+
+cssRulesOfText :: T.Text -> [CssRule]
+cssRulesOfText txt = case parseOnly (many1 ruleSet) $ txt of
+    Left _ -> []
+    Right rules -> rules
 

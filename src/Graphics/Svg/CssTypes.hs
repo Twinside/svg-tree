@@ -12,6 +12,7 @@ module Graphics.Svg.CssTypes
     , Number( .. )
     , serializeNumber
     , findMatchingDeclarations
+    , tserialize
     ) where
 
 import Data.Monoid( mconcat, (<>) )

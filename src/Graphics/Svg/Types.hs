@@ -1163,7 +1163,6 @@ data Document = Document
     , _elements    :: [Tree]
     , _definitions :: M.Map String Element
     , _description  :: String
-    , _styleText   :: String
     , _styleRules  :: [CssRule]
     }
     deriving Show

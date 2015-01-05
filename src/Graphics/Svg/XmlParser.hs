@@ -17,6 +17,7 @@ import Control.Applicative( (<$>)
 import Control.Lens hiding( transform, children, elements, element )
 import Control.Monad( join )
 import Control.Monad.State.Strict( State, runState, modify, gets )
+import Data.Foldable( foldMap )
 import Data.Maybe( catMaybes )
 import Data.Monoid( mempty, Last( Last ), getLast )
 import Data.List( foldl', intercalate )
@@ -24,6 +25,8 @@ import Text.XML.Light.Proc( findAttrBy, elChildren, strContent )
 import Text.Read( readMaybe )
 import qualified Text.XML.Light as X
 import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
+import qualified Data.Text.Lazy.Builder as TB
 import qualified Data.Map as M
 import Data.Attoparsec.Text( Parser, parseOnly, many1 )
 import Graphics.Svg.Types
@@ -32,6 +35,7 @@ import Graphics.Svg.ColorParser
 import Graphics.Svg.CssTypes( CssDeclaration( .. )
                             , CssElement( .. )
                             , CssRule
+                            , tserialize
                             )
 import Graphics.Svg.CssParser( complexNumber
                              , num
@@ -836,13 +840,12 @@ instance XMLUpdatable GradientStop where
             
 
 data Symbols = Symbols
-    { symbols :: !(M.Map String Element)
-    , cssStyle   :: [CssRule]
-    , cssText    :: String
-    }
+  { symbols :: !(M.Map String Element)
+  , cssStyle   :: [CssRule]
+  }
 
 emptyState :: Symbols
-emptyState = Symbols mempty mempty ""
+emptyState = Symbols mempty mempty
  
 parseGradientStops :: X.Element -> [GradientStop]
 parseGradientStops = concatMap unStop . elChildren
@@ -889,8 +892,7 @@ unparse e@(nodeName -> "style") = do
   case parseOnly (many1 ruleSet) . T.pack $ strContent e of
     Left _ -> return ()
     Right rules ->
-      modify $ \s -> s { cssStyle = cssStyle s ++ rules
-                      , cssText = cssText s ++ "\n" ++ strContent e }
+      modify $ \s -> s { cssStyle = cssStyle s ++ rules }
   return None
 unparse e@(nodeName -> "defs") = do
     mapM_ unparseDefs $ elChildren e
@@ -965,7 +967,6 @@ unparseDocument e@(nodeName -> "svg") = Just Document
     , _definitions = symbols named
     , _description = ""
     , _styleRules = cssStyle named
-    , _styleText = cssText named
     }
   where
     (parsedElements, named) =
@@ -1004,17 +1005,17 @@ xmlOfDocument doc =
         Nothing -> []
         Just b -> [attr "viewBox" $ serializeViewBox b]
 
-    {-style [] = []-}
-    {-style lst =-}
+
 
     descTag = case _description doc of
         "" -> []
         txt -> [X.node (X.unqual "desc") txt]
 
-    styleTag = case _styleText doc of
-        "" -> []
-        txt -> [X.node (X.unqual "style")
-                    ([attr "type" "text/css"], txt)]
+    styleTag = case _styleRules doc of
+        [] -> []
+        rules -> [X.node (X.unqual "style")
+                        ([attr "type" "text/css"], txt)]
+          where txt = TL.unpack . TB.toLazyText $ foldMap tserialize rules
 
     attrs =
         docViewBox ++

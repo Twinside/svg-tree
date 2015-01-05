@@ -5,6 +5,7 @@ module Graphics.Svg ( loadSvgFile
                     , applyCSSRules
                     , xmlOfDocument
                     , saveXmlFile
+                    , cssRulesOfText
                     , module Graphics.Svg.Types
                     ) where
 
@@ -17,6 +18,7 @@ import Control.Lens
 
 import Graphics.Svg.Types
 import Graphics.Svg.CssTypes
+import Graphics.Svg.CssParser( cssRulesOfText )
 import Graphics.Svg.XmlParser
 
 {-import Graphics.Svg.CssParser-}
