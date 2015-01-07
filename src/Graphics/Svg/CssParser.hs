@@ -144,12 +144,14 @@ ruleSet :: Parser CssRule
 ruleSet = cleanSpace *> rule where
   rule = CssRule
       <$> selector `sepBy1` commaWsp
-      <*> between '{' '}' styleString
+      <*> (between '{' '}' styleString)
       <?> "cssrule"
 
 styleString :: Parser [CssDeclaration]
-styleString = (cleanSpace *> declaration) `sepBy` semiWsp 
+styleString = ((cleanSpace *> declaration) `sepBy` semiWsp) <* mayWsp
+           <?> "styleString"
   where semiWsp = skipSpace *> char ';' <* skipSpace
+        mayWsp = option ';' semiWsp
 
 selector :: Parser [CssSelector]
 selector = (:)
@@ -195,7 +197,7 @@ declaration =
                       )
                  <?> "declaration"
   where
-    property = ident <* cleanSpace
+    property = (ident <* cleanSpace) <?> "property"
     prio = option "" $ string "!important"
 
 operator :: Parser CssElement
