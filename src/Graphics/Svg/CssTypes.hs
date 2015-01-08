@@ -156,11 +156,12 @@ instance TextBuildable Number where
    tserialize = TB.fromText . T.pack . serializeNumber
 
 data CssElement
-    = CssIdent    !T.Text
-    | CssString   !T.Text
-    | CssNumber   !Number
-    | CssColor    !PixelRGBA8
-    | CssFunction !T.Text ![CssElement]
+    = CssIdent     !T.Text
+    | CssString    !T.Text
+    | CssReference !T.Text 
+    | CssNumber    !Number
+    | CssColor     !PixelRGBA8
+    | CssFunction  !T.Text ![CssElement]
     | CssOpComa
     | CssOpSlash
     deriving (Eq, Show)
@@ -169,6 +170,7 @@ instance TextBuildable CssElement where
   tserialize e = case e of
     CssIdent    n -> ft n
     CssString   s -> si '"' <> ft s <> si '"'
+    CssReference r -> si '#' <> ft r
     CssNumber   n -> tserialize n
     CssColor  (PixelRGBA8 r g b _) ->
       ft . T.pack $ printf  "#%02X%02X%02X" r g b

@@ -16,6 +16,7 @@ module Graphics.Svg.Types
     , RPoint
     , Path( .. )
     , Transformation( .. )
+
       -- ** Building helpers
     , toPoint
     , serializeNumber

@@ -247,6 +247,7 @@ term :: Parser CssElement
 term = checkRgb <$> function
     <|> (CssNumber <$> complexNumber)
     <|> (CssString <$> str)
+    <|> (CssReference <$> ref)
     <|> (checkNamedColor <$> ident)
     <|> (CssColor <$> colorParser)
   where
@@ -254,6 +255,8 @@ term = checkRgb <$> function
     checkNamedColor n 
         | Just c <- M.lookup n svgNamedColors = CssColor c
         | otherwise = CssIdent n
+
+    ref = char '#' *> ident
 
     checkRgb (CssFunction "rgb"
                 [CssNumber r, CssNumber g, CssNumber b]) =
