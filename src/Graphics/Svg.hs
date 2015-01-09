@@ -1,7 +1,7 @@
 -- | Module providing basic input/output for the SVG document,
 -- for document building, please refer to Graphics.Svg.Types.
 module Graphics.Svg ( loadSvgFile
-                    , cssApply 
+                    , cssApply
                     , applyCSSRules
                     , xmlOfDocument
                     , saveXmlFile

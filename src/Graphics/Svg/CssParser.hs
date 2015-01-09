@@ -201,7 +201,7 @@ declaration =
     prio = option "" $ string "!important"
 
 operator :: Parser CssElement
-operator = op <* skipSpace
+operator = skipSpace *> op <* skipSpace
   where
     op = CssOpSlash <$ char '/'
       <|> CssOpComa <$ char ',' 
@@ -253,7 +253,7 @@ term = checkRgb <$> function
     <|> (checkNamedColor <$> ident)
     <|> (CssColor <$> colorParser)
   where
-    comma = char ',' <* skipSpace
+    comma = skipSpace *> char ',' <* skipSpace
     checkNamedColor n 
         | Just c <- M.lookup n svgNamedColors = CssColor c
         | otherwise = CssIdent n
