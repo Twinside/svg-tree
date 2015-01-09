@@ -367,6 +367,8 @@ cssUniqueTexture setter attr ((CssIdent "none":_):_) =
     attr & setter .~ Last (Just FillNone)
 cssUniqueTexture setter attr ((CssColor c:_):_) =
     attr & setter .~ Last (Just $ ColorRef c)
+cssUniqueTexture setter attr ((CssFunction "url" [CssReference c]:_):_) =
+    attr & setter .~ Last (Just . TextureRef $ T.unpack c)
 cssUniqueTexture _ attr _ = attr
 
 cssMayStringSetter :: ASetter DrawAttributes DrawAttributes a (Maybe String)
