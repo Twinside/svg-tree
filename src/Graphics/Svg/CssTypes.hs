@@ -84,7 +84,7 @@ instance TextBuildable CssRule where
 
 class CssMatcheable a where
   cssIdOf     :: a -> Maybe T.Text
-  cssClassOf  :: a -> Maybe T.Text
+  cssClassOf  :: a -> [T.Text]
   cssNameOf   :: a -> T.Text
   cssAttribOf :: a -> T.Text -> Maybe T.Text
 
@@ -94,7 +94,7 @@ isDescribedBy :: CssMatcheable a
               => a -> [CssDescriptor] -> Bool
 isDescribedBy e = all tryMatch
   where
-    tryMatch (OfClass t) = cssClassOf e == Just t
+    tryMatch (OfClass t) = t `elem` cssClassOf e
     tryMatch (OfId    i) = cssIdOf e == Just i
     tryMatch (OfName  n) = cssNameOf e == n
     tryMatch (OfPseudoClass _) = False

@@ -153,6 +153,7 @@ import Data.Monoid( Monoid( .. ), Last( .. ), (<>) )
 import Data.Foldable( Foldable )
 import qualified Data.Foldable as F
 import qualified Data.Text as T
+import qualified Data.Set as S
 import Codec.Picture( PixelRGBA8( .. ) )
 import Control.Lens( Lens'
                    , lens
@@ -392,7 +393,7 @@ data DrawAttributes = DrawAttributes
     , _fillRule         :: !(Last FillRule)
       -- | Map to the `class` attribute. Used for the CSS
       -- rewriting.
-    , _attrClass        :: !(Last String)
+    , _attrClass        :: !(S.Set T.Text)
       -- | Map to the `id` attribute. Used for the CSS
       -- rewriting.
     , _attrId           :: !(Maybe String)
@@ -1221,7 +1222,7 @@ instance Monoid DrawAttributes where
         , _fontStyle        = Last Nothing
         , _transform        = Nothing
         , _fillRule         = Last Nothing
-        , _attrClass        = Last Nothing
+        , _attrClass        = mempty
         , _attrId           = Nothing
         , _strokeOffset     = Last Nothing
         , _strokeDashArray  = Last Nothing
@@ -1244,7 +1245,7 @@ instance Monoid DrawAttributes where
         , _fontSize = (mappend `on` _fontSize) a b
         , _transform = (mayMerge `on` _transform) a b
         , _fillRule = (mappend `on` _fillRule) a b
-        , _attrClass = (mappend `on` _attrClass) a b
+        , _attrClass = _attrClass b
         , _attrId = _attrId b
         , _strokeOffset = (mappend `on` _strokeOffset) a b
         , _strokeDashArray = (mappend `on` _strokeDashArray) a b
@@ -1266,7 +1267,7 @@ instance WithDefaultSvg DrawAttributes where
 
 instance CssMatcheable Tree where
   cssAttribOf _ _ = Nothing
-  cssClassOf = fmap T.pack . getLast . view (drawAttr . attrClass)
+  cssClassOf = S.toList . view (drawAttr . attrClass)
   cssIdOf = fmap T.pack . view (drawAttr . attrId)
   cssNameOf = nameOfTree
 

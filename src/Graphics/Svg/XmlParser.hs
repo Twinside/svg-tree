@@ -28,6 +28,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Builder as TB
 import qualified Data.Map as M
+import qualified Data.Set as S
 import Data.Attoparsec.Text( Parser, parseOnly, many1 )
 import Graphics.Svg.Types
 import Graphics.Svg.PathParser
@@ -336,6 +337,15 @@ parserLastSetter attribute elLens parser serialize =
 
     serializer a = getLast (a ^. elLens) >>= serialize 
 
+classSetter :: SvgAttributeLens DrawAttributes
+classSetter = SvgAttributeLens "class" updater serializer
+  where
+    updater el str = 
+      el & attrClass .~ (S.fromList . T.split (== ' ') $ T.pack str)
+
+    serializer a = 
+       Just . T.unpack . T.intercalate " " . S.toList $ a ^. attrClass
+
 cssUniqueNumber :: ASetter DrawAttributes DrawAttributes
                    a (Last Number)
                 -> CssUpdater
@@ -379,13 +389,8 @@ cssMayStringSetter setter attr ((CssString i:_):_) =
     attr & setter .~ Just (T.unpack i)
 cssMayStringSetter _ attr _ = attr
 
-cssLastStringSetter :: ASetter DrawAttributes DrawAttributes a (Last String)
-                   -> CssUpdater
-cssLastStringSetter setter attr ((CssIdent i:_):_) =
-    attr & setter .~ Last (Just $ T.unpack i)
-cssLastStringSetter setter attr ((CssString i:_):_) =
-    attr & setter .~ Last (Just $ T.unpack i)
-cssLastStringSetter _ attr _ = attr
+cssNullSetter :: CssUpdater
+cssNullSetter attr _ = attr
 
 cssDashArray :: ASetter DrawAttributes DrawAttributes a (Last [Number])
              -> CssUpdater
@@ -435,7 +440,7 @@ drawAttributesList =
     ,(parserLastSetter "fill-rule" fillRule parseFillRule
         (Just . serializeFillRule),
         cssIdentStringParser fillRule (Last . parseFillRule))
-    ,(parserLastSetter "class" attrClass Just Just, cssLastStringSetter attrClass)
+    ,(classSetter, cssNullSetter) -- can't set class in CSS
     ,(parserMaySetter "id" attrId Just Just, cssMayStringSetter attrId)
     ,(numericLastSetter "stroke-dashoffset" strokeOffset,
         cssUniqueNumber strokeOffset)
