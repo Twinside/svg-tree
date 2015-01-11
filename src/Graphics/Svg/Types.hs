@@ -153,7 +153,6 @@ import Data.Monoid( Monoid( .. ), Last( .. ), (<>) )
 import Data.Foldable( Foldable )
 import qualified Data.Foldable as F
 import qualified Data.Text as T
-import qualified Data.Set as S
 import Codec.Picture( PixelRGBA8( .. ) )
 import Control.Lens( Lens'
                    , lens
@@ -393,7 +392,7 @@ data DrawAttributes = DrawAttributes
     , _fillRule         :: !(Last FillRule)
       -- | Map to the `class` attribute. Used for the CSS
       -- rewriting.
-    , _attrClass        :: !(S.Set T.Text)
+    , _attrClass        :: ![T.Text]
       -- | Map to the `id` attribute. Used for the CSS
       -- rewriting.
     , _attrId           :: !(Maybe String)
@@ -1267,7 +1266,7 @@ instance WithDefaultSvg DrawAttributes where
 
 instance CssMatcheable Tree where
   cssAttribOf _ _ = Nothing
-  cssClassOf = S.toList . view (drawAttr . attrClass)
+  cssClassOf = view (drawAttr . attrClass)
   cssIdOf = fmap T.pack . view (drawAttr . attrId)
   cssNameOf = nameOfTree
 

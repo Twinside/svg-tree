@@ -28,7 +28,6 @@ import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Builder as TB
 import qualified Data.Map as M
-import qualified Data.Set as S
 import Data.Attoparsec.Text( Parser, parseOnly, many1 )
 import Graphics.Svg.Types
 import Graphics.Svg.PathParser
@@ -341,10 +340,10 @@ classSetter :: SvgAttributeLens DrawAttributes
 classSetter = SvgAttributeLens "class" updater serializer
   where
     updater el str = 
-      el & attrClass .~ (S.fromList . T.split (== ' ') $ T.pack str)
+      el & attrClass .~ (T.split (== ' ') $ T.pack str)
 
     serializer a = 
-       Just . T.unpack . T.intercalate " " . S.toList $ a ^. attrClass
+       Just . T.unpack . T.intercalate " " $ a ^. attrClass
 
 cssUniqueNumber :: ASetter DrawAttributes DrawAttributes
                    a (Last Number)
