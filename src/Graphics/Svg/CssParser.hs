@@ -249,7 +249,6 @@ term :: Parser CssElement
 term = checkRgb <$> function
     <|> (CssNumber <$> complexNumber)
     <|> (CssString <$> str)
-    <|> (CssReference <$> ref)
     <|> (checkNamedColor <$> ident)
     <|> (CssColor <$> colorParser)
   where
@@ -269,10 +268,11 @@ term = checkRgb <$> function
              to (Em c) = floor $ clamp c
 
     checkRgb a = a
+    functionParam = (CssReference <$> ref) <|> term
 
     function = CssFunction
        <$> ident <* char '('
-       <*> (term `sepBy` comma) <* char ')' <* skipSpace
+       <*> (functionParam `sepBy` comma) <* char ')' <* skipSpace
 
 cssRulesOfText :: T.Text -> [CssRule]
 cssRulesOfText txt = case parseOnly (many1 ruleSet) $ txt of
