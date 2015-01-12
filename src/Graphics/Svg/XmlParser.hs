@@ -572,7 +572,7 @@ instance XMLUpdatable Tree where
   attributes = []
   serializeTreeNode e = case e of
     None -> X.blank_element
-    UseTree u -> serializeTreeNode u
+    UseTree u _ -> serializeTreeNode u
     GroupTree g -> serializeTreeNode g
     SymbolTree s -> serializeTreeNode s
     Path p -> serializeTreeNode p
@@ -960,7 +960,7 @@ unparse e@(nodeName -> "line") =
 unparse e@(nodeName -> "path") =
   pure . Path $ xmlUnparseWithDrawAttr e
 unparse e@(nodeName -> "use") = 
-    pure . UseTree $ xmlUnparseWithDrawAttr e
+  pure $ UseTree (xmlUnparseWithDrawAttr e) Nothing
 unparse _ = pure None
 
 unparseDocument :: X.Element -> Maybe Document

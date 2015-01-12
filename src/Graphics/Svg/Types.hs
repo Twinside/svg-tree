@@ -144,6 +144,7 @@ module Graphics.Svg.Types
     , isPathWithArc
     , nameOfTree
     , zipTree
+    , mapTree
     ) where
 
 import Data.Function( on )
@@ -839,7 +840,8 @@ instance WithDefaultSvg Text where
 -- specific type describing each tag.
 data Tree
     = None
-    | UseTree       !Use
+    | UseTree { useInformation :: !Use
+              , useSubTree     :: !(Maybe Tree) }
     | GroupTree     !(Group Tree)
     | SymbolTree    !(Group Tree)
     | Path          !PathPrim
@@ -917,7 +919,11 @@ appNode (curr:above) e = (e:curr) : above
 zipTree :: ([[Tree]] -> Tree) -> Tree -> Tree
 zipTree f = dig [] where
   dig prev e@None = f $ appNode prev e
-  dig prev e@(UseTree _) = f $ appNode prev e
+  dig prev e@(UseTree _ Nothing) = f $ appNode prev e
+  dig prev e@(UseTree nfo (Just sub)) = f $ appNode prev tree'
+    where useContext = appNode prev e
+          tree' = UseTree nfo $ Just sub'
+          sub' = f $ appNode useContext sub
   dig prev e@(GroupTree g) =
       f . appNode prev . GroupTree $ zipGroup (appNode prev e) g
   dig prev e@(SymbolTree g) =
@@ -938,13 +944,31 @@ zipTree f = dig [] where
         [dig (c:prev) child
             | (child, c) <- zip groupChild $ inits groupChild]
 
+mapTree :: (Tree -> Tree) -> Tree -> Tree
+mapTree f = go where
+  go e@None = f e
+  go e@(UseTree _ _) = f e
+  go e@(GroupTree g) = f . GroupTree $ mapGroup g
+  go e@(SymbolTree g) = f . SymbolTree $ mapGroup g
+  go e@(Path _) = f e
+  go e@(CircleTree _) = f e
+  go e@(PolyLineTree _) = f e
+  go e@(PolygonTree _) = f e
+  go e@(EllipseTree _) = f e
+  go e@(LineTree _) = f e
+  go e@(RectangleTree _) = f e
+  go e@(TextArea _ _) = f e
+
+  mapGroup g =
+      g { _groupChildren = map go $ _groupChildren g }
+
 -- | For every element of a svg tree, associate
 -- it's SVG tag name.
 nameOfTree :: Tree -> T.Text
 nameOfTree v =
   case v of
    None     -> ""
-   UseTree _       -> "use"
+   UseTree _ _     -> "use"
    GroupTree _     -> "g"
    SymbolTree _    -> "symbol"
    Path _      -> "path"
@@ -959,7 +983,7 @@ nameOfTree v =
 drawAttrOfTree :: Tree -> DrawAttributes
 drawAttrOfTree v = case v of
   None -> mempty
-  UseTree e -> e ^. drawAttr
+  UseTree e _ -> e ^. drawAttr
   GroupTree e -> e ^. drawAttr
   SymbolTree e -> e ^. drawAttr
   Path e -> e ^. drawAttr
@@ -974,7 +998,7 @@ drawAttrOfTree v = case v of
 setDrawAttrOfTree :: Tree -> DrawAttributes -> Tree
 setDrawAttrOfTree v attr = case v of
   None -> None
-  UseTree e -> UseTree $ e & drawAttr .~ attr
+  UseTree e m -> UseTree (e & drawAttr .~ attr) m
   GroupTree e -> GroupTree $ e & drawAttr .~ attr
   SymbolTree e -> SymbolTree $ e & drawAttr .~ attr
   Path e -> Path $ e & drawAttr .~ attr

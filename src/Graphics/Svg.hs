@@ -6,11 +6,13 @@ module Graphics.Svg ( loadSvgFile
                     , xmlOfDocument
                     , saveXmlFile
                     , cssRulesOfText
+                    , resolveUses
                     , module Graphics.Svg.Types
                     ) where
 
 import Control.Applicative( (<$>) )
 import Data.List( foldl' )
+import qualified Data.Map as M
 import qualified Data.Text as T
 import Text.XML.Light.Input( parseXMLDoc )
 import Text.XML.Light.Output( ppcTopElement, prettyConfigPP )
@@ -59,10 +61,41 @@ cssApply rules = zipTree go where
          findMatchingDeclarations rules context
      attr = view drawAttr t
      attr' = foldl' cssDeclApplyer attr matchingDeclarations
-   
+
+-- | For every 'use' tag, try to resolve the geometry associated
+-- with it and place it in the scene Tree. It is important to
+-- resolve the 'use' tag before applying the CSS rules, as some
+-- rules may apply some elements matching the children of "use".
+resolveUses :: Document -> Document
+resolveUses doc =
+  doc { _elements = mapTree fetchUses <$> _elements doc }
+  where
+    fetchUses (UseTree useInfo _) = UseTree useInfo $ search useInfo
+    fetchUses a = a
+
+    search nfo = maybe Nothing geometryExtract found where
+      found = M.lookup (_useName nfo) $ _definitions doc
+
+    geometryExtract c = case c of
+      ElementLinearGradient _ -> Nothing
+      ElementRadialGradient _ -> Nothing
+      ElementGeometry t -> Just t
+      ElementPattern _ -> Nothing
+      ElementMarker _ -> Nothing
+
 -- | Rewrite the document by applying the CSS rules embedded
 -- inside it.
 applyCSSRules :: Document -> Document
 applyCSSRules doc = doc
-    { _elements = cssApply (_styleRules doc) <$> _elements doc}
+    { _elements = cssRewrite <$> _elements doc
+    , _definitions = M.map defApply $ _definitions doc
+    }
+  where
+    cssRewrite = cssApply $ _styleRules doc
+    defApply d = case d of
+      ElementLinearGradient _ -> d
+      ElementRadialGradient _ -> d
+      ElementPattern _ -> d
+      ElementMarker _ -> d
+      ElementGeometry t -> ElementGeometry $ cssRewrite t
 
