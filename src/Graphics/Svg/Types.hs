@@ -33,6 +33,7 @@ module Graphics.Svg.Types
     , Element( .. )
     , FillRule( .. )
     , FontStyle( .. )
+    , Dpi
 
     , WithDefaultSvg( .. )
 
@@ -145,6 +146,7 @@ module Graphics.Svg.Types
     , nameOfTree
     , zipTree
     , mapTree
+    , toUserUnit
     ) where
 
 import Data.Function( on )

@@ -9,9 +9,11 @@ module Graphics.Svg.CssTypes
 
     , CssMatcheable( .. )
     , CssContext
+    , Dpi
     , Number( .. )
     , serializeNumber
     , findMatchingDeclarations
+    , toUserUnit
     , tserialize
     ) where
 
@@ -23,6 +25,8 @@ import Text.Printf
 
 import Codec.Picture( PixelRGBA8( .. ) )
 {-import Debug.Trace-}
+
+type Dpi = Int
 
 class TextBuildable a where
     tserialize :: a -> TB.Builder
@@ -191,4 +195,19 @@ instance TextBuildable CssElement where
     where
       ft = TB.fromText 
       si = TB.singleton
+
+-- | This function replace all device dependant units to user
+-- units given it's DPI configuration.
+-- Preserve percentage and "em" notation.
+toUserUnit :: Dpi -> Number -> Number
+toUserUnit dpi = go where
+  go nu = case nu of
+    Num _ -> nu
+    Em _ -> nu
+    Percent _ -> nu
+    Pc n -> go . Inches $ (12 * n) / 72
+    Inches n -> Num $ n * fromIntegral dpi
+    Mm n -> go . Inches $ n / 25.4
+    Cm n -> go . Inches $ n / 2.54
+    Point n -> go . Inches $ n / 72
 
