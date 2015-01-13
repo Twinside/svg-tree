@@ -833,6 +833,11 @@ gradientOffsetSetter = SvgAttributeLens "offset" setter serialize
             Just (Num n) -> n
             Just (Percent n) -> n
             Just (Em n) -> n
+            Just (Pc n) -> n
+            Just (Mm n) -> n
+            Just (Cm n) -> n
+            Just (Point n) -> n
+            Just (Inches n) -> n
 
 instance XMLUpdatable GradientStop where
     xmlTagName _ = "stop"

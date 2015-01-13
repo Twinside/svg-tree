@@ -142,6 +142,11 @@ data Number
   = Num Float       -- ^ Simple coordinate in current user coordinate.
   | Em Float        -- ^ Number relative to the current font size.
   | Percent Float   -- ^ Number relative to the current viewport size.
+  | Pc Float
+  | Mm Float
+  | Cm Float
+  | Point Float
+  | Inches Float
   deriving (Eq, Show)
 
 -- | Encode the number to string which can be used in a
@@ -151,6 +156,11 @@ serializeNumber n = case n of
     Num c -> printf "%g" c
     Em cc -> printf "%gem" cc
     Percent p -> printf "%d%%" (floor $ 100 * p :: Int)
+    Pc p -> printf "%gpc" p
+    Mm m -> printf "%gmm" m
+    Cm c -> printf "%gcm" c
+    Point p -> printf "%gpt" p
+    Inches i -> printf "%gin" i
 
 instance TextBuildable Number where
    tserialize = TB.fromText . T.pack . serializeNumber

@@ -948,8 +948,8 @@ mapTree :: (Tree -> Tree) -> Tree -> Tree
 mapTree f = go where
   go e@None = f e
   go e@(UseTree _ _) = f e
-  go e@(GroupTree g) = f . GroupTree $ mapGroup g
-  go e@(SymbolTree g) = f . SymbolTree $ mapGroup g
+  go (GroupTree g) = f . GroupTree $ mapGroup g
+  go (SymbolTree g) = f . SymbolTree $ mapGroup g
   go e@(Path _) = f e
   go e@(CircleTree _) = f e
   go e@(PolyLineTree _) = f e

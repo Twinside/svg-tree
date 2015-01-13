@@ -4,7 +4,6 @@ module Graphics.Svg.CssParser
     ( CssElement( .. )
     , complexNumber
     , declaration
-    , unitNumber
     , ruleSet
     , styleString
     , dashArray
@@ -224,12 +223,6 @@ unitParser =
   <|> id <$ "px"
   <|> pure id
 
-unitNumber :: Parser Float
-unitNumber = do
-  n <- num
-  f <- unitParser
-  return $ f n
-
 dashArray :: Parser [Number]
 dashArray = skipSpace *> (complexNumber `sepBy1` commaWsp)
 
@@ -242,6 +235,12 @@ complexNumber = do
     let apply f = Num $ f n
     (Percent (n / 100) <$ char '%')
         <|> (Em n <$ string "em")
+        <|> (Mm n <$ string "mm")
+        <|> (Cm n <$ string "cm")
+        <|> (Point n <$ string "pt")
+        <|> (Pc n <$ string "pc")
+        <|> (Num n <$ string "px")
+        <|> (Inches n <$ string "in")
         <|> (apply <$> unitParser)
         <|> pure (Num n)
 
@@ -266,6 +265,11 @@ term = checkRgb <$> function
              to (Num n) = floor $ clamp n 
              to (Percent p) = floor . clamp $ p * 255
              to (Em c) = floor $ clamp c
+             to (Pc n) = floor $ clamp n
+             to (Mm n) = floor $ clamp n
+             to (Cm n) = floor $ clamp n
+             to (Point n) = floor $ clamp n
+             to (Inches n) = floor $ clamp n
 
     checkRgb a = a
     functionParam = (CssReference <$> ref) <|> term
