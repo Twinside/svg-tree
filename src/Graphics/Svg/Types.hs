@@ -1210,20 +1210,25 @@ makeClassy ''Document
 
 -- | Calculate the document size in function of the
 -- different available attributes in the document.
-documentSize :: Document -> (Int, Int)
-documentSize Document { _width = Just (Num w)
-                            , _height = Just (Num h) } = (floor w, floor h)
-documentSize Document { _viewBox = Just (x1, y1, x2, y2)
-                            , _width = Just (Percent pw)
-                            , _height = Just (Percent ph)
-                            } =
+documentSize :: Dpi -> Document -> (Int, Int)
+documentSize _ Document { _viewBox = Just (x1, y1, x2, y2)
+                        , _width = Just (Percent pw)
+                        , _height = Just (Percent ph)
+                        } =
     (floor $ dx * pw, floor $ dy * ph)
       where
         dx = fromIntegral . abs $ x2 - x1
         dy = fromIntegral . abs $ y2 - y1
-documentSize Document { _viewBox = Just (x1, y1, x2, y2) } =
+documentSize _ Document { _width = Just (Num w)
+                        , _height = Just (Num h) } = (floor w, floor h)
+documentSize dpi doc@(Document { _width = Just w 
+                               , _height = Just h }) =
+  documentSize dpi $ doc
+    { _width = Just $ toUserUnit dpi w
+    , _height = Just $ toUserUnit dpi h }
+documentSize _ Document { _viewBox = Just (x1, y1, x2, y2) } =
     (abs $ x2 - x1, abs $ y2 - y1)
-documentSize _ = (1, 1)
+documentSize _ _ = (1, 1)
 
 mayMerge :: Monoid a => Maybe a -> Maybe a -> Maybe a
 mayMerge (Just a) (Just b) = Just $ mappend a b

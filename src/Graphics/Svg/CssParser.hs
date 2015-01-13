@@ -213,16 +213,6 @@ expr = ((:) <$> term <*> (concat <$> many termOp))
     op = option (:[]) $ (\a b -> [a, b]) <$> operator
     termOp = ($) <$> op <*> term
 
-unitParser :: Parser (Float -> Float)
-unitParser =
-      (* 1.25) <$ "pt"
-  <|> (* 15) <$ "pc"
-  <|> (* 3.543307) <$ "mm"
-  <|> (* 35.43307) <$ "cm"
-  <|> (* 90) <$ "in"
-  <|> id <$ "px"
-  <|> pure id
-
 dashArray :: Parser [Number]
 dashArray = skipSpace *> (complexNumber `sepBy1` commaWsp)
 
@@ -232,7 +222,6 @@ numberList = skipSpace *> (num `sepBy1` commaWsp)
 complexNumber :: Parser Number
 complexNumber = do
     n <- num
-    let apply f = Num $ f n
     (Percent (n / 100) <$ char '%')
         <|> (Em n <$ string "em")
         <|> (Mm n <$ string "mm")
@@ -241,7 +230,6 @@ complexNumber = do
         <|> (Pc n <$ string "pc")
         <|> (Num n <$ string "px")
         <|> (Inches n <$ string "in")
-        <|> (apply <$> unitParser)
         <|> pure (Num n)
 
 term :: Parser CssElement
