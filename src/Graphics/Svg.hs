@@ -87,15 +87,5 @@ resolveUses doc =
 -- inside it.
 applyCSSRules :: Document -> Document
 applyCSSRules doc = doc
-    { _elements = cssRewrite <$> _elements doc
-    , _definitions = M.map defApply $ _definitions doc
-    }
-  where
-    cssRewrite = cssApply $ _styleRules doc
-    defApply d = case d of
-      ElementLinearGradient _ -> d
-      ElementRadialGradient _ -> d
-      ElementPattern _ -> d
-      ElementMarker _ -> d
-      ElementGeometry t -> ElementGeometry $ cssRewrite t
+    { _elements = cssApply (_styleRules doc) <$> _elements doc }
 

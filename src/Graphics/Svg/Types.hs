@@ -922,10 +922,8 @@ zipTree :: ([[Tree]] -> Tree) -> Tree -> Tree
 zipTree f = dig [] where
   dig prev e@None = f $ appNode prev e
   dig prev e@(UseTree _ Nothing) = f $ appNode prev e
-  dig prev e@(UseTree nfo (Just sub)) = f $ appNode prev tree'
-    where useContext = appNode prev e
-          tree' = UseTree nfo $ Just sub'
-          sub' = f $ appNode useContext sub
+  dig prev e@(UseTree nfo (Just u)) =
+      f . appNode prev . UseTree nfo . Just $ dig ([] : appNode prev e) u
   dig prev e@(GroupTree g) =
       f . appNode prev . GroupTree $ zipGroup (appNode prev e) g
   dig prev e@(SymbolTree g) =
