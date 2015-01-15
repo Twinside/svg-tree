@@ -369,6 +369,18 @@ cssIdentStringParser setter f attr ((CssIdent i:_):_) =
     attr & setter .~ f (T.unpack i)
 cssIdentStringParser _ _ attr _ = attr
 
+fontFamilyParser :: CssUpdater
+fontFamilyParser attr (lst:_) = attr & fontFamily .~ fontNames
+  where
+    fontNames = Last . Just $ T.unpack <$> extractString lst
+
+    extractString [] = []
+    extractString (CssIdent n:rest) = n : extractString rest
+    extractString (CssString n:rest) = n : extractString rest
+    extractString (_:rest) = extractString rest
+fontFamilyParser attr _ = attr
+
+
 cssUniqueTexture :: ASetter DrawAttributes DrawAttributes
                     a (Last Texture)
                  -> CssUpdater
@@ -433,8 +445,7 @@ drawAttributesList =
         cssUniqueFloat strokeOpacity)
     ,(numericLastSetter "font-size" fontSize, cssUniqueNumber fontSize)
     ,(parserLastSetter "font-family" fontFamily (Just . commaSeparate)
-        (Just . intercalate ", "),
-        cssIdentStringParser fontFamily (\s -> Last (Just $ commaSeparate s)))
+        (Just . intercalate ", "), fontFamilyParser)
         
     ,(parserLastSetter "fill-rule" fillRule parseFillRule
         (Just . serializeFillRule),
