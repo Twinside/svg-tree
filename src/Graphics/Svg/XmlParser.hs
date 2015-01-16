@@ -443,7 +443,8 @@ drawAttributesList =
         cssUniqueFloat fillOpacity)
     ,(opacitySetter "stroke-opacity" strokeOpacity fillOpacity,
         cssUniqueFloat strokeOpacity)
-    ,(numericLastSetter "font-size" fontSize, cssUniqueNumber fontSize)
+    ,(numericLastSetter "font-size" fontSize,
+      cssUniqueNumber fontSize)
     ,(parserLastSetter "font-family" fontFamily (Just . commaSeparate)
         (Just . intercalate ", "), fontFamilyParser)
         
@@ -842,6 +843,7 @@ gradientOffsetSetter = SvgAttributeLens "offset" setter serialize
         val = case parseMayStartDot complexNumber str of
             Nothing -> 0
             Just (Num n) -> n
+            Just (Px n) -> n
             Just (Percent n) -> n
             Just (Em n) -> n
             Just (Pc n) -> n

@@ -228,7 +228,7 @@ complexNumber = do
         <|> (Cm n <$ string "cm")
         <|> (Point n <$ string "pt")
         <|> (Pc n <$ string "pc")
-        <|> (Num n <$ string "px")
+        <|> (Px n <$ string "px")
         <|> (Inches n <$ string "in")
         <|> pure (Num n)
 
@@ -251,6 +251,7 @@ term = checkRgb <$> function
         CssColor $ PixelRGBA8 (to r) (to g) (to b) 255
        where clamp = max 0 . min 255
              to (Num n) = floor $ clamp n 
+             to (Px n) = floor $ clamp n 
              to (Percent p) = floor . clamp $ p * 255
              to (Em c) = floor $ clamp c
              to (Pc n) = floor $ clamp n

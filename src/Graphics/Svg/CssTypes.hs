@@ -144,6 +144,7 @@ instance TextBuildable CssDeclaration where
 -- render size.
 data Number
   = Num Float       -- ^ Simple coordinate in current user coordinate.
+  | Px Float        -- ^ With suffix "px"
   | Em Float        -- ^ Number relative to the current font size.
   | Percent Float   -- ^ Number relative to the current viewport size.
   | Pc Float
@@ -158,6 +159,7 @@ data Number
 serializeNumber :: Number -> String
 serializeNumber n = case n of
     Num c -> printf "%g" c
+    Px c -> printf "%gpx" c
     Em cc -> printf "%gem" cc
     Percent p -> printf "%d%%" (floor $ 100 * p :: Int)
     Pc p -> printf "%gpc" p
@@ -203,6 +205,7 @@ toUserUnit :: Dpi -> Number -> Number
 toUserUnit dpi = go where
   go nu = case nu of
     Num _ -> nu
+    Px p -> go $ Num p
     Em _ -> nu
     Percent _ -> nu
     Pc n -> go . Inches $ (12 * n) / 72
