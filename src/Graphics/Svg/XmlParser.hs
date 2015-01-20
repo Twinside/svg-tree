@@ -505,6 +505,17 @@ instance XMLUpdatable Rectangle where
     ,numericSetter "ry" (rectCornerRadius._2)
     ]
 
+instance XMLUpdatable Image where
+  xmlTagName _ = "image"
+  serializeTreeNode = genericSerializeWithDrawAttr
+  attributes =
+    [numericSetter "width" imageWidth
+    ,numericSetter "height" imageHeight
+    ,numericSetter "x" (imageCornerUpperLeft._1)
+    ,numericSetter "y" (imageCornerUpperLeft._2)
+    ,parserSetter "href" imageHref (Just . dropSharp) (Just . ('#':))
+    ]
+
 instance XMLUpdatable Line where
   xmlTagName _ = "line"
   serializeTreeNode = genericSerializeWithDrawAttr
@@ -595,6 +606,7 @@ instance XMLUpdatable Tree where
     LineTree l -> serializeTreeNode l
     RectangleTree r -> serializeTreeNode r
     TextTree Nothing t -> serializeTreeNode t
+    ImageTree i -> serializeTreeNode i
     TextTree (Just p) t ->
         setChildren textNode [X.Elem . setChildren pathNode $ X.elContent textNode]
       where
@@ -654,7 +666,7 @@ instance XMLUpdatable Use where
     ,numericSetter "y" $ useBase._2
     ,numericMaySetter "width" useWidth
     ,numericMaySetter "height" useHeight
-    ,parserSetter "href" useName (Just . dropSharp) (Just . ('#':))
+    ,parserSetter "href" useName Just Just
     ]
 
 dropSharp :: String -> String

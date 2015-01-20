@@ -76,6 +76,10 @@ module Graphics.Svg.Types
     , Ellipse( .. )
     , HasEllipse( .. )
 
+      -- ** Image
+    , Image( .. )
+    , HasImage( .. )
+
       -- ** Use
     , Use( .. )
     , HasUse( .. )
@@ -663,6 +667,36 @@ instance WithDefaultSvg Ellipse where
     , _ellipseYRadius = Num 0
     }
 
+-- | Define an `<image>` tag.
+data Image = Image
+  { -- | Drawing attributes of the image
+    _imageDrawAttributes :: DrawAttributes
+    -- | Position of the image referenced by its
+    -- upper left corner.
+  , _imageCornerUpperLeft :: Point
+    -- | Image width
+  , _imageWidth :: Number
+    -- | Image Height
+  , _imageHeight :: Number
+    -- | Image href, pointing to the real image.
+  , _imageHref :: String
+  }
+  deriving (Eq, Show)
+
+makeClassy ''Image
+
+instance WithDrawAttributes Image where
+  drawAttr = imageDrawAttributes
+
+instance WithDefaultSvg Image where
+  defaultSvg = Image
+    { _imageDrawAttributes = mempty
+    , _imageCornerUpperLeft = (Num 0, Num 0)
+    , _imageWidth = Num 0
+    , _imageHeight = Num 0
+    , _imageHref = ""
+    }
+
 -- | Define an `<use>` for a named content.
 -- Every named content can be reused in the
 -- document using this element.
@@ -854,6 +888,7 @@ data Tree
     | LineTree      !Line
     | RectangleTree !Rectangle
     | TextTree      !(Maybe TextPath) !Text
+    | ImageTree     !Image
     deriving (Eq, Show)
 
 -- | Define the orientation, associated to the
@@ -936,6 +971,7 @@ zipTree f = dig [] where
   dig prev e@(LineTree _) = f $ appNode prev e
   dig prev e@(RectangleTree _) = f $ appNode prev e
   dig prev e@(TextTree _ _) = f $ appNode prev e
+  dig prev e@(ImageTree _) = f $ appNode prev e
 
   zipGroup prev g = g { _groupChildren = updatedChildren }
     where
@@ -958,6 +994,7 @@ mapTree f = go where
   go e@(LineTree _) = f e
   go e@(RectangleTree _) = f e
   go e@(TextTree _ _) = f e
+  go e@(ImageTree _) = f e
 
   mapGroup g =
       g { _groupChildren = map go $ _groupChildren g }
@@ -979,6 +1016,7 @@ nameOfTree v =
    LineTree _      -> "line"
    RectangleTree _ -> "rectangle"
    TextTree    _ _ -> "text"
+   ImageTree _     -> "image"
 
 drawAttrOfTree :: Tree -> DrawAttributes
 drawAttrOfTree v = case v of
@@ -994,6 +1032,7 @@ drawAttrOfTree v = case v of
   LineTree e -> e ^. drawAttr
   RectangleTree e -> e ^. drawAttr
   TextTree _ e -> e ^. drawAttr
+  ImageTree e -> e ^. drawAttr
 
 setDrawAttrOfTree :: Tree -> DrawAttributes -> Tree
 setDrawAttrOfTree v attr = case v of
@@ -1009,6 +1048,7 @@ setDrawAttrOfTree v attr = case v of
   LineTree e -> LineTree $ e & drawAttr .~ attr
   RectangleTree e -> RectangleTree $ e & drawAttr .~ attr
   TextTree a e -> TextTree a $ e & drawAttr .~ attr
+  ImageTree e -> ImageTree $ e & drawAttr .~ attr
 
 instance WithDrawAttributes Tree where
     drawAttr = lens drawAttrOfTree setDrawAttrOfTree
