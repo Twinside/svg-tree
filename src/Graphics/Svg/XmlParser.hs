@@ -550,7 +550,7 @@ instance XMLUpdatable PolyLine where
         (parse pointData)
         (Just . serializePoints)]
 
-instance XMLUpdatable PathPrim where
+instance XMLUpdatable Path where
   xmlTagName _ =  "path"
   serializeTreeNode = genericSerializeWithDrawAttr
   attributes =
@@ -587,15 +587,15 @@ instance XMLUpdatable Tree where
     UseTree u _ -> serializeTreeNode u
     GroupTree g -> serializeTreeNode g
     SymbolTree s -> serializeTreeNode s
-    Path p -> serializeTreeNode p
+    PathTree p -> serializeTreeNode p
     CircleTree c -> serializeTreeNode c
     PolyLineTree p -> serializeTreeNode p
     PolygonTree p -> serializeTreeNode p
     EllipseTree el -> serializeTreeNode el
     LineTree l -> serializeTreeNode l
     RectangleTree r -> serializeTreeNode r
-    TextArea Nothing t -> serializeTreeNode t
-    TextArea (Just p) t ->
+    TextTree Nothing t -> serializeTreeNode t
+    TextTree (Just p) t ->
         setChildren textNode [X.Elem . setChildren pathNode $ X.elContent textNode]
       where
         textNode = serializeTreeNode t
@@ -799,9 +799,9 @@ unparseText = extractResult . go True
     go startStrip (X.Elem e@(nodeName -> "textPath"):rest) = 
         case attributeFinder "href" e of
           Nothing -> go startStrip rest
-          Just v -> (tsub ++ trest, pure path, retStrp)
+          Just v -> (tsub ++ trest, pure p, retStrp)
             where
-              path = (xmlUnparse e) { _textPathName = dropSharp v }
+              p = (xmlUnparse e) { _textPathName = dropSharp v }
               (trest, _, retStrp) = go restStrip rest
               (tsub, _, restStrip) = go startStrip $ X.elContent e
 
@@ -939,10 +939,10 @@ unparse e@(nodeName -> "g") = do
   pure $ GroupTree $ groupNode & groupChildren .~ realChildren
 
 unparse e@(nodeName -> "text") = do
-  pathWithGeometry <- pathGeomtryOf path
-  pure . TextArea pathWithGeometry $ xmlUnparse e & textRoot .~ root
+  pathWithGeometry <- pathGeomtryOf tPath
+  pure . TextTree pathWithGeometry $ xmlUnparse e & textRoot .~ root
     where
-      (textContent, path) = unparseText $ X.elContent e
+      (textContent, tPath) = unparseText $ X.elContent e
       
       pathGeomtryOf Nothing = pure Nothing
       pathGeomtryOf (Just pathInfo) = do
@@ -953,7 +953,7 @@ unparse e@(nodeName -> "text") = do
           Just (ElementRadialGradient _) -> pure Nothing
           Just (ElementPattern _) -> pure Nothing
           Just (ElementMarker _) -> pure Nothing
-          Just (ElementGeometry (Path p)) ->
+          Just (ElementGeometry (PathTree p)) ->
               pure . Just $ pathInfo { _textPathData = _pathDefinition p }
           Just (ElementGeometry _) -> pure Nothing
 
@@ -976,7 +976,7 @@ unparse e@(nodeName -> "circle") =
 unparse e@(nodeName -> "line") =
   pure . LineTree $ xmlUnparseWithDrawAttr e
 unparse e@(nodeName -> "path") =
-  pure . Path $ xmlUnparseWithDrawAttr e
+  pure . PathTree $ xmlUnparseWithDrawAttr e
 unparse e@(nodeName -> "use") = 
   pure $ UseTree (xmlUnparseWithDrawAttr e) Nothing
 unparse _ = pure None

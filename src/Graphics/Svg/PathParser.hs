@@ -57,7 +57,7 @@ point = V2 <$> num <* commaWsp <*> num
 pointData :: Parser [RPoint]
 pointData = point `sepBy` commaWsp
 
-command :: Parser Path
+command :: Parser PathCommand
 command =  (MoveTo OriginAbsolute <$ string "M" <*> pointList)
        <|> (MoveTo OriginRelative <$ string "m" <*> pointList)
        <|> (LineTo OriginAbsolute <$ string "L" <*> pointList)
@@ -117,10 +117,10 @@ serializePointTriplet (a, b, c) =
 serializePointTriplets :: [(RPoint, RPoint, RPoint)] -> String
 serializePointTriplets = unwords . fmap serializePointTriplet
 
-serializeCommands :: [Path] -> String
+serializeCommands :: [PathCommand] -> String
 serializeCommands = unwords . fmap serializeCommand
 
-serializeCommand :: Path -> String
+serializeCommand :: PathCommand -> String
 serializeCommand p = case p of
   MoveTo OriginAbsolute points -> "M" ++ serializePoints points
   MoveTo OriginRelative points -> "m" ++ serializePoints points

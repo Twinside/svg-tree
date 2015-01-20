@@ -14,7 +14,7 @@ module Graphics.Svg.Types
     , Origin( .. )
     , Point
     , RPoint
-    , Path( .. )
+    , PathCommand( .. )
     , Transformation( .. )
 
       -- ** Building helpers
@@ -65,8 +65,8 @@ module Graphics.Svg.Types
     , HasPolyLine( .. )
 
       -- ** Path
-    , PathPrim( .. )
-    , HasPathPrim( .. )
+    , Path( .. )
+    , HasPath( .. )
 
       -- ** Circle
     , Circle( .. )
@@ -189,7 +189,7 @@ data Origin
   deriving (Eq, Show)
 
 -- | Path command definition.
-data Path
+data PathCommand
       -- | 'M' or 'm' command
     = MoveTo Origin [RPoint]
       -- | Line to, 'L' or 'l' Svg path command.
@@ -219,12 +219,12 @@ toPoint :: Number -> Number -> Point
 toPoint = (,)
 
 -- | Tell if the path command is an ElipticalArc.
-isPathArc :: Path -> Bool
+isPathArc :: PathCommand -> Bool
 isPathArc (ElipticalArc _ _) = True
 isPathArc _ = False
 
 -- | Tell if a full path contain an ElipticalArc.
-isPathWithArc :: Foldable f => f Path -> Bool
+isPathWithArc :: Foldable f => f PathCommand -> Bool
 isPathWithArc = F.any isPathArc
 
 
@@ -546,23 +546,23 @@ instance WithDefaultSvg Rectangle where
     }
 
 -- | Type mapping the `<path>` svg tag.
-data PathPrim = PathPrim
+data Path = Path
   { -- | Drawing attributes of the path.
     _pathDrawAttributes :: DrawAttributes
     -- | Definition of the path, correspond to the
     -- `d` attributes.
-  , _pathDefinition :: [Path]
+  , _pathDefinition :: [PathCommand]
   }
   deriving (Eq, Show)
 
--- | Lenses for the PathPrim type
-makeClassy ''PathPrim
+-- | Lenses for the Path type
+makeClassy ''Path
 
-instance WithDrawAttributes PathPrim where
+instance WithDrawAttributes Path where
   drawAttr = pathDrawAttributes
 
-instance WithDefaultSvg PathPrim where
-  defaultSvg = PathPrim
+instance WithDefaultSvg Path where
+  defaultSvg = Path
     { _pathDrawAttributes = mempty
     , _pathDefinition = []
     }
@@ -782,7 +782,7 @@ data TextPath = TextPath
     -- | Correspond to the `spacing` attribute.
   , _textPathSpacing     :: !TextPathSpacing
     -- | Real content of the path.
-  , _textPathData        :: ![Path]
+  , _textPathData        :: ![PathCommand]
   }
   deriving (Eq, Show)
 
@@ -846,14 +846,14 @@ data Tree
               , useSubTree     :: !(Maybe Tree) }
     | GroupTree     !(Group Tree)
     | SymbolTree    !(Group Tree)
-    | Path          !PathPrim
+    | PathTree      !Path
     | CircleTree    !Circle
     | PolyLineTree  !PolyLine
     | PolygonTree   !Polygon
     | EllipseTree   !Ellipse
     | LineTree      !Line
     | RectangleTree !Rectangle
-    | TextArea      !(Maybe TextPath) !Text
+    | TextTree      !(Maybe TextPath) !Text
     deriving (Eq, Show)
 
 -- | Define the orientation, associated to the
@@ -928,14 +928,14 @@ zipTree f = dig [] where
       f . appNode prev . GroupTree $ zipGroup (appNode prev e) g
   dig prev e@(SymbolTree g) =
       f . appNode prev . SymbolTree $ zipGroup (appNode prev e) g
-  dig prev e@(Path _) = f $ appNode prev e
+  dig prev e@(PathTree _) = f $ appNode prev e
   dig prev e@(CircleTree _) = f $ appNode prev e
   dig prev e@(PolyLineTree _) = f $ appNode prev e
   dig prev e@(PolygonTree _) = f $ appNode prev e
   dig prev e@(EllipseTree _) = f $ appNode prev e
   dig prev e@(LineTree _) = f $ appNode prev e
   dig prev e@(RectangleTree _) = f $ appNode prev e
-  dig prev e@(TextArea _ _) = f $ appNode prev e
+  dig prev e@(TextTree _ _) = f $ appNode prev e
 
   zipGroup prev g = g { _groupChildren = updatedChildren }
     where
@@ -950,14 +950,14 @@ mapTree f = go where
   go e@(UseTree _ _) = f e
   go (GroupTree g) = f . GroupTree $ mapGroup g
   go (SymbolTree g) = f . SymbolTree $ mapGroup g
-  go e@(Path _) = f e
+  go e@(PathTree _) = f e
   go e@(CircleTree _) = f e
   go e@(PolyLineTree _) = f e
   go e@(PolygonTree _) = f e
   go e@(EllipseTree _) = f e
   go e@(LineTree _) = f e
   go e@(RectangleTree _) = f e
-  go e@(TextArea _ _) = f e
+  go e@(TextTree _ _) = f e
 
   mapGroup g =
       g { _groupChildren = map go $ _groupChildren g }
@@ -971,14 +971,14 @@ nameOfTree v =
    UseTree _ _     -> "use"
    GroupTree _     -> "g"
    SymbolTree _    -> "symbol"
-   Path _      -> "path"
+   PathTree _      -> "path"
    CircleTree _    -> "circle"
    PolyLineTree _  -> "polyline"
    PolygonTree _   -> "polygon"
    EllipseTree _   -> "ellipse"
    LineTree _      -> "line"
    RectangleTree _ -> "rectangle"
-   TextArea    _ _ -> "text"
+   TextTree    _ _ -> "text"
 
 drawAttrOfTree :: Tree -> DrawAttributes
 drawAttrOfTree v = case v of
@@ -986,14 +986,14 @@ drawAttrOfTree v = case v of
   UseTree e _ -> e ^. drawAttr
   GroupTree e -> e ^. drawAttr
   SymbolTree e -> e ^. drawAttr
-  Path e -> e ^. drawAttr
+  PathTree e -> e ^. drawAttr
   CircleTree e -> e ^. drawAttr
   PolyLineTree e -> e ^. drawAttr
   PolygonTree e -> e ^. drawAttr
   EllipseTree e -> e ^. drawAttr
   LineTree e -> e ^. drawAttr
   RectangleTree e -> e ^. drawAttr
-  TextArea _ e -> e ^. drawAttr
+  TextTree _ e -> e ^. drawAttr
 
 setDrawAttrOfTree :: Tree -> DrawAttributes -> Tree
 setDrawAttrOfTree v attr = case v of
@@ -1001,14 +1001,14 @@ setDrawAttrOfTree v attr = case v of
   UseTree e m -> UseTree (e & drawAttr .~ attr) m
   GroupTree e -> GroupTree $ e & drawAttr .~ attr
   SymbolTree e -> SymbolTree $ e & drawAttr .~ attr
-  Path e -> Path $ e & drawAttr .~ attr
+  PathTree e -> PathTree $ e & drawAttr .~ attr
   CircleTree e -> CircleTree $ e & drawAttr .~ attr
   PolyLineTree e -> PolyLineTree $ e & drawAttr .~ attr
   PolygonTree e -> PolygonTree $ e & drawAttr .~ attr
   EllipseTree e -> EllipseTree $ e & drawAttr .~ attr
   LineTree e -> LineTree $ e & drawAttr .~ attr
   RectangleTree e -> RectangleTree $ e & drawAttr .~ attr
-  TextArea a e -> TextArea a $ e & drawAttr .~ attr
+  TextTree a e -> TextTree a $ e & drawAttr .~ attr
 
 instance WithDrawAttributes Tree where
     drawAttr = lens drawAttrOfTree setDrawAttrOfTree

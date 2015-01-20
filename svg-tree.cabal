@@ -23,12 +23,13 @@ library
   Ghc-options: -O3 -Wall
   ghc-prof-options: -rtsopts -Wall -prof -auto-all
   exposed-modules: Graphics.Svg
+                 , Graphics.Svg.CssTypes
                  , Graphics.Svg.Types
-                 , Graphics.Svg.CssParser
+
   other-modules: Graphics.Svg.NamedColors
-               , Graphics.Svg.CssTypes
                , Graphics.Svg.XmlParser
                , Graphics.Svg.PathParser
+               , Graphics.Svg.CssParser
                , Graphics.Svg.ColorParser
 
   build-depends: base >= 4.6
