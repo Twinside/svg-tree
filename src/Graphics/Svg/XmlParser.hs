@@ -666,7 +666,7 @@ instance XMLUpdatable Use where
     ,numericSetter "y" $ useBase._2
     ,numericMaySetter "width" useWidth
     ,numericMaySetter "height" useHeight
-    ,parserSetter "href" useName Just Just
+    ,parserSetter "href" useName (Just . dropSharp) (Just . ('#':))
     ]
 
 dropSharp :: String -> String
