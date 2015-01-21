@@ -975,6 +975,8 @@ unparse e@(nodeName -> "text") = do
            , _spanContent = textContent
            }
 
+unparse e@(nodeName -> "image") =
+  pure . ImageTree $ xmlUnparseWithDrawAttr e
 unparse e@(nodeName -> "ellipse") =
   pure . EllipseTree $ xmlUnparseWithDrawAttr e
 unparse e@(nodeName -> "rect") = 
