@@ -1,6 +1,7 @@
 -- | Module providing basic input/output for the SVG document,
 -- for document building, please refer to Graphics.Svg.Types.
 module Graphics.Svg ( loadSvgFile
+                    , parseSvgFile
                     , cssApply
                     , applyCSSRules
                     , xmlOfDocument
@@ -12,6 +13,7 @@ module Graphics.Svg ( loadSvgFile
 
 import Control.Applicative( (<$>) )
 import Data.List( foldl' )
+import qualified Data.ByteString as B
 import qualified Data.Map as M
 import qualified Data.Text as T
 import Text.XML.Light.Input( parseXMLDoc )
@@ -28,9 +30,16 @@ import Graphics.Svg.XmlParser
 -- | Try to load an svg file on disc and parse it as
 -- a SVG Document.
 loadSvgFile :: FilePath -> IO (Maybe Document)
-loadSvgFile filename = do
-    fileContent <- readFile filename
-    return $ parseXMLDoc fileContent >>= unparseDocument 
+loadSvgFile filename =
+  parseSvgFile filename <$> B.readFile filename
+
+-- | Parse an in-memory SVG file
+parseSvgFile :: FilePath    -- ^ Source path/URL of the document, used
+                            -- to resolve relative links.
+             -> B.ByteString
+             -> Maybe Document
+parseSvgFile filename fileContent =
+  parseXMLDoc fileContent >>= unparseDocument filename
 
 -- | Save a svg Document on a file on disk.
 saveXmlFile :: FilePath -> Document -> IO ()
