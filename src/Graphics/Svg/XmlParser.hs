@@ -993,8 +993,8 @@ unparse e@(nodeName -> "use") =
   pure $ UseTree (xmlUnparseWithDrawAttr e) Nothing
 unparse _ = pure None
 
-unparseDocument :: X.Element -> Maybe Document
-unparseDocument e@(nodeName -> "svg") = Just Document 
+unparseDocument :: FilePath -> X.Element -> Maybe Document
+unparseDocument rootLocation e@(nodeName -> "svg") = Just Document 
     { _viewBox =
         attributeFinder "viewBox" e >>= parse viewBoxParser
     , _elements = parsedElements
@@ -1003,13 +1003,14 @@ unparseDocument e@(nodeName -> "svg") = Just Document
     , _definitions = symbols named
     , _description = ""
     , _styleRules = cssStyle named
+    , _documentLocation = rootLocation
     }
   where
     (parsedElements, named) =
         runState (mapM unparse $ elChildren e) emptyState
     lengthFind n =
         attributeFinder n e >>= parse complexNumber
-unparseDocument _ = Nothing   
+unparseDocument _ _ = Nothing   
 
 -- | Transform a SVG document to a XML node.
 xmlOfDocument :: Document -> X.Element

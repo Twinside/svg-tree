@@ -1235,13 +1235,14 @@ data Element
 -- | Represent a full svg document with style,
 -- geometry and named elements.
 data Document = Document
-    { _viewBox     :: Maybe (Int, Int, Int, Int)
-    , _width       :: Maybe Number
-    , _height      :: Maybe Number
-    , _elements    :: [Tree]
-    , _definitions :: M.Map String Element
-    , _description  :: String
-    , _styleRules  :: [CssRule]
+    { _viewBox          :: Maybe (Int, Int, Int, Int)
+    , _width            :: Maybe Number
+    , _height           :: Maybe Number
+    , _elements         :: [Tree]
+    , _definitions      :: M.Map String Element
+    , _description      :: String
+    , _styleRules       :: [CssRule]
+    , _documentLocation :: FilePath
     }
     deriving Show
 
