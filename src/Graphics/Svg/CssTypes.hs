@@ -2,6 +2,7 @@
 -- | Define the types used to describes CSS elements
 module Graphics.Svg.CssTypes
     ( CssSelector( .. )
+    , CssSelectorRule
     , CssRule( .. )
     , CssDescriptor( .. )
     , CssDeclaration( .. )
@@ -28,16 +29,20 @@ import Codec.Picture( PixelRGBA8( .. ) )
 
 type Dpi = Int
 
+-- | Helper typeclass for serialization to Text.
 class TextBuildable a where
+    -- | Serialize an element to a text builder.
     tserialize :: a -> TB.Builder
 
+-- | Describe an element of a CSS selector. Multiple
+-- elements can be combined in a CssSelector type.
 data CssDescriptor
   = OfClass T.Text    -- ^ .IDENT
   | OfName  T.Text    -- ^ IDENT
   | OfId    T.Text    -- ^ #IDENT
-  | OfPseudoClass T.Text   -- ^ :IDENT (ignore function syntax)
-  | AnyElem         -- ^ '*'
-  | WithAttrib T.Text T.Text
+  | OfPseudoClass T.Text     -- ^ `:IDENT` (ignore function syntax)
+  | AnyElem                  -- ^ '*'
+  | WithAttrib T.Text T.Text -- ^ ``
   deriving (Eq, Show)
 
 instance TextBuildable CssDescriptor where
@@ -56,7 +61,8 @@ instance TextBuildable CssDescriptor where
 data CssSelector
   = Nearby          -- ^ Correspond to the `+` CSS selector.
   | DirectChildren  -- ^ Correspond to the `>` CSS selectro.
-  | AllOf [CssDescriptor] -- ^ Grouping construct.
+  | AllOf [CssDescriptor] -- ^ Grouping construct, all the elements
+                          -- of the list must be matched.
   deriving (Eq, Show)
 
 instance TextBuildable CssSelector where
@@ -68,8 +74,18 @@ instance TextBuildable CssSelector where
     where
       si = TB.singleton
 
+-- | A CssSelectorRule is a list of all the elements
+-- that must be meet in a depth first search fashion.
+type CssSelectorRule = [CssSelector]
+
+-- | Represent a CSS selector and the different declarations
+-- to apply to the matched elemens.
 data CssRule = CssRule
-    { cssRuleSelector :: ![[CssSelector]]
+    { -- | At the first level represent a list of elements
+      -- to be matched. If any match is made, you can apply
+      -- the declarations. At the second level
+      cssRuleSelector :: ![CssSelectorRule]
+      -- | Declarations to apply to the matched element.
     , cssDeclarations :: ![CssDeclaration]
     }
     deriving (Eq, Show)
@@ -86,12 +102,21 @@ instance TextBuildable CssRule where
       tselectors =
           intersperse (ft ",\n") . fmap tserialize $ concat selectors
 
+-- | Interface for elements to be matched against
+-- some CssRule.
 class CssMatcheable a where
+  -- | For an element, tell its optional ID attribute.
   cssIdOf     :: a -> Maybe T.Text
+  -- | For an element, return all of it's class attributes.
   cssClassOf  :: a -> [T.Text]
+  -- | Return the name of the tagname of the element
   cssNameOf   :: a -> T.Text
+  -- | Return a value of a given attribute if present
   cssAttribOf :: a -> T.Text -> Maybe T.Text
 
+-- | Represent a zipper in depth at the first list
+-- level, and the previous nodes at in the second
+-- list level.
 type CssContext a = [[a]]
 
 isDescribedBy :: CssMatcheable a
@@ -127,8 +152,14 @@ findMatchingDeclarations rules context =
                     , selector <- cssRuleSelector rule
                     , isMatching context $ reverse selector ]
 
-data CssDeclaration
-    = CssDeclaration T.Text [[CssElement]]
+-- | Represent the content to apply to some
+-- CSS matched rules.
+data CssDeclaration = CssDeclaration 
+    { -- | Property name to change (like font-family or color).
+      _cssDeclarationProperty :: T.Text
+      -- | List of values
+    , _cssDecarationlValues   :: [[CssElement]]
+    }
     deriving (Eq, Show)
 
 instance TextBuildable CssDeclaration where
@@ -148,10 +179,10 @@ data Number
   | Em Float        -- ^ Number relative to the current font size.
   | Percent Float   -- ^ Number relative to the current viewport size.
   | Pc Float
-  | Mm Float
-  | Cm Float
-  | Point Float
-  | Inches Float
+  | Mm Float        -- ^ Number in millimeters, relative to DPI.
+  | Cm Float        -- ^ Number in centimeters, relative to DPI.
+  | Point Float     -- ^ Number in points, relative to DPI.
+  | Inches Float    -- ^ Number in inches, relative to DPI.
   deriving (Eq, Show)
 
 -- | Encode the number to string which can be used in a
@@ -171,6 +202,7 @@ serializeNumber n = case n of
 instance TextBuildable Number where
    tserialize = TB.fromText . T.pack . serializeNumber
 
+-- | Value of a CSS property.
 data CssElement
     = CssIdent     !T.Text
     | CssString    !T.Text
