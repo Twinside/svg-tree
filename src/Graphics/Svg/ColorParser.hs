@@ -3,6 +3,7 @@ module Graphics.Svg.ColorParser( colorParser
                                , colorSerializer
                                , textureParser
                                , textureSerializer
+                               , urlRef
                                ) where
 
 import Data.Bits( (.|.), unsafeShiftL )
@@ -93,6 +94,12 @@ textureSerializer (ColorRef px) = colorSerializer px
 textureSerializer (TextureRef str) = printf "url(#%s)" str
 textureSerializer FillNone = "none"
 
+urlRef :: Parser String
+urlRef = string "url(" *> skipSpace *>
+       char '#' *> many1 (letter <|> digit)
+       <* skipSpace <* char ')' <* skipSpace
+
+
 textureParser :: Parser (Maybe Texture)
 textureParser =
   (Just <$> (none
@@ -100,9 +107,5 @@ textureParser =
            <|> (ColorRef <$> colorParser)))
         <|> return Nothing
   where
-    urlRef = string "url(" *> skipSpace *>
-            char '#' *> many1 (letter <|> digit)
-            <* skipSpace <* char ')' <* skipSpace
-
     none = FillNone <$ string "none"
 

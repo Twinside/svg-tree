@@ -914,14 +914,16 @@ data Marker = Marker
   , _markerRefPoint :: (Number, Number)
     -- | Define the width of the marker. Correspond to
     -- the `markerWidth` attribute.
-  , _markerWidth    :: Number
+  , _markerWidth    :: Maybe Number
     -- | Define the height of the marker. Correspond to
     -- the `markerHeight` attribute.
-  , _markerHeight   :: Number
+  , _markerHeight   :: Maybe Number
     -- | Correspond to the `orient` attribute.
   , _markerOrient   :: Maybe MarkerOrientation
     -- | Map the `markerUnits` attribute.
   , _markerUnits    :: Maybe MarkerUnit
+    -- | Optional viewbox
+  , _markerViewBox  :: !(Maybe (Int, Int, Int, Int))
     -- | Elements defining the marker.
   , _markerElements :: [Tree]
   }
@@ -937,11 +939,12 @@ instance WithDefaultSvg Marker where
   defaultSvg = Marker
     { _markerDrawAttributes = mempty
     , _markerRefPoint = (Num 0, Num 0)
-    , _markerWidth = Num 0
-    , _markerHeight = Num 0
+    , _markerWidth = Nothing
+    , _markerHeight = Nothing
     , _markerOrient = Nothing -- MarkerOrientation
     , _markerUnits = Nothing -- MarkerUnitStrokeWidth
-    , _markerElements = []
+    , _markerViewBox = Nothing
+    , _markerElements = mempty
     }
 
 -- | Insert element in the first sublist in the list of list.

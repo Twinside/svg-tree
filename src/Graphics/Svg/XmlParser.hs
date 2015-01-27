@@ -9,7 +9,7 @@ module Graphics.Svg.XmlParser( xmlOfDocument
                              , drawAttributesList
                              ) where
 
-import Control.Applicative( (<$>)
+import Control.Applicative( (<$>), (<$), (<|>)
                           {-, (<*>)-}
                           , many
                           , pure )
@@ -19,7 +19,7 @@ import Control.Monad( join )
 import Control.Monad.State.Strict( State, runState, modify, gets )
 import Data.Foldable( foldMap )
 import Data.Maybe( catMaybes )
-import Data.Monoid( mempty, Last( Last ), getLast )
+import Data.Monoid( mempty, Last( Last ), getLast, (<>) )
 import Data.List( foldl', intercalate )
 import Text.XML.Light.Proc( findAttrBy, elChildren, strContent )
 import Text.Read( readMaybe )
@@ -28,7 +28,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Builder as TB
 import qualified Data.Map as M
-import Data.Attoparsec.Text( Parser, parseOnly, many1 )
+import Data.Attoparsec.Text( Parser, string, parseOnly, many1 )
 import Graphics.Svg.Types
 import Graphics.Svg.PathParser
 import Graphics.Svg.ColorParser
@@ -72,6 +72,18 @@ parseTextAnchor "middle" = Just TextAnchorMiddle
 parseTextAnchor "start" = Just TextAnchorStart
 parseTextAnchor "end" = Just TextAnchorEnd
 parseTextAnchor _ = Nothing
+
+serializeMarkerRef :: MarkerAttribute -> String
+serializeMarkerRef (MarkerRef r) = "url(" <> r <> ")"
+serializeMarkerRef MarkerNone = "none"
+
+parseMarkerRef :: String -> Maybe MarkerAttribute
+parseMarkerRef s = case parseOnly pa $ T.pack s of
+    Left _ -> Nothing
+    Right v -> Just v
+  where
+    pa = (MarkerNone <$ string "none")
+      <|> (MarkerRef <$> urlRef)
 
 serializeTextAnchor :: TextAnchor -> String
 serializeTextAnchor t = case t of
@@ -392,6 +404,14 @@ cssUniqueTexture setter attr ((CssFunction "url" [CssReference c]:_):_) =
     attr & setter .~ Last (Just . TextureRef $ T.unpack c)
 cssUniqueTexture _ attr _ = attr
 
+cssMarkerAttributeSetter :: Lens' DrawAttributes (Last MarkerAttribute)
+                         -> CssUpdater
+cssMarkerAttributeSetter setter attr ((CssFunction "url" [CssReference c]:_):_) =
+    attr & setter .~ Last (Just . MarkerRef $ T.unpack c)
+cssMarkerAttributeSetter setter attr ((CssIdent "none":_):_) =
+    attr & setter .~ Last (Just MarkerNone)
+cssMarkerAttributeSetter _ attr _ = attr
+
 cssMayStringSetter :: ASetter DrawAttributes DrawAttributes a (Maybe String)
                    -> CssUpdater
 cssMayStringSetter setter attr ((CssIdent i:_):_) =
@@ -462,6 +482,15 @@ drawAttributesList =
     ,(parserLastSetter "text-anchor" textAnchor parseTextAnchor
         (Just . serializeTextAnchor),
         cssIdentStringParser textAnchor (Last . parseTextAnchor))
+    ,(parserLastSetter "marker-end" markerEnd parseMarkerRef
+        (Just . serializeMarkerRef),
+        cssMarkerAttributeSetter markerEnd)
+    ,(parserLastSetter "marker-start" markerEnd parseMarkerRef
+        (Just . serializeMarkerRef),
+        cssMarkerAttributeSetter markerEnd)
+    ,(parserLastSetter "marker-mid" markerEnd parseMarkerRef
+        (Just . serializeMarkerRef),
+        cssMarkerAttributeSetter markerEnd)
     ]
   where
     commaSeparate =
@@ -764,14 +793,18 @@ instance XMLUpdatable Marker where
   attributes =
     [numericSetter "refX" (markerRefPoint._1)
     ,numericSetter "refY" (markerRefPoint._2)
-    ,numericSetter "markerWidth" markerWidth
-    ,numericSetter "markerHeight" markerHeight
+    ,numericMaySetter "markerWidth" markerWidth
+    ,numericMaySetter "markerHeight" markerHeight
     ,parserMaySetter "patternUnits" markerUnits
         parseMarkerUnit
         (Just . serializeMarkerUnit)
     ,parserMaySetter "patternUnits" markerOrient
         parseOrientation
         (Just . serializeOrientation)
+    ,parserMaySetter "viewBox" markerViewBox
+        (parse viewBoxParser)
+        (Just . serializeViewBox)
+
     ]
 
 serializeText :: Text -> X.Element
