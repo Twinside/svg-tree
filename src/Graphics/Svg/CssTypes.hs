@@ -15,6 +15,7 @@ module Graphics.Svg.CssTypes
     , serializeNumber
     , findMatchingDeclarations
     , toUserUnit
+    , mapNumber
     , tserialize
     ) where
 
@@ -184,6 +185,19 @@ data Number
   | Point Float     -- ^ Number in points, relative to DPI.
   | Inches Float    -- ^ Number in inches, relative to DPI.
   deriving (Eq, Show)
+
+-- | Helper function to modify inner value of a number
+mapNumber :: (Float -> Float) -> Number -> Number
+mapNumber f n = case n of
+  Num n -> Num $ f n
+  Px n -> Px $ f n
+  Em n -> Em $ f n
+  Percent n -> Percent $ f n
+  Pc n -> Pc $ f n
+  Mm n -> Mm $ f n
+  Cm n -> Cm $ f n
+  Point n -> Point $ f n
+  Inches n -> Inches $ f n
 
 -- | Encode the number to string which can be used in a
 -- CSS or a svg attributes.

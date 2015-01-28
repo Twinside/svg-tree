@@ -485,12 +485,12 @@ drawAttributesList =
     ,(parserLastSetter "marker-end" markerEnd parseMarkerRef
         (Just . serializeMarkerRef),
         cssMarkerAttributeSetter markerEnd)
-    ,(parserLastSetter "marker-start" markerEnd parseMarkerRef
+    ,(parserLastSetter "marker-start" markerStart parseMarkerRef
         (Just . serializeMarkerRef),
-        cssMarkerAttributeSetter markerEnd)
-    ,(parserLastSetter "marker-mid" markerEnd parseMarkerRef
+        cssMarkerAttributeSetter markerStart)
+    ,(parserLastSetter "marker-mid" markerMid parseMarkerRef
         (Just . serializeMarkerRef),
-        cssMarkerAttributeSetter markerEnd)
+        cssMarkerAttributeSetter markerMid)
     ]
   where
     commaSeparate =

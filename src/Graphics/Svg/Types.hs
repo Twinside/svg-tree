@@ -151,6 +151,7 @@ module Graphics.Svg.Types
     , zipTree
     , mapTree
     , toUserUnit
+    , mapNumber
     ) where
 
 import Data.Function( on )
