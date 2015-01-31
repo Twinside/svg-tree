@@ -602,6 +602,7 @@ instance WithDefaultSvg (Group a) where
 -- a named group.
 newtype Symbol a =
     Symbol { _groupOfSymbol :: Group a }
+  deriving (Eq, Show)
 
 -- | Lenses associated with the Symbol type.
 makeLenses ''Symbol
@@ -880,7 +881,7 @@ data Tree
     | UseTree { useInformation :: !Use
               , useSubTree     :: !(Maybe Tree) }
     | GroupTree     !(Group Tree)
-    | SymbolTree    !(Group Tree)
+    | SymbolTree    !(Symbol Tree)
     | PathTree      !Path
     | CircleTree    !Circle
     | PolyLineTree  !PolyLine
@@ -966,7 +967,8 @@ zipTree f = dig [] where
   dig prev e@(GroupTree g) =
       f . appNode prev . GroupTree $ zipGroup (appNode prev e) g
   dig prev e@(SymbolTree g) =
-      f . appNode prev . SymbolTree $ zipGroup (appNode prev e) g
+      f . appNode prev . SymbolTree . Symbol .
+            zipGroup (appNode prev e) $ _groupOfSymbol g
   dig prev e@(PathTree _) = f $ appNode prev e
   dig prev e@(CircleTree _) = f $ appNode prev e
   dig prev e@(PolyLineTree _) = f $ appNode prev e
@@ -989,7 +991,8 @@ mapTree f = go where
   go e@None = f e
   go e@(UseTree _ _) = f e
   go (GroupTree g) = f . GroupTree $ mapGroup g
-  go (SymbolTree g) = f . SymbolTree $ mapGroup g
+  go (SymbolTree g) =
+      f . SymbolTree . Symbol . mapGroup $ _groupOfSymbol g
   go e@(PathTree _) = f e
   go e@(CircleTree _) = f e
   go e@(PolyLineTree _) = f e
