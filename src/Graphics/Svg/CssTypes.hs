@@ -188,7 +188,7 @@ data Number
 
 -- | Helper function to modify inner value of a number
 mapNumber :: (Float -> Float) -> Number -> Number
-mapNumber f n = case n of
+mapNumber f nu = case nu of
   Num n -> Num $ f n
   Px n -> Px $ f n
   Em n -> Em $ f n

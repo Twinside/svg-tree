@@ -15,7 +15,6 @@ import Control.Applicative( (<$>), (<$), (<|>)
                           , pure )
 
 import Control.Lens hiding( transform, children, elements, element )
-import Control.Monad( join )
 import Control.Monad.State.Strict( State, runState, modify, gets )
 import Data.Foldable( foldMap )
 import Data.Maybe( catMaybes )
@@ -29,6 +28,7 @@ import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Builder as TB
 import qualified Data.Map as M
 import Data.Attoparsec.Text( Parser, string, parseOnly, many1 )
+import Codec.Picture( PixelRGBA8( .. ) )
 import Graphics.Svg.Types
 import Graphics.Svg.PathParser
 import Graphics.Svg.ColorParser
@@ -55,127 +55,198 @@ attributeFinder :: String -> X.Element -> Maybe String
 attributeFinder str =
     findAttrBy (\a -> X.qName a == str)
 
-parseCap :: String -> Maybe Cap
-parseCap "butt" = Just CapButt
-parseCap "round" = Just CapRound
-parseCap "square" = Just CapSquare
-parseCap _ = Nothing
+-- | Helper class to help simplify parsing code
+-- for various attributes.
+class ParseableAttribute a where
+  aparse :: String -> Maybe a
+  aserialize :: a -> Maybe String
 
-serializeCap :: Cap -> String
-serializeCap c = case c of
-  CapButt -> "butt"
-  CapRound -> "round"
-  CapSquare -> "square"
+instance ParseableAttribute v => ParseableAttribute (Maybe v) where
+  aparse = fmap Just . aparse
+  aserialize = (>>= aserialize)
 
-parseTextAnchor :: String -> Maybe TextAnchor
-parseTextAnchor "middle" = Just TextAnchorMiddle
-parseTextAnchor "start" = Just TextAnchorStart
-parseTextAnchor "end" = Just TextAnchorEnd
-parseTextAnchor _ = Nothing
+instance ParseableAttribute v => ParseableAttribute (Last v) where
+  aparse = fmap Last . aparse
+  aserialize = aserialize . getLast
 
-serializeMarkerRef :: MarkerAttribute -> String
-serializeMarkerRef (MarkerRef r) = "url(" <> r <> ")"
-serializeMarkerRef MarkerNone = "none"
+instance ParseableAttribute String where
+  aparse = Just
+  aserialize = Just
 
-parseMarkerRef :: String -> Maybe MarkerAttribute
-parseMarkerRef s = case parseOnly pa $ T.pack s of
-    Left _ -> Nothing
-    Right v -> Just v
-  where
-    pa = (MarkerNone <$ string "none")
-      <|> (MarkerRef <$> urlRef)
+instance ParseableAttribute Number where
+  aparse = parseMayStartDot complexNumber
+  aserialize = Just . serializeNumber
 
-serializeTextAnchor :: TextAnchor -> String
-serializeTextAnchor t = case t of
-  TextAnchorMiddle -> "middle"
-  TextAnchorStart -> "start"
-  TextAnchorEnd -> "end"
+instance ParseableAttribute [Number] where
+  aparse = parse dashArray
+  aserialize = Just . serializeDashArray
 
-parseLineJoin :: String -> Maybe LineJoin
-parseLineJoin "miter" = Just JoinMiter
-parseLineJoin "round" = Just JoinRound
-parseLineJoin "bevel" = Just JoinBevel
-parseLineJoin _ = Nothing
+instance ParseableAttribute PixelRGBA8 where
+  aparse = parse colorParser
+  aserialize = Just . colorSerializer
 
-serializeLineJoin :: LineJoin -> String
-serializeLineJoin j = case j of
+instance ParseableAttribute [PathCommand] where
+  aparse = parse $ many1 command
+  aserialize = Just . serializeCommands
+
+instance ParseableAttribute [RPoint] where
+  aparse = parse pointData
+  aserialize = Just . serializePoints
+
+instance ParseableAttribute Float where
+  aparse = parseMayStartDot num
+  aserialize v = Just $ printf "%g" v
+
+instance ParseableAttribute Texture where
+  aparse = parse textureParser
+  aserialize = Just . textureSerializer
+
+instance ParseableAttribute [Transformation] where
+  aparse = parse $ many transformParser
+  aserialize = Just . serializeTransformations
+
+instance ParseableAttribute Cap where
+  aparse s = case s of
+    "butt" -> Just CapButt
+    "round" -> Just CapRound
+    "square" -> Just CapSquare
+    _ -> Nothing
+
+  aserialize c = Just $ case c of
+    CapButt -> "butt"
+    CapRound -> "round"
+    CapSquare -> "square"
+
+instance ParseableAttribute TextAnchor where
+  aparse s = case s of
+    "middle" -> Just TextAnchorMiddle
+    "start" -> Just TextAnchorStart
+    "end" -> Just TextAnchorEnd
+    _ -> Nothing
+ 
+  aserialize t = Just $ case t of
+    TextAnchorMiddle -> "middle"
+    TextAnchorStart -> "start"
+    TextAnchorEnd -> "end"
+ 
+instance ParseableAttribute MarkerAttribute where
+  aparse s = case parseOnly pa $ T.pack s of
+     Left _ -> Nothing
+     Right v -> Just v
+    where
+      pa = (MarkerNone <$ string "none")
+        <|> (MarkerRef <$> urlRef)
+
+  aserialize c = Just $ case c of
+    MarkerRef r -> "url(#" <> r <> ")"
+    MarkerNone -> "none"
+
+instance ParseableAttribute LineJoin where
+  aparse s = case s of
+    "miter" -> Just JoinMiter
+    "round" -> Just JoinRound
+    "bevel" -> Just JoinBevel
+    _ -> Nothing
+
+  aserialize j = Just $ case j of
     JoinMiter -> "miter"
     JoinRound -> "round"
     JoinBevel -> "bevel"
 
-parseGradientUnit :: String -> GradientUnits
-parseGradientUnit "userSpaceOnUse" = GradientUserSpace
-parseGradientUnit "objectBoundingBox" = GradientBoundingBox
-parseGradientUnit _ = GradientBoundingBox
+instance ParseableAttribute GradientUnits where
+  aparse s = case s of
+    "userSpaceOnUse" -> Just GradientUserSpace
+    "objectBoundingBox" -> Just GradientBoundingBox
+    _ -> Just GradientBoundingBox
 
-serializeGradientUnit :: GradientUnits -> String
-serializeGradientUnit uni = case uni of
+  aserialize uni = Just $ case uni of
     GradientUserSpace -> "userSpaceOnUse"
     GradientBoundingBox -> "objectBoundingBox"
 
-parseGradientSpread :: String -> Spread
-parseGradientSpread "pad" = SpreadPad
-parseGradientSpread "reflect" = SpreadReflect
-parseGradientSpread "repeat" = SpreadRepeat
-parseGradientSpread _ = SpreadPad
+instance ParseableAttribute Spread where
+  aparse s = case s of
+    "pad" -> Just SpreadPad
+    "reflect" -> Just SpreadReflect
+    "repeat" -> Just SpreadRepeat
+    _ -> Nothing
 
-serializeGradientSpread :: Spread -> String
-serializeGradientSpread spread = case spread of
+  aserialize s = Just $ case s of
     SpreadPad -> "pad"
     SpreadReflect -> "reflect"
     SpreadRepeat -> "repeat"
 
-parseFillRule :: String -> Maybe FillRule
-parseFillRule "nonzero" = Just FillNonZero
-parseFillRule "evenodd" = Just FillEvenOdd
-parseFillRule _ = Nothing
+instance ParseableAttribute FillRule where
+  aparse s = case s of
+    "nonzero" -> Just FillNonZero
+    "evenodd" -> Just FillEvenOdd
+    _ -> Nothing
 
-serializeFillRule :: FillRule -> String
-serializeFillRule FillNonZero = "nonzero"
-serializeFillRule FillEvenOdd = "evenodd"
+  aserialize f = Just $ case f of
+    FillNonZero -> "nonzero"
+    FillEvenOdd -> "evenodd"
 
-parseTextAdjust :: String -> TextAdjust
-parseTextAdjust "spacing" = TextAdjustSpacing
-parseTextAdjust "spacingAndGlyphs" = TextAdjustSpacingAndGlyphs
-parseTextAdjust _ = TextAdjustSpacing
-
-parsePatternUnit :: String -> Maybe PatternUnit
-parsePatternUnit str = case str of
-  "userSpaceOnUse" -> Just PatternUnitUserSpaceOnUse
-  "objectBoundingBox" -> Just PatternUnitObjectBoundingBox
-  _ -> Nothing
-
-serializePatternUnit :: PatternUnit -> String
-serializePatternUnit p = case p of
-  PatternUnitUserSpaceOnUse -> "userSpaceOnUse"
-  PatternUnitObjectBoundingBox -> "objectBoundingBox"
-
-serializeTextAdjust :: TextAdjust -> String
-serializeTextAdjust adj = case adj of
+instance ParseableAttribute TextAdjust where
+  aparse s = Just $ case s of
+    "spacing" -> TextAdjustSpacing
+    "spacingAndGlyphs" -> TextAdjustSpacingAndGlyphs
+    _ -> TextAdjustSpacing
+ 
+  aserialize a = Just $ case a of
     TextAdjustSpacing -> "spacing"
     TextAdjustSpacingAndGlyphs -> "spacingAndGlyphs"
 
-parseMarkerUnit :: String -> Maybe MarkerUnit
-parseMarkerUnit s = case s of
-  "strokeWidth" -> Just MarkerUnitStrokeWidth
-  "userSpaceOnUse" -> Just MarkerUnitUserSpaceOnUse
-  _ -> Nothing
+instance ParseableAttribute PatternUnit where
+  aparse str = case str of
+    "userSpaceOnUse" -> Just PatternUnitUserSpaceOnUse
+    "objectBoundingBox" -> Just PatternUnitObjectBoundingBox
+    _ -> Nothing
 
-serializeMarkerUnit :: MarkerUnit -> String
-serializeMarkerUnit u = case u of
-  MarkerUnitStrokeWidth -> "strokeWidth"
-  MarkerUnitUserSpaceOnUse -> "userSpaceOnUse"
+  aserialize p = Just $ case p of
+    PatternUnitUserSpaceOnUse -> "userSpaceOnUse"
+    PatternUnitObjectBoundingBox -> "objectBoundingBox"
 
-parseOrientation :: String -> Maybe MarkerOrientation
-parseOrientation s = case (s, readMaybe s) of
+instance ParseableAttribute MarkerUnit where
+  aparse s = case s of
+    "strokeWidth" -> Just MarkerUnitStrokeWidth
+    "userSpaceOnUse" -> Just MarkerUnitUserSpaceOnUse
+    _ -> Nothing
+
+  aserialize u = Just $ case u of
+    MarkerUnitStrokeWidth -> "strokeWidth"
+    MarkerUnitUserSpaceOnUse -> "userSpaceOnUse"
+
+instance ParseableAttribute MarkerOrientation where
+  aparse s = case (s, readMaybe s) of
     ("auto", _) -> Just OrientationAuto
     (_, Just f) -> Just $ OrientationAngle f
     _ -> Nothing
 
-serializeOrientation :: MarkerOrientation -> String
-serializeOrientation s = case s of
+  aserialize s = Just $ case s of
     OrientationAuto -> "auto"
     OrientationAngle f -> show f
+
+instance ParseableAttribute (Int, Int, Int, Int) where
+  aparse = parse viewBoxParser
+  aserialize = Just . serializeViewBox
+
+instance ParseableAttribute TextPathMethod where
+  aparse s = case s of
+    "align" -> Just TextPathAlign
+    "stretch" -> Just TextPathStretch
+    _ -> Nothing
+  aserialize m = Just $ case m of
+    TextPathAlign -> "align"
+    TextPathStretch -> "stretch"
+
+instance ParseableAttribute TextPathSpacing where
+  aparse s = case s of
+    "auto" -> Just TextPathSpacingAuto
+    "exact" -> Just TextPathSpacingExact
+    _ -> Nothing
+
+  aserialize s = Just $ case s of
+    TextPathSpacingAuto -> "auto"
+    TextPathSpacingExact -> "exact"
 
 parse :: Parser a -> String -> Maybe a
 parse p str = case parseOnly p (T.pack str) of
@@ -251,43 +322,6 @@ genericSerializeWithDrawAttr node = mergeAttributes thisXml drawAttrNode where
 type CssUpdater =
     DrawAttributes -> [[CssElement]] -> DrawAttributes
 
-numericSetter :: String -> Lens' a Number -> SvgAttributeLens a
-numericSetter attribute elLens = SvgAttributeLens attribute updater serializer
-  where
-    updater el str = case parseMayStartDot complexNumber str of
-        Nothing -> el
-        Just v -> el & elLens .~ v
-
-    serializer a = Just . serializeNumber $ a ^. elLens
-
-numericMaySetter :: String -> Lens' a (Maybe Number) -> SvgAttributeLens a
-numericMaySetter attribute elLens = SvgAttributeLens attribute updater serializer
-  where
-    updater el str = case parseMayStartDot complexNumber str of
-        Nothing -> el
-        Just v -> el & elLens .~ Just v
-
-    serializer a = serializeNumber <$> a ^. elLens
-
-
-numericLastSetter :: String -> Lens' a (Last Number) -> SvgAttributeLens a
-numericLastSetter attribute elLens = SvgAttributeLens attribute updater serializer
-  where
-    updater el str = case parseMayStartDot complexNumber str of
-        Nothing -> el
-        Just v -> el & elLens .~ Last (Just v)
-
-    serializer a = serializeNumber <$> getLast (a ^. elLens)
-
-numLastSetter :: String -> Lens' a (Last Float) -> SvgAttributeLens a
-numLastSetter attribute elLens = SvgAttributeLens attribute updater serializer
-  where
-    updater el str = case parseMayStartDot num str of
-        Nothing -> el
-        Just v -> el & elLens .~ Last (Just v)
-
-    serializer a = printf "%g" <$> getLast (a ^. elLens)
-
 groupOpacitySetter :: SvgAttributeLens DrawAttributes
 groupOpacitySetter = SvgAttributeLens "opacity" updater serializer
   where
@@ -326,16 +360,21 @@ parserSetter attribute elLens parser serialize =
 
     serializer  a = serialize $ a ^. elLens
 
-parserMaySetter :: String -> Lens' a (Maybe e) -> (String -> Maybe e) -> Serializer e
-                -> SvgAttributeLens a
-parserMaySetter attribute elLens parser serialize =
+parseIn :: (Eq a, WithDefaultSvg s, ParseableAttribute a)
+        => String -> Lens' s a -> SvgAttributeLens s
+parseIn attribute elLens =
     SvgAttributeLens attribute updater serializer
   where
-    updater el str = case parser str of
+    updater el str = case aparse str of
         Nothing -> el
-        Just v -> el & elLens .~ Just v
+        Just v -> el & elLens .~ v
 
-    serializer a = a ^. elLens >>= serialize
+    serializer a 
+      | v /= defaultVal = aserialize v
+      | otherwise = Nothing
+      where
+        v = a ^. elLens
+        defaultVal = defaultSvg ^. elLens
 
 parserLastSetter :: String -> Lens' a (Last e) -> (String -> Maybe e) -> Serializer e
                  -> SvgAttributeLens a
@@ -360,7 +399,8 @@ classSetter = SvgAttributeLens "class" updater serializer
 cssUniqueNumber :: ASetter DrawAttributes DrawAttributes
                    a (Last Number)
                 -> CssUpdater
-cssUniqueNumber setter attr ((CssNumber n:_):_) = attr & setter .~ Last (Just n)
+cssUniqueNumber setter attr ((CssNumber n:_):_) =
+    attr & setter .~ Last (Just n)
 cssUniqueNumber _ attr _ = attr
 
 cssUniqueFloat :: ASetter DrawAttributes DrawAttributes a (Maybe Float)
@@ -375,11 +415,11 @@ cssUniqueMayFloat setter attr ((CssNumber (Num n):_):_) =
     attr & setter .~ Last (Just n)
 cssUniqueMayFloat _ attr _ = attr
 
-cssIdentStringParser :: ASetter DrawAttributes DrawAttributes a b
-                     -> (String -> b) -> CssUpdater
-cssIdentStringParser setter f attr ((CssIdent i:_):_) =
-    attr & setter .~ f (T.unpack i)
-cssIdentStringParser _ _ attr _ = attr
+cssIdentAttr :: ParseableAttribute a => Lens' DrawAttributes a -> CssUpdater
+cssIdentAttr setter attr ((CssIdent i:_):_) = case aparse $ T.unpack i of
+    Nothing -> attr
+    Just v -> attr & setter .~ v
+cssIdentAttr _ attr _ = attr
 
 fontFamilyParser :: CssUpdater
 fontFamilyParser attr (lst:_) = attr & fontFamily .~ fontNames
@@ -434,64 +474,35 @@ cssDashArray _ attr _ = attr
 
 drawAttributesList :: [(SvgAttributeLens DrawAttributes, CssUpdater)]
 drawAttributesList =
-    [(numericLastSetter "stroke-width" strokeWidth, cssUniqueNumber strokeWidth)
-    ,(parserLastSetter "stroke" strokeColor
-        (join . parse textureParser)
-        (Just . textureSerializer),
-        cssUniqueTexture strokeColor)
+  [("stroke-width" `parseIn` strokeWidth, cssUniqueNumber strokeWidth)
+  ,("stroke" `parseIn` strokeColor, cssUniqueTexture strokeColor)
+  ,("fill" `parseIn` fillColor, cssUniqueTexture fillColor)
+  ,("stroke-linecap" `parseIn` strokeLineCap, cssIdentAttr strokeLineCap)
+  ,("stroke-linejoin" `parseIn` strokeLineJoin, cssIdentAttr strokeLineJoin)
+  ,("stroke-miterlimit" `parseIn` strokeMiterLimit,
+       cssUniqueMayFloat strokeMiterLimit)
 
-    ,(parserLastSetter "fill" fillColor
-        (join . parse textureParser)
-        (Just . textureSerializer),
-        cssUniqueTexture fillColor)
-
-    ,(parserLastSetter "stroke-linecap" strokeLineCap parseCap
-        (Just . serializeCap),
-        cssIdentStringParser strokeLineCap (Last . parseCap))
-
-    ,(parserLastSetter "stroke-linejoin" strokeLineJoin parseLineJoin
-        (Just . serializeLineJoin) ,
-        cssIdentStringParser strokeLineJoin (Last . parseLineJoin))
-    ,(numLastSetter "stroke-miterlimit" strokeMiterLimit,
-         cssUniqueMayFloat strokeMiterLimit)
-
-    ,(parserMaySetter "transform"  transform
-         (parse $ many transformParser)
-         (Just . serializeTransformations), const)
-    ,(groupOpacitySetter, cssUniqueFloat fillOpacity)
-    ,(opacitySetter "fill-opacity" fillOpacity strokeOpacity,
-        cssUniqueFloat fillOpacity)
-    ,(opacitySetter "stroke-opacity" strokeOpacity fillOpacity,
-        cssUniqueFloat strokeOpacity)
-    ,(numericLastSetter "font-size" fontSize,
-      cssUniqueNumber fontSize)
-    ,(parserLastSetter "font-family" fontFamily (Just . commaSeparate)
-        (Just . intercalate ", "), fontFamilyParser)
-        
-    ,(parserLastSetter "fill-rule" fillRule parseFillRule
-        (Just . serializeFillRule),
-        cssIdentStringParser fillRule (Last . parseFillRule))
-    ,(classSetter, cssNullSetter) -- can't set class in CSS
-    ,(parserMaySetter "id" attrId Just Just, cssMayStringSetter attrId)
-    ,(numericLastSetter "stroke-dashoffset" strokeOffset,
-        cssUniqueNumber strokeOffset)
-    ,(parserLastSetter "stroke-dasharray" strokeDashArray
-        (parse dashArray)
-        (Just . serializeDashArray),
-        cssDashArray strokeDashArray)
-    ,(parserLastSetter "text-anchor" textAnchor parseTextAnchor
-        (Just . serializeTextAnchor),
-        cssIdentStringParser textAnchor (Last . parseTextAnchor))
-    ,(parserLastSetter "marker-end" markerEnd parseMarkerRef
-        (Just . serializeMarkerRef),
-        cssMarkerAttributeSetter markerEnd)
-    ,(parserLastSetter "marker-start" markerStart parseMarkerRef
-        (Just . serializeMarkerRef),
-        cssMarkerAttributeSetter markerStart)
-    ,(parserLastSetter "marker-mid" markerMid parseMarkerRef
-        (Just . serializeMarkerRef),
-        cssMarkerAttributeSetter markerMid)
-    ]
+  ,("transform" `parseIn` transform, const)
+  ,(groupOpacitySetter, cssUniqueFloat fillOpacity)
+  ,(opacitySetter "fill-opacity" fillOpacity strokeOpacity,
+      cssUniqueFloat fillOpacity)
+  ,(opacitySetter "stroke-opacity" strokeOpacity fillOpacity,
+      cssUniqueFloat strokeOpacity)
+  ,("font-size" `parseIn` fontSize, cssUniqueNumber fontSize)
+  ,(parserLastSetter "font-family" fontFamily (Just . commaSeparate)
+      (Just . intercalate ", "), fontFamilyParser)
+      
+  ,("fill-rule" `parseIn` fillRule, cssIdentAttr fillRule)
+  ,(classSetter, cssNullSetter) -- can't set class in CSS
+  ,("id" `parseIn` attrId, cssMayStringSetter attrId)
+  ,("stroke-dashoffset" `parseIn` strokeOffset,
+      cssUniqueNumber strokeOffset)
+  ,("stroke-dasharray" `parseIn` strokeDashArray, cssDashArray strokeDashArray)
+  ,("text-anchor" `parseIn` textAnchor, cssIdentAttr textAnchor)
+  ,("marker-end" `parseIn` markerEnd, cssMarkerAttributeSetter markerEnd)
+  ,("marker-start" `parseIn` markerStart, cssMarkerAttributeSetter markerStart)
+  ,("marker-mid" `parseIn` markerMid, cssMarkerAttributeSetter markerMid)
+  ]
   where
     commaSeparate =
         fmap (T.unpack . T.strip) . T.split (',' ==) . T.pack
@@ -526,22 +537,22 @@ instance XMLUpdatable Rectangle where
   xmlTagName _ = "rect"
   serializeTreeNode = genericSerializeWithDrawAttr
   attributes =
-    [numericSetter "width" rectWidth
-    ,numericSetter "height" rectHeight
-    ,numericSetter "x" (rectUpperLeftCorner._1)
-    ,numericSetter "y" (rectUpperLeftCorner._2)
-    ,numericSetter "rx" (rectCornerRadius._1)
-    ,numericSetter "ry" (rectCornerRadius._2)
+    ["width" `parseIn` rectWidth
+    ,"height" `parseIn` rectHeight
+    ,"x" `parseIn` (rectUpperLeftCorner._1)
+    ,"y" `parseIn` (rectUpperLeftCorner._2)
+    ,"rx" `parseIn` (rectCornerRadius._1)
+    ,"ry" `parseIn` (rectCornerRadius._2)
     ]
 
 instance XMLUpdatable Image where
   xmlTagName _ = "image"
   serializeTreeNode = genericSerializeWithDrawAttr
   attributes =
-    [numericSetter "width" imageWidth
-    ,numericSetter "height" imageHeight
-    ,numericSetter "x" (imageCornerUpperLeft._1)
-    ,numericSetter "y" (imageCornerUpperLeft._2)
+    ["width" `parseIn` imageWidth
+    ,"height" `parseIn` imageHeight
+    ,"x" `parseIn` (imageCornerUpperLeft._1)
+    ,"y" `parseIn` (imageCornerUpperLeft._2)
     ,parserSetter "href" imageHref (Just . dropSharp) (Just . ('#':))
     ]
 
@@ -549,54 +560,45 @@ instance XMLUpdatable Line where
   xmlTagName _ = "line"
   serializeTreeNode = genericSerializeWithDrawAttr
   attributes =
-    [numericSetter "x1" $ linePoint1._1
-    ,numericSetter "y1" $ linePoint1._2
-    ,numericSetter "x2" $ linePoint2._1
-    ,numericSetter "y2" $ linePoint2._2
+    ["x1" `parseIn` (linePoint1._1)
+    ,"y1" `parseIn` (linePoint1._2)
+    ,"x2" `parseIn` (linePoint2._1)
+    ,"y2" `parseIn` (linePoint2._2)
     ]
 
 instance XMLUpdatable Ellipse where
   xmlTagName _ = "ellipse"
   serializeTreeNode = genericSerializeWithDrawAttr
   attributes =
-    [numericSetter "cx" $ ellipseCenter._1
-    ,numericSetter "cy" $ ellipseCenter._2
-    ,numericSetter "rx" ellipseXRadius
-    ,numericSetter "ry" ellipseYRadius
+    ["cx" `parseIn` (ellipseCenter._1)
+    ,"cy" `parseIn` (ellipseCenter._2)
+    ,"rx" `parseIn` ellipseXRadius
+    ,"ry" `parseIn` ellipseYRadius
     ]
 
 instance XMLUpdatable Circle where
   xmlTagName _ = "circle"
   serializeTreeNode = genericSerializeWithDrawAttr
   attributes =
-    [numericSetter "cx" $ circleCenter._1
-    ,numericSetter "cy" $ circleCenter._2
-    ,numericSetter "r" circleRadius
+    ["cx" `parseIn` (circleCenter._1)
+    ,"cy" `parseIn` (circleCenter._2)
+    ,"r" `parseIn` circleRadius
     ]
 
 instance XMLUpdatable Polygon where
   xmlTagName _ = "polygon"
   serializeTreeNode = genericSerializeWithDrawAttr
-  attributes =
-    [parserSetter "points" polygonPoints
-        (parse pointData)
-        (Just . serializePoints)]
+  attributes = ["points" `parseIn` polygonPoints]
 
 instance XMLUpdatable PolyLine where
   xmlTagName _ =  "polyline"
   serializeTreeNode = genericSerializeWithDrawAttr
-  attributes = 
-    [parserSetter "points" polyLinePoints
-        (parse pointData)
-        (Just . serializePoints)]
+  attributes = ["points" `parseIn` polyLinePoints]
 
 instance XMLUpdatable Path where
   xmlTagName _ =  "path"
   serializeTreeNode = genericSerializeWithDrawAttr
-  attributes =
-    [parserSetter "d" pathDefinition
-        (parse $ many1 command)
-        (Just . serializeCommands)]
+  attributes = ["d" `parseIn` pathDefinition]
 
 instance XMLUpdatable LinearGradient where
   xmlTagName _ = "linearGradient"
@@ -604,19 +606,13 @@ instance XMLUpdatable LinearGradient where
      updateWithAccessor _linearGradientStops node $ genericSerializeNode node
         
   attributes = 
-    [parserSetter "gradientTransform" linearGradientTransform
-        (parse $ many transformParser)
-        (Just . serializeTransformations)
-    ,parserSetter "gradientUnits" linearGradientUnits
-        (Just . parseGradientUnit)
-        (Just . serializeGradientUnit)
-    ,parserSetter "spreadMethod" linearGradientSpread
-        (Just . parseGradientSpread)
-        (Just . serializeGradientSpread)
-    ,numericSetter "x1" $ linearGradientStart._1
-    ,numericSetter "y1" $ linearGradientStart._2
-    ,numericSetter "x2" $ linearGradientStop._1
-    ,numericSetter "y2" $ linearGradientStop._2
+    ["gradientTransform" `parseIn` linearGradientTransform
+    ,"gradientUnits" `parseIn` linearGradientUnits
+    ,"spreadMethod" `parseIn` linearGradientSpread
+    ,"x1" `parseIn` (linearGradientStart._1)
+    ,"y1" `parseIn` (linearGradientStart._2)
+    ,"x2" `parseIn` (linearGradientStop._1)
+    ,"y2" `parseIn` (linearGradientStop._2)
     ]
 
 instance XMLUpdatable Tree where
@@ -660,10 +656,7 @@ instance XMLUpdatable (Symbol Tree) where
      updateWithAccessor (filter isNotNone . _groupChildren . _groupOfSymbol) node $
         genericSerializeWithDrawAttr node
   attributes =
-        [parserMaySetter "viewBox" (groupOfSymbol . groupViewBox)
-            (parse viewBoxParser)
-            (Just . serializeViewBox)
-        ]
+     ["viewBox" `parseIn` (groupOfSymbol . groupViewBox)]
 
 
 instance XMLUpdatable RadialGradient where
@@ -671,30 +664,24 @@ instance XMLUpdatable RadialGradient where
   serializeTreeNode node =
      updateWithAccessor _radialGradientStops node $ genericSerializeNode node
   attributes =
-    [parserSetter "gradientTransform" radialGradientTransform
-        (parse $ many transformParser)
-        (Just . serializeTransformations)
-    ,parserSetter "gradientUnits" radialGradientUnits
-        (Just . parseGradientUnit)
-        (Just . serializeGradientUnit)
-    ,parserSetter "spreadMethod" radialGradientSpread
-        (Just . parseGradientSpread)
-        (Just . serializeGradientSpread)
-    ,numericSetter "cx" $ radialGradientCenter._1
-    ,numericSetter "cy" $ radialGradientCenter._2
-    ,numericSetter "r" radialGradientRadius
-    ,numericMaySetter "fx" radialGradientFocusX
-    ,numericMaySetter "fy" radialGradientFocusY
+    ["gradientTransform" `parseIn` radialGradientTransform
+    ,"gradientUnits" `parseIn` radialGradientUnits
+    ,"spreadMethod" `parseIn` radialGradientSpread
+    ,"cx" `parseIn` (radialGradientCenter._1)
+    ,"cy" `parseIn` (radialGradientCenter._2)
+    ,"r"  `parseIn` radialGradientRadius
+    ,"fx" `parseIn` radialGradientFocusX
+    ,"fy" `parseIn` radialGradientFocusY
     ]
 
 instance XMLUpdatable Use where
   xmlTagName _ = "use"
   serializeTreeNode = genericSerializeWithDrawAttr
   attributes =
-    [numericSetter "x" $ useBase._1
-    ,numericSetter "y" $ useBase._2
-    ,numericMaySetter "width" useWidth
-    ,numericMaySetter "height" useHeight
+    ["x" `parseIn` (useBase._1)
+    ,"y" `parseIn` (useBase._2)
+    ,"width" `parseIn` useWidth
+    ,"height" `parseIn` useHeight
     ,parserSetter "href" useName (Just . dropSharp) (Just . ('#':))
     ]
 
@@ -713,7 +700,7 @@ instance XMLUpdatable TextInfo where
     ,parserSetter "rotate" textInfoRotate 
         (parse numberList)
         rotateNotEmpty
-    ,numericMaySetter "textLength" textInfoLength
+    ,"textLength" `parseIn` textInfoLength
     ]
     where
       dashNotEmpty [] = Nothing
@@ -724,49 +711,20 @@ instance XMLUpdatable TextInfo where
           Just . unwords $ printf "%g" <$> lst
 
 
-parseTextPathMethod :: String -> TextPathMethod
-parseTextPathMethod s = case s of
-  "align" -> TextPathAlign
-  "stretch" -> TextPathStretch
-  _ -> _textPathMethod defaultSvg
-
-serializeTextPathMethod :: TextPathMethod -> String
-serializeTextPathMethod m = case m of
-  TextPathAlign -> "align"
-  TextPathStretch -> "stretch"
-
-parseTextPathSpacing :: String -> TextPathSpacing
-parseTextPathSpacing s = case s of
-  "auto" -> TextPathSpacingAuto
-  "exact" -> TextPathSpacingExact
-  _ -> _textPathSpacing defaultSvg
-
-serializeTextPathSpacing :: TextPathSpacing -> String
-serializeTextPathSpacing s = case s of
-  TextPathSpacingAuto -> "auto"
-  TextPathSpacingExact -> "exact"
-
 instance XMLUpdatable TextPath where
   xmlTagName _ =  "textPath"
   serializeTreeNode = genericSerializeNode
   attributes =
-    [numericSetter "startOffset" textPathStartOffset
-    ,parserSetter "method"textPathMethod
-        (Just . parseTextPathMethod)
-        (Just . serializeTextPathMethod)
-    ,parserSetter "spacing" textPathSpacing
-        (Just . parseTextPathSpacing)
-        (Just . serializeTextPathSpacing)
+    ["startOffset" `parseIn` textPathStartOffset
+    ,"method" `parseIn` textPathMethod
+    ,"spacing" `parseIn` textPathSpacing
     ,parserSetter "href" textPathName (Just . dropSharp) (Just . ('#':))
     ]
 
 instance XMLUpdatable Text where
   xmlTagName _ = "text"
   serializeTreeNode = serializeText
-  attributes =
-      [parserSetter "lengthAdjust" textAdjust 
-         (Just . parseTextAdjust)
-         (Just . serializeTextAdjust)]
+  attributes = ["lengthAdjust" `parseIn` textAdjust]
 
 
 instance XMLUpdatable Pattern where
@@ -774,16 +732,12 @@ instance XMLUpdatable Pattern where
   serializeTreeNode node =
      updateWithAccessor _patternElements node $ genericSerializeNode node
   attributes =
-    [parserMaySetter "viewBox" patternViewBox 
-        (parse viewBoxParser)
-        (Just . serializeViewBox)
-    ,parserSetter "patternUnits" patternUnit
-        parsePatternUnit
-        (Just . serializePatternUnit)
-    ,numericSetter "width" patternWidth
-    ,numericSetter "height" patternHeight
-    ,numericSetter "x" (patternPos._1)
-    ,numericSetter "y" (patternPos._2)
+    ["viewBox" `parseIn` patternViewBox 
+    ,"patternUnits" `parseIn` patternUnit
+    ,"width" `parseIn` patternWidth
+    ,"height" `parseIn` patternHeight
+    ,"x" `parseIn` (patternPos._1)
+    ,"y" `parseIn` (patternPos._2)
     ]
 
 instance XMLUpdatable Marker where
@@ -791,20 +745,13 @@ instance XMLUpdatable Marker where
   serializeTreeNode node =
      updateWithAccessor _markerElements node $ genericSerializeNode node
   attributes =
-    [numericSetter "refX" (markerRefPoint._1)
-    ,numericSetter "refY" (markerRefPoint._2)
-    ,numericMaySetter "markerWidth" markerWidth
-    ,numericMaySetter "markerHeight" markerHeight
-    ,parserMaySetter "patternUnits" markerUnits
-        parseMarkerUnit
-        (Just . serializeMarkerUnit)
-    ,parserMaySetter "patternUnits" markerOrient
-        parseOrientation
-        (Just . serializeOrientation)
-    ,parserMaySetter "viewBox" markerViewBox
-        (parse viewBoxParser)
-        (Just . serializeViewBox)
-
+    ["refX" `parseIn` (markerRefPoint._1)
+    ,"refY" `parseIn` (markerRefPoint._2)
+    ,"markerWidth" `parseIn` markerWidth
+    ,"markerHeight" `parseIn` markerHeight
+    ,"patternUnits" `parseIn` markerUnits
+    ,"orient" `parseIn` markerOrient
+    ,"viewBox" `parseIn` markerViewBox
     ]
 
 serializeText :: Text -> X.Element
@@ -902,9 +849,7 @@ instance XMLUpdatable GradientStop where
     serializeTreeNode = genericSerializeNode
     attributes =
         [gradientOffsetSetter
-        ,parserSetter "stop-color" gradientColor
-            (parse colorParser)
-            (Just . colorSerializer)
+        ,"stop-color" `parseIn` gradientColor
         ]
             
 
@@ -1008,25 +953,20 @@ unparse e@(nodeName -> "text") = do
            , _spanContent = textContent
            }
 
-unparse e@(nodeName -> "image") =
-  pure . ImageTree $ xmlUnparseWithDrawAttr e
-unparse e@(nodeName -> "ellipse") =
-  pure . EllipseTree $ xmlUnparseWithDrawAttr e
-unparse e@(nodeName -> "rect") = 
-  pure . RectangleTree $ xmlUnparseWithDrawAttr e
-unparse e@(nodeName -> "polyline") =
-  pure . PolyLineTree $ xmlUnparseWithDrawAttr e
-unparse e@(nodeName -> "polygon") =
-  pure . PolygonTree $ xmlUnparseWithDrawAttr e
-unparse e@(nodeName -> "circle") =
-  pure . CircleTree $ xmlUnparseWithDrawAttr e
-unparse e@(nodeName -> "line") =
-  pure . LineTree $ xmlUnparseWithDrawAttr e
-unparse e@(nodeName -> "path") =
-  pure . PathTree $ xmlUnparseWithDrawAttr e
-unparse e@(nodeName -> "use") = 
-  pure $ UseTree (xmlUnparseWithDrawAttr e) Nothing
-unparse _ = pure None
+unparse e = pure $ case nodeName e of
+    "image" -> ImageTree parsed
+    "ellipse" -> EllipseTree parsed
+    "rect" -> RectangleTree parsed
+    "polyline" -> PolyLineTree parsed
+    "polygon" -> PolygonTree parsed
+    "circle"-> CircleTree parsed
+    "line"  -> LineTree parsed
+    "path" -> PathTree parsed
+    "use" -> UseTree parsed Nothing
+    _ -> None
+  where
+    parsed :: (XMLUpdatable a, WithDrawAttributes a) => a
+    parsed = xmlUnparseWithDrawAttr e
 
 unparseDocument :: FilePath -> X.Element -> Maybe Document
 unparseDocument rootLocation e@(nodeName -> "svg") = Just Document 
@@ -1076,8 +1016,6 @@ xmlOfDocument doc =
     docViewBox = case _viewBox doc of
         Nothing -> []
         Just b -> [attr "viewBox" $ serializeViewBox b]
-
-
 
     descTag = case _description doc of
         "" -> []

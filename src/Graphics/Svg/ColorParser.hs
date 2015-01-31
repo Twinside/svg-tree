@@ -100,12 +100,10 @@ urlRef = string "url(" *> skipSpace *>
        <* skipSpace <* char ')' <* skipSpace
 
 
-textureParser :: Parser (Maybe Texture)
+textureParser :: Parser Texture
 textureParser =
-  (Just <$> (none
-           <|> (TextureRef <$> urlRef)
-           <|> (ColorRef <$> colorParser)))
-        <|> return Nothing
+  none <|> (TextureRef <$> urlRef)
+       <|> (ColorRef <$> colorParser)
   where
     none = FillNone <$ string "none"
 

@@ -940,8 +940,8 @@ instance WithDefaultSvg Marker where
   defaultSvg = Marker
     { _markerDrawAttributes = mempty
     , _markerRefPoint = (Num 0, Num 0)
-    , _markerWidth = Nothing
-    , _markerHeight = Nothing
+    , _markerWidth = Just (Num 3)
+    , _markerHeight = Just (Num 3)
     , _markerOrient = Nothing -- MarkerOrientation
     , _markerUnits = Nothing -- MarkerUnitStrokeWidth
     , _markerViewBox = Nothing
