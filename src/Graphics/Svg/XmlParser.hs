@@ -743,7 +743,7 @@ instance XMLUpdatable Pattern where
 instance XMLUpdatable Marker where
   xmlTagName _ = "marker"
   serializeTreeNode node =
-     updateWithAccessor _markerElements node $ genericSerializeNode node
+     updateWithAccessor _markerElements node $ genericSerializeWithDrawAttr node
   attributes =
     ["refX" `parseIn` (markerRefPoint._1)
     ,"refY" `parseIn` (markerRefPoint._2)
@@ -1007,7 +1007,7 @@ xmlOfDocument doc =
     elementRender k e = case e of
         ElementGeometry t -> serializeTreeNode t
         ElementMarker m ->
-            X.add_attr (attr "id" k) $ serializeTreeNode m
+            serializeTreeNode m
         ElementPattern p ->
             X.add_attr (attr "id" k) $ serializeTreeNode p
         ElementLinearGradient lg ->
