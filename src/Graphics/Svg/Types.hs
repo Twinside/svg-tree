@@ -143,6 +143,9 @@ module Graphics.Svg.Types
     , PatternUnit( .. )
     , HasPattern( .. )
 
+      -- * Mask definition
+    , Mask( .. )
+    , HasMask( .. )
 
       -- * MISC functions
     , isPathArc
@@ -398,6 +401,8 @@ data DrawAttributes = DrawAttributes
     , _transform        :: !(Maybe [Transformation])
       -- | Define the `fill-rule` used during the rendering.
     , _fillRule         :: !(Last FillRule)
+      -- | Define the `mask` attribute.
+    , _maskRef          :: !(Last MarkerAttribute)
       -- | Map to the `class` attribute. Used for the CSS
       -- rewriting.
     , _attrClass        :: ![T.Text]
@@ -1181,6 +1186,41 @@ instance WithDefaultSvg RadialGradient where
     , _radialGradientStops   = []
     }
 
+-- | Define a SVG `<mask>` tag.
+data Mask = Mask
+  { -- | Drawing attributes of the Mask
+    _maskDrawAttributes :: DrawAttributes
+    -- | Correspond to the `maskContentUnits` attributes.
+  , _maskContentUnits :: GradientUnits
+    -- | Mapping to the `maskUnits` attribute.
+  , _maskUnits        :: GradientUnits
+    -- | Map to the `x` and `y` attributes.
+  , _maskPosition     :: Point
+    -- | Map to the `width` attribute
+  , _maskWidth        :: Number
+    -- | Map to the `height` attribute.
+  , _maskHeight       :: Number
+    -- | Children of the `<mask>` tag.
+  , _maskContent      :: [Tree]
+  }
+  deriving (Eq, Show)
+
+makeClassy ''Mask
+
+instance WithDrawAttributes Mask where
+  drawAttr = maskDrawAttributes
+
+instance WithDefaultSvg Mask where
+  defaultSvg = Mask
+    { _maskDrawAttributes = mempty
+    , _maskContentUnits = GradientUserSpace
+    , _maskUnits        = GradientBoundingBox
+    , _maskPosition     = (Percent (-0.1), Percent (-0.1))
+    , _maskWidth        = Percent 1.2
+    , _maskHeight       = Percent 1.2
+    , _maskContent      = []
+    }
+
 -- | Define the possible values of the `patternUnit`
 -- attribute.
 data PatternUnit
@@ -1237,6 +1277,7 @@ data Element
     | ElementGeometry Tree
     | ElementPattern  Pattern
     | ElementMarker Marker
+    | ElementMask Mask
     deriving Show
 
 -- | Represent a full svg document with style,
@@ -1303,6 +1344,7 @@ instance Monoid DrawAttributes where
         , _strokeOffset     = Last Nothing
         , _strokeDashArray  = Last Nothing
         , _textAnchor       = Last Nothing
+        , _maskRef          = Last Nothing
 
         , _markerStart      = Last Nothing
         , _markerMid        = Last Nothing
@@ -1328,6 +1370,7 @@ instance Monoid DrawAttributes where
         , _fontFamily = (mappend `on` _fontFamily) a b
         , _fontStyle = (mappend `on` _fontStyle) a b
         , _textAnchor = (mappend `on` _textAnchor) a b
+        , _maskRef = (mappend `on` _maskRef) a b
         , _markerStart = (mappend `on` _markerStart) a b
         , _markerMid = (mappend `on` _markerMid) a b
         , _markerEnd = (mappend `on` _markerEnd) a b

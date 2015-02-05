@@ -88,6 +88,7 @@ resolveUses doc =
     geometryExtract c = case c of
       ElementLinearGradient _ -> Nothing
       ElementRadialGradient _ -> Nothing
+      ElementMask _ -> Nothing
       ElementGeometry t -> Just t
       ElementPattern _ -> Nothing
       ElementMarker _ -> Nothing

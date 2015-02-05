@@ -493,6 +493,7 @@ drawAttributesList =
       (Just . intercalate ", "), fontFamilyParser)
       
   ,("fill-rule" `parseIn` fillRule, cssIdentAttr fillRule)
+  ,("mask" `parseIn` maskRef, cssMarkerAttributeSetter maskRef)
   ,(classSetter, cssNullSetter) -- can't set class in CSS
   ,("id" `parseIn` attrId, cssMayStringSetter attrId)
   ,("stroke-dashoffset" `parseIn` strokeOffset,
@@ -583,6 +584,18 @@ instance XMLUpdatable Circle where
     ["cx" `parseIn` (circleCenter._1)
     ,"cy" `parseIn` (circleCenter._2)
     ,"r" `parseIn` circleRadius
+    ]
+
+instance XMLUpdatable Mask where
+  xmlTagName _ = "mask"
+  serializeTreeNode = genericSerializeWithDrawAttr
+  attributes =
+    ["x" `parseIn` (maskPosition._1)
+    ,"y" `parseIn` (maskPosition._2)
+    ,"width" `parseIn` maskWidth
+    ,"height" `parseIn` maskHeight
+    ,"maskContentUnits" `parseIn` maskContentUnits
+    ,"maskUnits" `parseIn` maskUnits
     ]
 
 instance XMLUpdatable Polygon where
@@ -887,6 +900,12 @@ unparseDefs e@(nodeName -> "marker") = do
   withId e . const . ElementMarker $ mark {_markerElements = subElements }
     where
       mark = xmlUnparseWithDrawAttr e
+unparseDefs e@(nodeName -> "mask") = do
+  children <- mapM unparse $ elChildren e
+  let realChildren = filter isNotNone children
+      parsedMask = xmlUnparseWithDrawAttr e
+  withId e . const . ElementMask $ parsedMask { _maskContent = realChildren }
+
 unparseDefs e@(nodeName -> "linearGradient") =
   withId e $ ElementLinearGradient . unparser
   where
@@ -942,6 +961,7 @@ unparse e@(nodeName -> "text") = do
           Just (ElementLinearGradient _) -> pure Nothing
           Just (ElementRadialGradient _) -> pure Nothing
           Just (ElementPattern _) -> pure Nothing
+          Just (ElementMask _) -> pure Nothing
           Just (ElementMarker _) -> pure Nothing
           Just (ElementGeometry (PathTree p)) ->
               pure . Just $ pathInfo { _textPathData = _pathDefinition p }
@@ -1006,8 +1026,8 @@ xmlOfDocument doc =
 
     elementRender k e = case e of
         ElementGeometry t -> serializeTreeNode t
-        ElementMarker m ->
-            serializeTreeNode m
+        ElementMarker m -> serializeTreeNode m
+        ElementMask m -> serializeTreeNode m
         ElementPattern p ->
             X.add_attr (attr "id" k) $ serializeTreeNode p
         ElementLinearGradient lg ->
