@@ -16,6 +16,7 @@ module Graphics.Svg.Types
     , RPoint
     , PathCommand( .. )
     , Transformation( .. )
+    , CoordinateUnits( .. )
 
       -- ** Building helpers
     , toPoint
@@ -126,7 +127,6 @@ module Graphics.Svg.Types
     , HasMarker( .. )
 
       -- * Gradient definition
-    , GradientUnits( .. )
     , GradientStop( .. )
     , HasGradientStop( .. )
 
@@ -140,7 +140,6 @@ module Graphics.Svg.Types
 
       -- * Pattern definition
     , Pattern( .. )
-    , PatternUnit( .. )
     , HasPattern( .. )
 
       -- * Mask definition
@@ -1070,9 +1069,9 @@ instance WithDefaultSvg Tree where
 
 -- | Define the possible values of the `gradientUnits`,
 -- used in the definition of the gradients.
-data GradientUnits
-    = GradientUserSpace   -- ^ `userSpaceOnUse` value
-    | GradientBoundingBox -- ^ `objectBoundingBox` value
+data CoordinateUnits
+    = CoordUserSpace   -- ^ `userSpaceOnUse` value
+    | CoordBoundingBox -- ^ `objectBoundingBox` value
     deriving (Eq, Show)
 
 -- | Define the possible values for the `spreadMethod`
@@ -1108,7 +1107,7 @@ instance WithDefaultSvg GradientStop where
 data LinearGradient = LinearGradient
     { -- | Define coordinate system of the gradient,
       -- associated to the `gradientUnits` attribute.
-      _linearGradientUnits  :: GradientUnits
+      _linearGradientUnits  :: CoordinateUnits
       -- | Point defining the beginning of the line gradient.
       -- Associated to the `x1` and `y1` attribute.
     , _linearGradientStart  :: Point
@@ -1133,7 +1132,7 @@ makeClassy ''LinearGradient
 
 instance WithDefaultSvg LinearGradient where
   defaultSvg = LinearGradient
-    { _linearGradientUnits     = GradientBoundingBox
+    { _linearGradientUnits     = CoordBoundingBox
     , _linearGradientStart     = (Percent 0, Percent 0)
     , _linearGradientStop      = (Percent 1, Percent 0)
     , _linearGradientSpread    = SpreadPad
@@ -1145,7 +1144,7 @@ instance WithDefaultSvg LinearGradient where
 data RadialGradient = RadialGradient
   { -- | Define coordinate system of the gradient,
     -- associated to the `gradientUnits` attribute.
-    _radialGradientUnits   :: GradientUnits
+    _radialGradientUnits   :: CoordinateUnits
     -- | Center of the radial gradient. Associated to
     -- the `cx` and `cy` attributes.
   , _radialGradientCenter  :: Point
@@ -1176,7 +1175,7 @@ makeClassy ''RadialGradient
 
 instance WithDefaultSvg RadialGradient where
   defaultSvg = RadialGradient
-    { _radialGradientUnits   = GradientBoundingBox
+    { _radialGradientUnits   = CoordBoundingBox
     , _radialGradientCenter  = (Percent 0.5, Percent 0.5)
     , _radialGradientRadius  = Percent 0.5
     , _radialGradientFocusX  = Nothing
@@ -1191,9 +1190,9 @@ data Mask = Mask
   { -- | Drawing attributes of the Mask
     _maskDrawAttributes :: DrawAttributes
     -- | Correspond to the `maskContentUnits` attributes.
-  , _maskContentUnits :: GradientUnits
+  , _maskContentUnits :: CoordinateUnits
     -- | Mapping to the `maskUnits` attribute.
-  , _maskUnits        :: GradientUnits
+  , _maskUnits        :: CoordinateUnits
     -- | Map to the `x` and `y` attributes.
   , _maskPosition     :: Point
     -- | Map to the `width` attribute
@@ -1213,20 +1212,13 @@ instance WithDrawAttributes Mask where
 instance WithDefaultSvg Mask where
   defaultSvg = Mask
     { _maskDrawAttributes = mempty
-    , _maskContentUnits = GradientUserSpace
-    , _maskUnits        = GradientBoundingBox
+    , _maskContentUnits = CoordUserSpace
+    , _maskUnits        = CoordBoundingBox
     , _maskPosition     = (Percent (-0.1), Percent (-0.1))
     , _maskWidth        = Percent 1.2
     , _maskHeight       = Percent 1.2
     , _maskContent      = []
     }
-
--- | Define the possible values of the `patternUnit`
--- attribute.
-data PatternUnit
-  = PatternUnitUserSpaceOnUse
-  | PatternUnitObjectBoundingBox
-  deriving (Eq, Show)
 
 -- | Define a `<pattern>` tag.
 data Pattern = Pattern
@@ -1248,7 +1240,7 @@ data Pattern = Pattern
       -- | Define the cordinate system to use for
       -- the pattern. Mapped to the `patternUnits`
       -- attribute.
-    , _patternUnit     :: PatternUnit
+    , _patternUnit     :: CoordinateUnits
     }
     deriving Show
 
@@ -1265,7 +1257,7 @@ instance WithDefaultSvg Pattern where
     , _patternHeight   = Num 0
     , _patternPos      = (Num 0, Num 0)
     , _patternElements = []
-    , _patternUnit = PatternUnitObjectBoundingBox
+    , _patternUnit = CoordBoundingBox
     , _patternDrawAttributes = mempty
     }
 

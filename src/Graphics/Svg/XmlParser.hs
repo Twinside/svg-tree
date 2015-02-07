@@ -153,15 +153,15 @@ instance ParseableAttribute LineJoin where
     JoinRound -> "round"
     JoinBevel -> "bevel"
 
-instance ParseableAttribute GradientUnits where
+instance ParseableAttribute CoordinateUnits where
   aparse s = case s of
-    "userSpaceOnUse" -> Just GradientUserSpace
-    "objectBoundingBox" -> Just GradientBoundingBox
-    _ -> Just GradientBoundingBox
+    "userSpaceOnUse" -> Just CoordUserSpace
+    "objectBoundingBox" -> Just CoordBoundingBox
+    _ -> Just CoordBoundingBox
 
   aserialize uni = Just $ case uni of
-    GradientUserSpace -> "userSpaceOnUse"
-    GradientBoundingBox -> "objectBoundingBox"
+    CoordUserSpace -> "userSpaceOnUse"
+    CoordBoundingBox -> "objectBoundingBox"
 
 instance ParseableAttribute Spread where
   aparse s = case s of
@@ -194,16 +194,6 @@ instance ParseableAttribute TextAdjust where
   aserialize a = Just $ case a of
     TextAdjustSpacing -> "spacing"
     TextAdjustSpacingAndGlyphs -> "spacingAndGlyphs"
-
-instance ParseableAttribute PatternUnit where
-  aparse str = case str of
-    "userSpaceOnUse" -> Just PatternUnitUserSpaceOnUse
-    "objectBoundingBox" -> Just PatternUnitObjectBoundingBox
-    _ -> Nothing
-
-  aserialize p = Just $ case p of
-    PatternUnitUserSpaceOnUse -> "userSpaceOnUse"
-    PatternUnitObjectBoundingBox -> "objectBoundingBox"
 
 instance ParseableAttribute MarkerUnit where
   aparse s = case s of
