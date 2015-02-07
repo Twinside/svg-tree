@@ -129,17 +129,17 @@ instance ParseableAttribute TextAnchor where
     TextAnchorStart -> "start"
     TextAnchorEnd -> "end"
  
-instance ParseableAttribute MarkerAttribute where
+instance ParseableAttribute ElementRef where
   aparse s = case parseOnly pa $ T.pack s of
      Left _ -> Nothing
      Right v -> Just v
     where
-      pa = (MarkerNone <$ string "none")
-        <|> (MarkerRef <$> urlRef)
+      pa = (RefNone <$ string "none")
+        <|> (Ref <$> urlRef)
 
   aserialize c = Just $ case c of
-    MarkerRef r -> "url(#" <> r <> ")"
-    MarkerNone -> "none"
+    Ref r -> "url(#" <> r <> ")"
+    RefNone -> "none"
 
 instance ParseableAttribute LineJoin where
   aparse s = case s of
@@ -434,13 +434,13 @@ cssUniqueTexture setter attr ((CssFunction "url" [CssReference c]:_):_) =
     attr & setter .~ Last (Just . TextureRef $ T.unpack c)
 cssUniqueTexture _ attr _ = attr
 
-cssMarkerAttributeSetter :: Lens' DrawAttributes (Last MarkerAttribute)
+cssElementRefSetter :: Lens' DrawAttributes (Last ElementRef)
                          -> CssUpdater
-cssMarkerAttributeSetter setter attr ((CssFunction "url" [CssReference c]:_):_) =
-    attr & setter .~ Last (Just . MarkerRef $ T.unpack c)
-cssMarkerAttributeSetter setter attr ((CssIdent "none":_):_) =
-    attr & setter .~ Last (Just MarkerNone)
-cssMarkerAttributeSetter _ attr _ = attr
+cssElementRefSetter setter attr ((CssFunction "url" [CssReference c]:_):_) =
+    attr & setter .~ Last (Just . Ref $ T.unpack c)
+cssElementRefSetter setter attr ((CssIdent "none":_):_) =
+    attr & setter .~ Last (Just RefNone)
+cssElementRefSetter _ attr _ = attr
 
 cssMayStringSetter :: ASetter DrawAttributes DrawAttributes a (Maybe String)
                    -> CssUpdater
@@ -483,16 +483,18 @@ drawAttributesList =
       (Just . intercalate ", "), fontFamilyParser)
       
   ,("fill-rule" `parseIn` fillRule, cssIdentAttr fillRule)
-  ,("mask" `parseIn` maskRef, cssMarkerAttributeSetter maskRef)
+  ,("clip-rule" `parseIn` clipRule, cssIdentAttr clipRule)
+  ,("mask" `parseIn` maskRef, cssElementRefSetter maskRef)
   ,(classSetter, cssNullSetter) -- can't set class in CSS
   ,("id" `parseIn` attrId, cssMayStringSetter attrId)
   ,("stroke-dashoffset" `parseIn` strokeOffset,
       cssUniqueNumber strokeOffset)
   ,("stroke-dasharray" `parseIn` strokeDashArray, cssDashArray strokeDashArray)
   ,("text-anchor" `parseIn` textAnchor, cssIdentAttr textAnchor)
-  ,("marker-end" `parseIn` markerEnd, cssMarkerAttributeSetter markerEnd)
-  ,("marker-start" `parseIn` markerStart, cssMarkerAttributeSetter markerStart)
-  ,("marker-mid" `parseIn` markerMid, cssMarkerAttributeSetter markerMid)
+  ,("clip-path" `parseIn` clipPathRef, cssElementRefSetter clipPathRef)
+  ,("marker-end" `parseIn` markerEnd, cssElementRefSetter markerEnd)
+  ,("marker-start" `parseIn` markerStart, cssElementRefSetter markerStart)
+  ,("marker-mid" `parseIn` markerMid, cssElementRefSetter markerMid)
   ]
   where
     commaSeparate =
@@ -578,7 +580,10 @@ instance XMLUpdatable Circle where
 
 instance XMLUpdatable Mask where
   xmlTagName _ = "mask"
-  serializeTreeNode = genericSerializeWithDrawAttr
+  serializeTreeNode node =
+      updateWithAccessor _maskContent node $
+          genericSerializeWithDrawAttr node
+
   attributes =
     ["x" `parseIn` (maskPosition._1)
     ,"y" `parseIn` (maskPosition._2)
@@ -587,6 +592,14 @@ instance XMLUpdatable Mask where
     ,"maskContentUnits" `parseIn` maskContentUnits
     ,"maskUnits" `parseIn` maskUnits
     ]
+
+instance XMLUpdatable ClipPath where
+  xmlTagName _ = "clipPath"
+  serializeTreeNode node =
+      updateWithAccessor _clipPathContent node $
+          genericSerializeWithDrawAttr node
+  attributes =
+    ["clipPathUnits" `parseIn` clipPathUnits]
 
 instance XMLUpdatable Polygon where
   xmlTagName _ = "polygon"
@@ -733,7 +746,7 @@ instance XMLUpdatable Text where
 instance XMLUpdatable Pattern where
   xmlTagName _ = "pattern"
   serializeTreeNode node =
-     updateWithAccessor _patternElements node $ genericSerializeNode node
+     updateWithAccessor _patternElements node $ genericSerializeWithDrawAttr node
   attributes =
     ["viewBox" `parseIn` patternViewBox 
     ,"patternUnits" `parseIn` patternUnit
@@ -896,6 +909,12 @@ unparseDefs e@(nodeName -> "mask") = do
       parsedMask = xmlUnparseWithDrawAttr e
   withId e . const . ElementMask $ parsedMask { _maskContent = realChildren }
 
+unparseDefs e@(nodeName -> "clipPath") = do
+  children <- mapM unparse $ elChildren e
+  let realChildren = filter isNotNone children
+      parsedClip = xmlUnparseWithDrawAttr e
+  withId e . const . ElementClipPath $ parsedClip { _clipPathContent = realChildren }
+
 unparseDefs e@(nodeName -> "linearGradient") =
   withId e $ ElementLinearGradient . unparser
   where
@@ -952,6 +971,7 @@ unparse e@(nodeName -> "text") = do
           Just (ElementRadialGradient _) -> pure Nothing
           Just (ElementPattern _) -> pure Nothing
           Just (ElementMask _) -> pure Nothing
+          Just (ElementClipPath _) -> pure Nothing
           Just (ElementMarker _) -> pure Nothing
           Just (ElementGeometry (PathTree p)) ->
               pure . Just $ pathInfo { _textPathData = _pathDefinition p }
@@ -1018,6 +1038,7 @@ xmlOfDocument doc =
         ElementGeometry t -> serializeTreeNode t
         ElementMarker m -> serializeTreeNode m
         ElementMask m -> serializeTreeNode m
+        ElementClipPath c -> serializeTreeNode c
         ElementPattern p ->
             X.add_attr (attr "id" k) $ serializeTreeNode p
         ElementLinearGradient lg ->

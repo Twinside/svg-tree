@@ -16,6 +16,7 @@ module Graphics.Svg.Types
     , RPoint
     , PathCommand( .. )
     , Transformation( .. )
+    , ElementRef( .. )
     , CoordinateUnits( .. )
 
       -- ** Building helpers
@@ -120,7 +121,6 @@ module Graphics.Svg.Types
     , TextAdjust( .. )
 
       -- * Marker definition
-    , MarkerAttribute( .. )
     , Marker( .. )
     , MarkerOrientation( .. )
     , MarkerUnit( .. )
@@ -146,12 +146,17 @@ module Graphics.Svg.Types
     , Mask( .. )
     , HasMask( .. )
 
+      -- * Clip path definition
+    , ClipPath( .. )
+    , HasClipPath( .. )
+
       -- * MISC functions
     , isPathArc
     , isPathWithArc
     , nameOfTree
     , zipTree
     , mapTree
+    , foldTree
     , toUserUnit
     , mapNumber
     ) where
@@ -359,11 +364,11 @@ data TextAnchor
 
 
 -- | Correspond to the possible values of the
--- attributes `marker-start`, `marker-mid` and
--- `marker-end`.
-data MarkerAttribute
-  = MarkerNone  -- ^ Value for `none`
-  | MarkerRef String -- ^ Equivalent to `url()` attribute.
+-- the attributes which are either `none` or
+-- `url(#elem)`
+data ElementRef
+  = RefNone  -- ^ Value for `none`
+  | Ref String -- ^ Equivalent to `url()` attribute.
   deriving (Eq, Show)
 
 -- | This type define how to draw any primitives,
@@ -401,7 +406,11 @@ data DrawAttributes = DrawAttributes
       -- | Define the `fill-rule` used during the rendering.
     , _fillRule         :: !(Last FillRule)
       -- | Define the `mask` attribute.
-    , _maskRef          :: !(Last MarkerAttribute)
+    , _maskRef          :: !(Last ElementRef)
+      -- | Define the `clip-path` attribute.
+    , _clipPathRef      :: !(Last ElementRef)
+      -- | Define the `clip-rule` attribute.
+    , _clipRule         :: !(Last FillRule)
       -- | Map to the `class` attribute. Used for the CSS
       -- rewriting.
     , _attrClass        :: ![T.Text]
@@ -427,14 +436,14 @@ data DrawAttributes = DrawAttributes
     , _textAnchor       :: !(Last TextAnchor)
       -- | Define the marker used for the start of the line.
       -- Correspond to the `marker-start` attribute.
-    , _markerStart      :: !(Last MarkerAttribute)
+    , _markerStart      :: !(Last ElementRef)
       -- | Define the marker used for every point of the
       -- polyline/path Correspond to the `marker-mid`
       -- attribute.
-    , _markerMid        :: !(Last MarkerAttribute)
+    , _markerMid        :: !(Last ElementRef)
       -- | Define the marker used for the end of the line.
       -- Correspond to the `marker-end` attribute.
-    , _markerEnd        :: !(Last MarkerAttribute)
+    , _markerEnd        :: !(Last ElementRef)
     }
     deriving (Eq, Show)
 
@@ -990,6 +999,29 @@ zipTree f = dig [] where
         [dig (c:prev) child
             | (child, c) <- zip groupChild $ inits groupChild]
 
+-- | Fold all nodes of a SVG tree.
+foldTree :: (a -> Tree -> a) -> a -> Tree -> a
+foldTree f = go where
+  go acc e = case e of
+    None            -> f acc e
+    UseTree _ _     -> f acc e
+    PathTree _      -> f acc e
+    CircleTree _    -> f acc e
+    PolyLineTree _  -> f acc e
+    PolygonTree _   -> f acc e
+    EllipseTree _   -> f acc e
+    LineTree _      -> f acc e
+    RectangleTree _ -> f acc e
+    TextTree    _ _ -> f acc e
+    ImageTree _     -> f acc e
+    GroupTree g     -> 
+      let subAcc = F.foldl' go acc $ _groupChildren g in
+      f subAcc e
+    SymbolTree s    ->
+      let subAcc =
+            F.foldl' go acc . _groupChildren $ _groupOfSymbol s in
+      f subAcc e
+
 mapTree :: (Tree -> Tree) -> Tree -> Tree
 mapTree f = go where
   go e@None = f e
@@ -1067,8 +1099,8 @@ instance WithDrawAttributes Tree where
 instance WithDefaultSvg Tree where
     defaultSvg = None
 
--- | Define the possible values of the `gradientUnits`,
--- used in the definition of the gradients.
+-- | Define the possible values of various *units attributes
+-- used in the definition of the gradients and masks.
 data CoordinateUnits
     = CoordUserSpace   -- ^ `userSpaceOnUse` value
     | CoordBoundingBox -- ^ `objectBoundingBox` value
@@ -1204,6 +1236,7 @@ data Mask = Mask
   }
   deriving (Eq, Show)
 
+-- | Lenses for the Mask type.
 makeClassy ''Mask
 
 instance WithDrawAttributes Mask where
@@ -1218,6 +1251,29 @@ instance WithDefaultSvg Mask where
     , _maskWidth        = Percent 1.2
     , _maskHeight       = Percent 1.2
     , _maskContent      = []
+    }
+
+-- | Define a `<clipPath>` tag.
+data ClipPath = ClipPath
+  { _clipPathDrawAttributes :: DrawAttributes
+    -- | Maps to the `clipPathUnits` attribute
+  , _clipPathUnits          :: CoordinateUnits
+    -- | Maps to the content of the tree
+  , _clipPathContent        :: [Tree]
+  }
+  deriving (Eq, Show)
+
+-- | Lenses for the ClipPath type.
+makeClassy ''ClipPath
+
+instance WithDrawAttributes ClipPath where
+  drawAttr = clipPathDrawAttributes
+
+instance WithDefaultSvg ClipPath where
+  defaultSvg = ClipPath
+    { _clipPathDrawAttributes = mempty
+    , _clipPathUnits = CoordUserSpace
+    , _clipPathContent = mempty
     }
 
 -- | Define a `<pattern>` tag.
@@ -1270,6 +1326,7 @@ data Element
     | ElementPattern  Pattern
     | ElementMarker Marker
     | ElementMask Mask
+    | ElementClipPath ClipPath
     deriving Show
 
 -- | Represent a full svg document with style,
@@ -1337,6 +1394,8 @@ instance Monoid DrawAttributes where
         , _strokeDashArray  = Last Nothing
         , _textAnchor       = Last Nothing
         , _maskRef          = Last Nothing
+        , _clipPathRef      = Last Nothing
+        , _clipRule         = Last Nothing
 
         , _markerStart      = Last Nothing
         , _markerMid        = Last Nothing
@@ -1363,6 +1422,8 @@ instance Monoid DrawAttributes where
         , _fontStyle = (mappend `on` _fontStyle) a b
         , _textAnchor = (mappend `on` _textAnchor) a b
         , _maskRef = (mappend `on` _maskRef) a b
+        , _clipPathRef = (mappend `on` _clipPathRef) a b
+        , _clipRule = (mappend `on` _clipRule) a b
         , _markerStart = (mappend `on` _markerStart) a b
         , _markerMid = (mappend `on` _markerMid) a b
         , _markerEnd = (mappend `on` _markerEnd) a b
