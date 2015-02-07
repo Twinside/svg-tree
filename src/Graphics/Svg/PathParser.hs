@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE CPP #-}
 module Graphics.Svg.PathParser( transformParser
                               , command
                               , viewBoxParser
@@ -9,10 +10,11 @@ module Graphics.Svg.PathParser( transformParser
                               , serializeViewBox
                               ) where
 
-import Control.Applicative( (<$>), (<$)
-                          , (<*>), (<*), (*>)
-                          , (<|>)
-                          )
+#if !MIN_VERSION_base(4,8,0)
+import Control.Applicative( (<*>), (<*), (*>) )
+#endif
+
+import Control.Applicative( (<$>), (<$), (<|>) )
 import Data.Scientific( toRealFloat )
 import Data.Attoparsec.Text
     ( Parser

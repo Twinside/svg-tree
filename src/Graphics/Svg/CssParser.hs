@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternGuards #-}
 module Graphics.Svg.CssParser
@@ -13,11 +14,15 @@ module Graphics.Svg.CssParser
     )
     where
 
+#if !MIN_VERSION_base(4,8,0)
+import Control.Applicative( (<*>), (<*), (*>)
+                          , pure
+                          )
+#endif
+
 import Control.Applicative( (<$>), (<$)
-                          , (<*>), (<*), (*>)
                           , (<|>)
                           , many
-                          , pure
                           )
 import Data.Attoparsec.Text
     ( Parser
@@ -94,29 +99,6 @@ between o e p =
 bracket :: Parser a -> Parser a
 bracket = between '[' ']'
 
-{-
-: 	:
-; 	;
-{ 	\{
-} 	\}
-( 	\(
-) 	\)
-[ 	\[
-] 	\]
-S 	[ \t\r\n\f]+
-COMMENT 	\/\*[^*]*\*+([^/*][^*]*\*+)*\/
-FUNCTION 	{ident}\(
-INCLUDES 	~=
-DASHMATCH 	|
--}
-
-{-  
-stylesheet
-  : [ CHARSET_SYM STRING ';' ]?
-    [S|CDO|CDC]* [ import [ CDO S* | CDC S* ]* ]*
-    [ [ ruleset | media | page ] [ CDO S* | CDC S* ]* ]*
-  ;
--- -}
 
 comment :: Parser ()
 comment = string "/*" *> toStar *> skipSpace

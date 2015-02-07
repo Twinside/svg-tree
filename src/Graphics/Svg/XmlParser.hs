@@ -1,7 +1,9 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 module Graphics.Svg.XmlParser( xmlOfDocument
                              , unparseDocument
 
@@ -9,16 +11,18 @@ module Graphics.Svg.XmlParser( xmlOfDocument
                              , drawAttributesList
                              ) where
 
-import Control.Applicative( (<$>), (<$), (<|>)
-                          {-, (<*>)-}
-                          , many
-                          , pure )
+#if !MIN_VERSION_base(4,8,0)
+import Control.Applicative( pure )
+import Data.Foldable( foldMap )
+import Data.Monoid( mempty )
+#endif
+
+import Control.Applicative( (<$>), (<$), (<|>), many )
 
 import Control.Lens hiding( transform, children, elements, element )
 import Control.Monad.State.Strict( State, runState, modify, gets )
-import Data.Foldable( foldMap )
 import Data.Maybe( catMaybes )
-import Data.Monoid( mempty, Last( Last ), getLast, (<>) )
+import Data.Monoid( Last( Last ), getLast, (<>) )
 import Data.List( foldl', intercalate )
 import Text.XML.Light.Proc( findAttrBy, elChildren, strContent )
 import Text.Read( readMaybe )
@@ -295,7 +299,9 @@ genericSerializeNode node =
         }
         where
          xName "href" = 
-            X.QName	{ X.qName = "href", X.qURI = Nothing, X.qPrefix = Just "xlink" }
+            X.QName { X.qName = "href"
+                    , X.qURI = Nothing
+                    , X.qPrefix = Just "xlink" }
          xName h = X.unqual h
 
 

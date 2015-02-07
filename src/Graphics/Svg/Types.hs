@@ -4,6 +4,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE CPP #-}
 -- | This module define all the types used in the definition
 -- of a svg scene.
 --
@@ -161,11 +162,15 @@ module Graphics.Svg.Types
     , mapNumber
     ) where
 
+#if !MIN_VERSION_base(4,8,0)
+import Data.Monoid( Monoid( .. ) )
+import Data.Foldable( Foldable )
+#endif
+
 import Data.Function( on )
 import Data.List( inits )
 import qualified Data.Map as M
-import Data.Monoid( Monoid( .. ), Last( .. ), (<>) )
-import Data.Foldable( Foldable )
+import Data.Monoid( Last( .. ), (<>) )
 import qualified Data.Foldable as F
 import qualified Data.Text as T
 import Codec.Picture( PixelRGBA8( .. ) )

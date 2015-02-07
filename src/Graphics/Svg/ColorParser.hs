@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Graphics.Svg.ColorParser( colorParser
                                , colorSerializer
@@ -6,11 +7,12 @@ module Graphics.Svg.ColorParser( colorParser
                                , urlRef
                                ) where
 
+#if !MIN_VERSION_base(4,8,0)
+import Control.Applicative( (<*>), (<*), (*>) )
+#endif
+
 import Data.Bits( (.|.), unsafeShiftL )
-import Control.Applicative( (<$>), (<$)
-                          , (<*>), (<*), (*>)
-                          , (<|>)
-                          )
+import Control.Applicative( (<$>), (<$), (<|>) )
 import Data.Attoparsec.Text
     ( Parser
     , string
