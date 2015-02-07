@@ -703,6 +703,7 @@ data Image = Image
   }
   deriving (Eq, Show)
 
+-- | Lenses for the Image type.
 makeClassy ''Image
 
 instance WithDrawAttributes Image where
@@ -1027,6 +1028,7 @@ foldTree f = go where
             F.foldl' go acc . _groupChildren $ _groupOfSymbol s in
       f subAcc e
 
+-- | Helper function mapping every tree element.
 mapTree :: (Tree -> Tree) -> Tree -> Tree
 mapTree f = go where
   go e@None = f e

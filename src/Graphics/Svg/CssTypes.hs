@@ -33,6 +33,8 @@ import Text.Printf
 import Codec.Picture( PixelRGBA8( .. ) )
 {-import Debug.Trace-}
 
+-- | Alias describing a "dot per inch" information
+-- used for size calculation (see toUserUnit).
 type Dpi = Int
 
 -- | Helper typeclass for serialization to Text.
@@ -150,6 +152,8 @@ isMatching = go where
     | otherwise = False
   go (_:upper) selector = go upper selector
 
+-- | Given CSS rules, find all the declaration to apply to the
+-- element in a given context.
 findMatchingDeclarations :: CssMatcheable a
                          => [CssRule] -> CssContext a -> [CssDeclaration]
 findMatchingDeclarations rules context =

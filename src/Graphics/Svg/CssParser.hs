@@ -249,6 +249,7 @@ term = checkRgb <$> function
        <$> ident <* char '('
        <*> (functionParam `sepBy` comma) <* char ')' <* skipSpace
 
+-- | Parse CSS text into rules.
 cssRulesOfText :: T.Text -> [CssRule]
 cssRulesOfText txt = case parseOnly (many1 ruleSet) $ txt of
     Left _ -> []

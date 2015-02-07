@@ -1,13 +1,18 @@
 -- | Module providing basic input/output for the SVG document,
 -- for document building, please refer to Graphics.Svg.Types.
-module Graphics.Svg ( loadSvgFile
+module Graphics.Svg ( -- * Saving/Loading functions
+                      loadSvgFile
                     , parseSvgFile
-                    , cssApply
-                    , applyCSSRules
                     , xmlOfDocument
                     , saveXmlFile
+
+                      -- * Manipulation functions
+                    , cssApply
                     , cssRulesOfText
+                    , applyCSSRules
                     , resolveUses
+
+                      -- * Type definitions
                     , module Graphics.Svg.Types
                     ) where
 
