@@ -89,6 +89,7 @@ resolveUses doc =
       ElementLinearGradient _ -> Nothing
       ElementRadialGradient _ -> Nothing
       ElementMask _ -> Nothing
+      ElementClipPath _ -> Nothing
       ElementGeometry t -> Just t
       ElementPattern _ -> Nothing
       ElementMarker _ -> Nothing
