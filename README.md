@@ -1,6 +1,8 @@
 svg-tree
 ========
 
+[![Build Status](https://travis-ci.org/Twinside/svg-tree.png?branch=master)](https://travis-ci.org/Twinside/svg-tree)
+
 SVG loader/serializer for Haskell with a tree type geared toward SVG
 rendering.
 
