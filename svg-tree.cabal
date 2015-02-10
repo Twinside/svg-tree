@@ -56,7 +56,7 @@ library
                , linear     >= 1.16
                , vector     >= 0.10
                , text       >= 1.2
-               , transformers >= 0.3 && < 0.4
-               , mtl        >= 2.1 && < 2.2
-               , lens       >= 4.6 && < 24.7
+               , transformers >= 0.3 && < 0.5
+               , mtl        >= 2.1 && < 2.3
+               , lens       >= 4.6 && < 4.8
 
