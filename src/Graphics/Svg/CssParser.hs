@@ -16,12 +16,12 @@ module Graphics.Svg.CssParser
 
 #if !MIN_VERSION_base(4,8,0)
 import Control.Applicative( (<*>), (<*), (*>)
+                          , (<$>), (<$)
                           , pure
                           )
 #endif
 
-import Control.Applicative( (<$>), (<$)
-                          , (<|>)
+import Control.Applicative( (<|>)
                           , many
                           )
 import Data.Attoparsec.Text

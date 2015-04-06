@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 -- | Module providing basic input/output for the SVG document,
 -- for document building, please refer to Graphics.Svg.Types.
 module Graphics.Svg ( -- * Saving/Loading functions
@@ -16,7 +17,10 @@ module Graphics.Svg ( -- * Saving/Loading functions
                     , module Graphics.Svg.Types
                     ) where
 
+#if !MIN_VERSION_base(4,8,0)
 import Control.Applicative( (<$>) )
+#endif
+
 import Data.List( foldl' )
 import qualified Data.ByteString as B
 import qualified Data.Map as M
