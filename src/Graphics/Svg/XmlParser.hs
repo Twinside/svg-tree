@@ -12,12 +12,12 @@ module Graphics.Svg.XmlParser( xmlOfDocument
                              ) where
 
 #if !MIN_VERSION_base(4,8,0)
-import Control.Applicative( pure )
+import Control.Applicative( pure, (<$>), (<$) )
 import Data.Foldable( foldMap )
 import Data.Monoid( mempty )
 #endif
 
-import Control.Applicative( (<$>), (<$), (<|>), many )
+import Control.Applicative( (<|>), many )
 
 import Control.Lens hiding( transform, children, elements, element )
 import Control.Monad.State.Strict( State, runState, modify, gets )

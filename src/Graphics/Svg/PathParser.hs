@@ -11,10 +11,10 @@ module Graphics.Svg.PathParser( transformParser
                               ) where
 
 #if !MIN_VERSION_base(4,8,0)
-import Control.Applicative( (<*>), (<*), (*>) )
+import Control.Applicative( (<*>), (<*), (*>), (<$>), (<$) )
 #endif
 
-import Control.Applicative( (<$>), (<$), (<|>) )
+import Control.Applicative( (<|>) )
 import Data.Scientific( toRealFloat )
 import Data.Attoparsec.Text
     ( Parser
