@@ -405,7 +405,8 @@ data DrawAttributes = DrawAttributes
       -- | Define the `fill-opacity` attribute, the transparency
       -- for the "content".
     , _fillOpacity      :: !(Maybe Float)
-
+      -- | Define the global or group opacity attribute.
+    , _groupOpacity     :: !(Maybe Float)
       -- | Content of the `transform` attribute
     , _transform        :: !(Maybe [Transformation])
       -- | Define the `fill-rule` used during the rendering.
@@ -1389,6 +1390,7 @@ instance Monoid DrawAttributes where
         , _strokeLineJoin   = Last Nothing
         , _strokeMiterLimit = Last Nothing
         , _fillColor        = Last Nothing
+        , _groupOpacity     = Nothing
         , _fillOpacity      = Nothing
         , _fontSize         = Last Nothing
         , _fontFamily       = Last Nothing
@@ -1423,6 +1425,7 @@ instance Monoid DrawAttributes where
         , _fillRule = (mappend `on` _fillRule) a b
         , _attrClass = _attrClass b
         , _attrId = _attrId b
+        , _groupOpacity = _groupOpacity b
         , _strokeOffset = (mappend `on` _strokeOffset) a b
         , _strokeDashArray = (mappend `on` _strokeDashArray) a b
         , _fontFamily = (mappend `on` _fontFamily) a b

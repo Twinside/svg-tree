@@ -318,30 +318,14 @@ genericSerializeWithDrawAttr node = mergeAttributes thisXml drawAttrNode where
 type CssUpdater =
     DrawAttributes -> [[CssElement]] -> DrawAttributes
 
-groupOpacitySetter :: SvgAttributeLens DrawAttributes
-groupOpacitySetter = SvgAttributeLens "opacity" updater serializer
-  where
-    updater el str = case parseMayStartDot num str of
-        Nothing -> el
-        Just v -> (el & fillOpacity .~ Just v) & strokeOpacity .~ Just v
-
-    serializer a = case (a ^. fillOpacity, a ^. strokeOpacity) of
-      (Just v, Just b) | v == b -> Just $ printf "%g" v
-      _ -> Nothing
-
-opacitySetter :: String -> Lens' a (Maybe Float) -> Lens' a (Maybe Float)
-              -> SvgAttributeLens a
-opacitySetter attribute elLens otherLens =
+opacitySetter :: String -> Lens' a (Maybe Float) -> SvgAttributeLens a
+opacitySetter attribute elLens =
     SvgAttributeLens attribute updater serializer
   where
+    serializer a = printf "%g" <$> a ^. elLens
     updater el str = case parseMayStartDot num str of
         Nothing -> el
         Just v -> el & elLens .~ Just v
-
-    serializer a = case (a ^. elLens, a ^. otherLens) of
-        (Just v, Just b) | v == b -> Nothing
-        (Just v, _) -> Just $ printf "%g" v
-        (Nothing, _) -> Nothing
 
 type Serializer e = e -> Maybe String
 
@@ -479,11 +463,9 @@ drawAttributesList =
        cssUniqueMayFloat strokeMiterLimit)
 
   ,("transform" `parseIn` transform, const)
-  ,(groupOpacitySetter, cssUniqueFloat fillOpacity)
-  ,(opacitySetter "fill-opacity" fillOpacity strokeOpacity,
-      cssUniqueFloat fillOpacity)
-  ,(opacitySetter "stroke-opacity" strokeOpacity fillOpacity,
-      cssUniqueFloat strokeOpacity)
+  ,(opacitySetter "opacity" groupOpacity, cssUniqueFloat groupOpacity)
+  ,(opacitySetter "fill-opacity" fillOpacity, cssUniqueFloat fillOpacity)
+  ,(opacitySetter "stroke-opacity" strokeOpacity, cssUniqueFloat strokeOpacity)
   ,("font-size" `parseIn` fontSize, cssUniqueNumber fontSize)
   ,(parserLastSetter "font-family" fontFamily (Just . commaSeparate)
       (Just . intercalate ", "), fontFamilyParser)

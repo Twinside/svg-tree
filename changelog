@@ -1,5 +1,9 @@
 -*-change-log-*-
 
+v0.2 April 2015
+ * Fix: Differentiating opacity & fill-opacity, as they are
+   semantically deferent (BREAKING CHANGE!)
+
 v0.1.1 April 2015
  * Fix: Bumping lens bounds
 
