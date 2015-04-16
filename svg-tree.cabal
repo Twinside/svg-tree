@@ -15,7 +15,7 @@ description:
 license:             BSD3
 author:              Vincent Berthoux
 maintainer:          Vincent Berthoux
--- copyright:           
+-- copyright:
 category:            Graphics, Svg
 build-type:          Simple
 cabal-version:       >=1.10

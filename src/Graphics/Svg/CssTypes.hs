@@ -62,7 +62,7 @@ instance TextBuildable CssDescriptor where
       AnyElem -> si '*'
       WithAttrib a b -> mconcat [si '[', ft a, si '=', ft b, si ']']
      where
-      ft = TB.fromText 
+      ft = TB.fromText
       si = TB.singleton
 
 -- | Define complex selector.
@@ -105,7 +105,7 @@ instance TextBuildable CssRule where
                  <> mconcat (fmap tserializeDecl decl)
                  <> ft "}\n"
      where
-      ft = TB.fromText 
+      ft = TB.fromText
       tserializeDecl d = ft "  " <> tserialize d <> ft ";\n"
       tselectors =
           intersperse (ft ",\n") . fmap tserialize $ concat selectors
@@ -164,7 +164,7 @@ findMatchingDeclarations rules context =
 
 -- | Represent the content to apply to some
 -- CSS matched rules.
-data CssDeclaration = CssDeclaration 
+data CssDeclaration = CssDeclaration
     { -- | Property name to change (like font-family or color).
       _cssDeclarationProperty :: T.Text
       -- | List of values
@@ -177,7 +177,7 @@ instance TextBuildable CssDeclaration where
       mconcat $ ft n : ft ": " : intersperse (si ' ') finalElems
      where
       finalElems = map tserialize (concat elems)
-      ft = TB.fromText 
+      ft = TB.fromText
       si = TB.singleton
 
 
@@ -229,7 +229,7 @@ instance TextBuildable Number where
 data CssElement
     = CssIdent     !T.Text
     | CssString    !T.Text
-    | CssReference !T.Text 
+    | CssReference !T.Text
     | CssNumber    !Number
     | CssColor     !PixelRGBA8
     | CssFunction  !T.Text ![CssElement]
@@ -250,7 +250,7 @@ instance TextBuildable CssElement where
     CssOpComa -> si ','
     CssOpSlash -> si '/'
     where
-      ft = TB.fromText 
+      ft = TB.fromText
       si = TB.singleton
 
 -- | This function replace all device dependant units to user

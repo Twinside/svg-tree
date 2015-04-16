@@ -460,7 +460,7 @@ makeClassy ''DrawAttributes
 -- segments. Correspond to the `<polyline>` tag.
 data PolyLine = PolyLine
   { -- | drawing attributes of the polyline.
-    _polyLineDrawAttributes :: DrawAttributes 
+    _polyLineDrawAttributes :: DrawAttributes
 
     -- | Geometry definition of the polyline.
     -- correspond to the `points` attribute
@@ -535,7 +535,7 @@ instance WithDefaultSvg Line where
 
 -- | Define a rectangle. Correspond to
 -- `<rectangle>` svg tag.
-data Rectangle = Rectangle 
+data Rectangle = Rectangle
   { -- | Rectangle drawing attributes.
     _rectDrawAttributes  :: DrawAttributes
     -- | Upper left corner of the rectangle, correspond
@@ -1002,7 +1002,7 @@ zipTree f = dig [] where
   zipGroup prev g = g { _groupChildren = updatedChildren }
     where
       groupChild = _groupChildren g
-      updatedChildren = 
+      updatedChildren =
         [dig (c:prev) child
             | (child, c) <- zip groupChild $ inits groupChild]
 
@@ -1021,7 +1021,7 @@ foldTree f = go where
     RectangleTree _ -> f acc e
     TextTree    _ _ -> f acc e
     ImageTree _     -> f acc e
-    GroupTree g     -> 
+    GroupTree g     ->
       let subAcc = F.foldl' go acc $ _groupChildren g in
       f subAcc e
     SymbolTree s    ->
@@ -1124,7 +1124,7 @@ data Spread
 
 -- | Define a color stop for the gradients. Represent
 -- the `<stop>` SVG tag.
-data GradientStop = GradientStop 
+data GradientStop = GradientStop
     { -- | Gradient offset between 0 and 1, correspond
       -- to the `offset` attribute.
       _gradientOffset :: Double
@@ -1138,7 +1138,7 @@ data GradientStop = GradientStop
 makeClassy ''GradientStop
 
 instance WithDefaultSvg GradientStop where
-  defaultSvg = GradientStop 
+  defaultSvg = GradientStop
     { _gradientOffset = 0.0
     , _gradientColor  = PixelRGBA8 0 0 0 255
     }
@@ -1367,7 +1367,7 @@ documentSize _ Document { _viewBox = Just (x1, y1, x2, y2)
         dy = fromIntegral . abs $ y2 - y1
 documentSize _ Document { _width = Just (Num w)
                         , _height = Just (Num h) } = (floor w, floor h)
-documentSize dpi doc@(Document { _width = Just w 
+documentSize dpi doc@(Document { _width = Just w
                                , _height = Just h }) =
   documentSize dpi $ doc
     { _width = Just $ toUserUnit dpi w
@@ -1382,7 +1382,7 @@ mayMerge _ b@(Just _) = b
 mayMerge a Nothing = a
 
 instance Monoid DrawAttributes where
-    mempty = DrawAttributes 
+    mempty = DrawAttributes
         { _strokeWidth      = Last Nothing
         , _strokeColor      = Last Nothing
         , _strokeOpacity    = Nothing

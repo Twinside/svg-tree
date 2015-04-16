@@ -148,7 +148,7 @@ serializeCommand p = case p of
   where
     serializeArg (a, b, c, d, e, V2 x y) =
         printf "%g %g %g %g %g %g,%g" a b c d e x y
-    serializeArgs = unwords . fmap serializeArg 
+    serializeArgs = unwords . fmap serializeArg
 
 
 

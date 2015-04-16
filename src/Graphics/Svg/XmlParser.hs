@@ -127,12 +127,12 @@ instance ParseableAttribute TextAnchor where
     "start" -> Just TextAnchorStart
     "end" -> Just TextAnchorEnd
     _ -> Nothing
- 
+
   aserialize t = Just $ case t of
     TextAnchorMiddle -> "middle"
     TextAnchorStart -> "start"
     TextAnchorEnd -> "end"
- 
+
 instance ParseableAttribute ElementRef where
   aparse s = case parseOnly pa $ T.pack s of
      Left _ -> Nothing
@@ -194,7 +194,7 @@ instance ParseableAttribute TextAdjust where
     "spacing" -> TextAdjustSpacing
     "spacingAndGlyphs" -> TextAdjustSpacingAndGlyphs
     _ -> TextAdjustSpacing
- 
+
   aserialize a = Just $ case a of
     TextAdjustSpacing -> "spacing"
     TextAdjustSpacingAndGlyphs -> "spacingAndGlyphs"
@@ -298,7 +298,7 @@ genericSerializeNode node =
         , X.attrVal = str
         }
         where
-         xName "href" = 
+         xName "href" =
             X.QName { X.qName = "href"
                     , X.qURI = Nothing
                     , X.qPrefix = Just "xlink" }
@@ -349,7 +349,7 @@ parseIn attribute elLens =
         Nothing -> el
         Just v -> el & elLens .~ v
 
-    serializer a 
+    serializer a
       | v /= defaultVal = aserialize v
       | otherwise = Nothing
       where
@@ -365,15 +365,15 @@ parserLastSetter attribute elLens parser serialize =
         Nothing -> el
         Just v -> el & elLens .~ Last (Just v)
 
-    serializer a = getLast (a ^. elLens) >>= serialize 
+    serializer a = getLast (a ^. elLens) >>= serialize
 
 classSetter :: SvgAttributeLens DrawAttributes
 classSetter = SvgAttributeLens "class" updater serializer
   where
-    updater el str = 
+    updater el str =
       el & attrClass .~ (T.split (== ' ') $ T.pack str)
 
-    serializer a = 
+    serializer a =
        Just . T.unpack . T.intercalate " " $ a ^. attrClass
 
 cssUniqueNumber :: ASetter DrawAttributes DrawAttributes
@@ -469,7 +469,7 @@ drawAttributesList =
   ,("font-size" `parseIn` fontSize, cssUniqueNumber fontSize)
   ,(parserLastSetter "font-family" fontFamily (Just . commaSeparate)
       (Just . intercalate ", "), fontFamilyParser)
-      
+
   ,("fill-rule" `parseIn` fillRule, cssIdentAttr fillRule)
   ,("clip-rule" `parseIn` clipRule, cssIdentAttr clipRule)
   ,("mask" `parseIn` maskRef, cssElementRefSetter maskRef)
@@ -490,7 +490,7 @@ drawAttributesList =
 
 serializeDashArray :: [Number] -> String
 serializeDashArray =
-   intercalate ", " . fmap serializeNumber 
+   intercalate ", " . fmap serializeNumber
 
 instance XMLUpdatable DrawAttributes where
   xmlTagName _ = "DRAWATTRIBUTES"
@@ -608,8 +608,8 @@ instance XMLUpdatable LinearGradient where
   xmlTagName _ = "linearGradient"
   serializeTreeNode node =
      updateWithAccessor _linearGradientStops node $ genericSerializeNode node
-        
-  attributes = 
+
+  attributes =
     ["gradientTransform" `parseIn` linearGradientTransform
     ,"gradientUnits" `parseIn` linearGradientUnits
     ,"spreadMethod" `parseIn` linearGradientSpread
@@ -701,7 +701,7 @@ instance XMLUpdatable TextInfo where
     ,parserSetter "y" textInfoY (parse dashArray) dashNotEmpty
     ,parserSetter "dx" textInfoDX (parse dashArray) dashNotEmpty
     ,parserSetter "dy" textInfoDY (parse dashArray) dashNotEmpty
-    ,parserSetter "rotate" textInfoRotate 
+    ,parserSetter "rotate" textInfoRotate
         (parse numberList)
         rotateNotEmpty
     ,"textLength" `parseIn` textInfoLength
@@ -736,7 +736,7 @@ instance XMLUpdatable Pattern where
   serializeTreeNode node =
      updateWithAccessor _patternElements node $ genericSerializeWithDrawAttr node
   attributes =
-    ["viewBox" `parseIn` patternViewBox 
+    ["viewBox" `parseIn` patternViewBox
     ,"patternUnits" `parseIn` patternUnit
     ,"width" `parseIn` patternWidth
     ,"height" `parseIn` patternHeight
@@ -760,8 +760,8 @@ instance XMLUpdatable Marker where
 
 serializeText :: Text -> X.Element
 serializeText topText = topNode { X.elName = X.unqual "text" } where
-  topNode = serializeSpan $ _textRoot topText 
-  
+  topNode = serializeSpan $ _textRoot topText
+
   serializeSpan tspan = setChildren (mergeAttributes info drawInfo) subContent
     where
       info = genericSerializeNode $ _spanInfo tspan
@@ -786,13 +786,13 @@ unparseText = extractResult . go True
         (sub, _, restStrip) = go startStrip $ X.elContent e
         spans = TextSpan (xmlUnparse e) (xmlUnparse e) sub
 
-    go startStrip (X.Elem e@(nodeName -> "tref"):rest) = 
+    go startStrip (X.Elem e@(nodeName -> "tref"):rest) =
         case attributeFinder "href" e of
           Nothing -> go startStrip rest
           Just v -> (SpanTextRef v : trest, mpath, stripRet)
             where (trest, mpath, stripRet) = go startStrip rest
 
-    go startStrip (X.Elem e@(nodeName -> "textPath"):rest) = 
+    go startStrip (X.Elem e@(nodeName -> "textPath"):rest) =
         case attributeFinder "href" e of
           Nothing -> go startStrip rest
           Just v -> (tsub ++ trest, pure p, retStrp)
@@ -835,7 +835,7 @@ gradientOffsetSetter = SvgAttributeLens "offset" setter serialize
       where percentage = floor . (100 *) $ a ^. gradientOffset :: Int
 
     setter el str = el & gradientOffset .~ val
-      where 
+      where
         val = case parseMayStartDot complexNumber str of
             Nothing -> 0
             Just (Num n) -> n
@@ -855,7 +855,7 @@ instance XMLUpdatable GradientStop where
         [gradientOffsetSetter
         ,"stop-color" `parseIn` gradientColor
         ]
-            
+
 
 data Symbols = Symbols
   { symbols :: !(M.Map String Element)
@@ -864,7 +864,7 @@ data Symbols = Symbols
 
 emptyState :: Symbols
 emptyState = Symbols mempty mempty
- 
+
 parseGradientStops :: X.Element -> [GradientStop]
 parseGradientStops = concatMap unStop . elChildren
   where
@@ -940,7 +940,7 @@ unparse e@(nodeName -> "g") = do
   let realChildren = filter isNotNone children
 
       groupNode :: Group Tree
-      groupNode = xmlUnparseWithDrawAttr e 
+      groupNode = xmlUnparseWithDrawAttr e
 
   pure $ GroupTree $ groupNode & groupChildren .~ realChildren
 
@@ -949,7 +949,7 @@ unparse e@(nodeName -> "text") = do
   pure . TextTree pathWithGeometry $ xmlUnparse e & textRoot .~ root
     where
       (textContent, tPath) = unparseText $ X.elContent e
-      
+
       pathGeomtryOf Nothing = pure Nothing
       pathGeomtryOf (Just pathInfo) = do
         pathElem <- gets $ M.lookup (_textPathName pathInfo) . symbols
@@ -987,7 +987,7 @@ unparse e = pure $ case nodeName e of
     parsed = xmlUnparseWithDrawAttr e
 
 unparseDocument :: FilePath -> X.Element -> Maybe Document
-unparseDocument rootLocation e@(nodeName -> "svg") = Just Document 
+unparseDocument rootLocation e@(nodeName -> "svg") = Just Document
     { _viewBox =
         attributeFinder "viewBox" e >>= parse viewBoxParser
     , _elements = parsedElements
@@ -1003,7 +1003,7 @@ unparseDocument rootLocation e@(nodeName -> "svg") = Just Document
         runState (mapM unparse $ elChildren e) emptyState
     lengthFind n =
         attributeFinder n e >>= parse complexNumber
-unparseDocument _ _ = Nothing   
+unparseDocument _ _ = Nothing
 
 -- | Transform a SVG document to a XML node.
 xmlOfDocument :: Document -> X.Element
