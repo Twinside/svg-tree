@@ -43,7 +43,7 @@ commaWsp = skipSpace *> option () (string "," *> return ())
 
 num :: Parser Double
 num = realToFrac <$> (skipSpace *> plusMinus <* skipSpace)
-  where doubleNumber :: Parser Float
+  where doubleNumber :: Parser Double
         doubleNumber = toRealFloat <$> scientific
 
         plusMinus = negate <$ string "-" <*> doubleNumber

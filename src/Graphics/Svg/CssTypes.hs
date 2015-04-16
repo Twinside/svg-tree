@@ -184,19 +184,19 @@ instance TextBuildable CssDeclaration where
 -- | Encode complex number possibly dependant to the current
 -- render size.
 data Number
-  = Num Float       -- ^ Simple coordinate in current user coordinate.
-  | Px Float        -- ^ With suffix "px"
-  | Em Float        -- ^ Number relative to the current font size.
-  | Percent Float   -- ^ Number relative to the current viewport size.
-  | Pc Float
-  | Mm Float        -- ^ Number in millimeters, relative to DPI.
-  | Cm Float        -- ^ Number in centimeters, relative to DPI.
-  | Point Float     -- ^ Number in points, relative to DPI.
-  | Inches Float    -- ^ Number in inches, relative to DPI.
+  = Num Double       -- ^ Simple coordinate in current user coordinate.
+  | Px Double        -- ^ With suffix "px"
+  | Em Double        -- ^ Number relative to the current font size.
+  | Percent Double   -- ^ Number relative to the current viewport size.
+  | Pc Double
+  | Mm Double        -- ^ Number in millimeters, relative to DPI.
+  | Cm Double        -- ^ Number in centimeters, relative to DPI.
+  | Point Double     -- ^ Number in points, relative to DPI.
+  | Inches Double    -- ^ Number in inches, relative to DPI.
   deriving (Eq, Show)
 
 -- | Helper function to modify inner value of a number
-mapNumber :: (Float -> Float) -> Number -> Number
+mapNumber :: (Double -> Double) -> Number -> Number
 mapNumber f nu = case nu of
   Num n -> Num $ f n
   Px n -> Px $ f n

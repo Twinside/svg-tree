@@ -189,7 +189,7 @@ import Linear hiding ( angle )
 import Text.Printf
 
 -- | Basic coordiante type.
-type Coord = Float
+type Coord = Double
 
 -- | Real Point, fully determined and not
 -- dependant of the rendering context.
@@ -286,16 +286,16 @@ data Transformation
       TransformMatrix Coord Coord Coord
                       Coord Coord Coord
       -- | Translation along a vector
-    | Translate Float Float
+    | Translate Double Double
       -- | Scaling on both axis or on X axis and Y axis.
-    | Scale Float (Maybe Float)
+    | Scale Double (Maybe Double)
       -- | Rotation around `(0, 0)` or around an optional
       -- point.
-    | Rotate Float (Maybe (Float, Float))
+    | Rotate Double (Maybe (Double, Double))
       -- | Skew transformation along the X axis.
-    | SkewX Float
+    | SkewX Double
       -- | Skew transformation along the Y axis.
-    | SkewY Float
+    | SkewY Double
       -- | Unkown transformation, like identity.
     | TransformUnknown
     deriving (Eq, Show)
@@ -389,7 +389,7 @@ data DrawAttributes = DrawAttributes
     , _strokeColor      :: !(Last Texture)
       -- | Define the `stroke-opacity` attribute, the transparency
       -- for the "border".
-    , _strokeOpacity    :: !(Maybe Float)
+    , _strokeOpacity    :: !(Maybe Double)
       -- | Correspond to the `stroke-linecap` SVG
       -- attribute
     , _strokeLineCap    :: !(Last Cap)
@@ -398,15 +398,15 @@ data DrawAttributes = DrawAttributes
     , _strokeLineJoin   :: !(Last LineJoin)
       -- | Define the distance of the miter join, correspond
       -- to the `stroke-miterlimit` attritbue.
-    , _strokeMiterLimit :: !(Last Float)
+    , _strokeMiterLimit :: !(Last Double)
       -- | Define the filling color of the elements. Corresponding
       -- to the `fill` attribute.
     , _fillColor        :: !(Last Texture)
       -- | Define the `fill-opacity` attribute, the transparency
       -- for the "content".
-    , _fillOpacity      :: !(Maybe Float)
+    , _fillOpacity      :: !(Maybe Double)
       -- | Define the global or group opacity attribute.
-    , _groupOpacity     :: !(Maybe Float)
+    , _groupOpacity     :: !(Maybe Double)
       -- | Content of the `transform` attribute
     , _transform        :: !(Maybe [Transformation])
       -- | Define the `fill-rule` used during the rendering.
@@ -764,7 +764,7 @@ data TextInfo = TextInfo
   , _textInfoY      :: ![Number] -- ^ `y` attribute.
   , _textInfoDX     :: ![Number] -- ^ `dx` attribute.
   , _textInfoDY     :: ![Number] -- ^ `dy` attribute.
-  , _textInfoRotate :: ![Float] -- ^ `rotate` attribute.
+  , _textInfoRotate :: ![Double] -- ^ `rotate` attribute.
   , _textInfoLength :: !(Maybe Number) -- ^ `textLength` attribute.
   }
   deriving (Eq, Show)
@@ -1127,7 +1127,7 @@ data Spread
 data GradientStop = GradientStop 
     { -- | Gradient offset between 0 and 1, correspond
       -- to the `offset` attribute.
-      _gradientOffset :: Float
+      _gradientOffset :: Double
       -- | Color of the gradient stop. Correspond
       -- to the `stop-color` attribute.
     , _gradientColor  :: PixelRGBA8

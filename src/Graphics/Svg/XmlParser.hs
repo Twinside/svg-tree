@@ -97,7 +97,7 @@ instance ParseableAttribute [RPoint] where
   aparse = parse pointData
   aserialize = Just . serializePoints
 
-instance ParseableAttribute Float where
+instance ParseableAttribute Double where
   aparse = parseMayStartDot num
   aserialize v = Just $ printf "%g" v
 
@@ -318,7 +318,7 @@ genericSerializeWithDrawAttr node = mergeAttributes thisXml drawAttrNode where
 type CssUpdater =
     DrawAttributes -> [[CssElement]] -> DrawAttributes
 
-opacitySetter :: String -> Lens' a (Maybe Float) -> SvgAttributeLens a
+opacitySetter :: String -> Lens' a (Maybe Double) -> SvgAttributeLens a
 opacitySetter attribute elLens =
     SvgAttributeLens attribute updater serializer
   where
@@ -383,13 +383,13 @@ cssUniqueNumber setter attr ((CssNumber n:_):_) =
     attr & setter .~ Last (Just n)
 cssUniqueNumber _ attr _ = attr
 
-cssUniqueFloat :: ASetter DrawAttributes DrawAttributes a (Maybe Float)
+cssUniqueFloat :: ASetter DrawAttributes DrawAttributes a (Maybe Double)
                -> CssUpdater
 cssUniqueFloat setter attr ((CssNumber (Num n):_):_) =
     attr & setter .~ Just n
 cssUniqueFloat _ attr _ = attr
 
-cssUniqueMayFloat :: ASetter DrawAttributes DrawAttributes a (Last Float)
+cssUniqueMayFloat :: ASetter DrawAttributes DrawAttributes a (Last Double)
                -> CssUpdater
 cssUniqueMayFloat setter attr ((CssNumber (Num n):_):_) =
     attr & setter .~ Last (Just n)
