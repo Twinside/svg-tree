@@ -189,7 +189,7 @@ import Linear hiding ( angle )
 import Text.Printf
 
 -- | Basic coordiante type.
-type Coord = Float
+type Coord = Double
 
 -- | Real Point, fully determined and not
 -- dependant of the rendering context.
@@ -286,16 +286,16 @@ data Transformation
       TransformMatrix Coord Coord Coord
                       Coord Coord Coord
       -- | Translation along a vector
-    | Translate Float Float
+    | Translate Double Double
       -- | Scaling on both axis or on X axis and Y axis.
-    | Scale Float (Maybe Float)
+    | Scale Double (Maybe Double)
       -- | Rotation around `(0, 0)` or around an optional
       -- point.
-    | Rotate Float (Maybe (Float, Float))
+    | Rotate Double (Maybe (Double, Double))
       -- | Skew transformation along the X axis.
-    | SkewX Float
+    | SkewX Double
       -- | Skew transformation along the Y axis.
-    | SkewY Float
+    | SkewY Double
       -- | Unkown transformation, like identity.
     | TransformUnknown
     deriving (Eq, Show)
@@ -389,7 +389,7 @@ data DrawAttributes = DrawAttributes
     , _strokeColor      :: !(Last Texture)
       -- | Define the `stroke-opacity` attribute, the transparency
       -- for the "border".
-    , _strokeOpacity    :: !(Maybe Float)
+    , _strokeOpacity    :: !(Maybe Double)
       -- | Correspond to the `stroke-linecap` SVG
       -- attribute
     , _strokeLineCap    :: !(Last Cap)
@@ -398,15 +398,15 @@ data DrawAttributes = DrawAttributes
     , _strokeLineJoin   :: !(Last LineJoin)
       -- | Define the distance of the miter join, correspond
       -- to the `stroke-miterlimit` attritbue.
-    , _strokeMiterLimit :: !(Last Float)
+    , _strokeMiterLimit :: !(Last Double)
       -- | Define the filling color of the elements. Corresponding
       -- to the `fill` attribute.
     , _fillColor        :: !(Last Texture)
       -- | Define the `fill-opacity` attribute, the transparency
       -- for the "content".
-    , _fillOpacity      :: !(Maybe Float)
+    , _fillOpacity      :: !(Maybe Double)
       -- | Define the global or group opacity attribute.
-    , _groupOpacity     :: !(Maybe Float)
+    , _groupOpacity     :: !(Maybe Double)
       -- | Content of the `transform` attribute
     , _transform        :: !(Maybe [Transformation])
       -- | Define the `fill-rule` used during the rendering.
@@ -460,7 +460,7 @@ makeClassy ''DrawAttributes
 -- segments. Correspond to the `<polyline>` tag.
 data PolyLine = PolyLine
   { -- | drawing attributes of the polyline.
-    _polyLineDrawAttributes :: DrawAttributes 
+    _polyLineDrawAttributes :: DrawAttributes
 
     -- | Geometry definition of the polyline.
     -- correspond to the `points` attribute
@@ -535,7 +535,7 @@ instance WithDefaultSvg Line where
 
 -- | Define a rectangle. Correspond to
 -- `<rectangle>` svg tag.
-data Rectangle = Rectangle 
+data Rectangle = Rectangle
   { -- | Rectangle drawing attributes.
     _rectDrawAttributes  :: DrawAttributes
     -- | Upper left corner of the rectangle, correspond
@@ -764,7 +764,7 @@ data TextInfo = TextInfo
   , _textInfoY      :: ![Number] -- ^ `y` attribute.
   , _textInfoDX     :: ![Number] -- ^ `dx` attribute.
   , _textInfoDY     :: ![Number] -- ^ `dy` attribute.
-  , _textInfoRotate :: ![Float] -- ^ `rotate` attribute.
+  , _textInfoRotate :: ![Double] -- ^ `rotate` attribute.
   , _textInfoLength :: !(Maybe Number) -- ^ `textLength` attribute.
   }
   deriving (Eq, Show)
@@ -1002,7 +1002,7 @@ zipTree f = dig [] where
   zipGroup prev g = g { _groupChildren = updatedChildren }
     where
       groupChild = _groupChildren g
-      updatedChildren = 
+      updatedChildren =
         [dig (c:prev) child
             | (child, c) <- zip groupChild $ inits groupChild]
 
@@ -1021,7 +1021,7 @@ foldTree f = go where
     RectangleTree _ -> f acc e
     TextTree    _ _ -> f acc e
     ImageTree _     -> f acc e
-    GroupTree g     -> 
+    GroupTree g     ->
       let subAcc = F.foldl' go acc $ _groupChildren g in
       f subAcc e
     SymbolTree s    ->
@@ -1124,10 +1124,10 @@ data Spread
 
 -- | Define a color stop for the gradients. Represent
 -- the `<stop>` SVG tag.
-data GradientStop = GradientStop 
+data GradientStop = GradientStop
     { -- | Gradient offset between 0 and 1, correspond
       -- to the `offset` attribute.
-      _gradientOffset :: Float
+      _gradientOffset :: Double
       -- | Color of the gradient stop. Correspond
       -- to the `stop-color` attribute.
     , _gradientColor  :: PixelRGBA8
@@ -1138,7 +1138,7 @@ data GradientStop = GradientStop
 makeClassy ''GradientStop
 
 instance WithDefaultSvg GradientStop where
-  defaultSvg = GradientStop 
+  defaultSvg = GradientStop
     { _gradientOffset = 0.0
     , _gradientColor  = PixelRGBA8 0 0 0 255
     }
@@ -1367,7 +1367,7 @@ documentSize _ Document { _viewBox = Just (x1, y1, x2, y2)
         dy = fromIntegral . abs $ y2 - y1
 documentSize _ Document { _width = Just (Num w)
                         , _height = Just (Num h) } = (floor w, floor h)
-documentSize dpi doc@(Document { _width = Just w 
+documentSize dpi doc@(Document { _width = Just w
                                , _height = Just h }) =
   documentSize dpi $ doc
     { _width = Just $ toUserUnit dpi w
@@ -1382,7 +1382,7 @@ mayMerge _ b@(Just _) = b
 mayMerge a Nothing = a
 
 instance Monoid DrawAttributes where
-    mempty = DrawAttributes 
+    mempty = DrawAttributes
         { _strokeWidth      = Last Nothing
         , _strokeColor      = Last Nothing
         , _strokeOpacity    = Nothing

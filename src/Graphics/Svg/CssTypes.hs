@@ -62,7 +62,7 @@ instance TextBuildable CssDescriptor where
       AnyElem -> si '*'
       WithAttrib a b -> mconcat [si '[', ft a, si '=', ft b, si ']']
      where
-      ft = TB.fromText 
+      ft = TB.fromText
       si = TB.singleton
 
 -- | Define complex selector.
@@ -105,7 +105,7 @@ instance TextBuildable CssRule where
                  <> mconcat (fmap tserializeDecl decl)
                  <> ft "}\n"
      where
-      ft = TB.fromText 
+      ft = TB.fromText
       tserializeDecl d = ft "  " <> tserialize d <> ft ";\n"
       tselectors =
           intersperse (ft ",\n") . fmap tserialize $ concat selectors
@@ -164,7 +164,7 @@ findMatchingDeclarations rules context =
 
 -- | Represent the content to apply to some
 -- CSS matched rules.
-data CssDeclaration = CssDeclaration 
+data CssDeclaration = CssDeclaration
     { -- | Property name to change (like font-family or color).
       _cssDeclarationProperty :: T.Text
       -- | List of values
@@ -177,26 +177,26 @@ instance TextBuildable CssDeclaration where
       mconcat $ ft n : ft ": " : intersperse (si ' ') finalElems
      where
       finalElems = map tserialize (concat elems)
-      ft = TB.fromText 
+      ft = TB.fromText
       si = TB.singleton
 
 
 -- | Encode complex number possibly dependant to the current
 -- render size.
 data Number
-  = Num Float       -- ^ Simple coordinate in current user coordinate.
-  | Px Float        -- ^ With suffix "px"
-  | Em Float        -- ^ Number relative to the current font size.
-  | Percent Float   -- ^ Number relative to the current viewport size.
-  | Pc Float
-  | Mm Float        -- ^ Number in millimeters, relative to DPI.
-  | Cm Float        -- ^ Number in centimeters, relative to DPI.
-  | Point Float     -- ^ Number in points, relative to DPI.
-  | Inches Float    -- ^ Number in inches, relative to DPI.
+  = Num Double       -- ^ Simple coordinate in current user coordinate.
+  | Px Double        -- ^ With suffix "px"
+  | Em Double        -- ^ Number relative to the current font size.
+  | Percent Double   -- ^ Number relative to the current viewport size.
+  | Pc Double
+  | Mm Double        -- ^ Number in millimeters, relative to DPI.
+  | Cm Double        -- ^ Number in centimeters, relative to DPI.
+  | Point Double     -- ^ Number in points, relative to DPI.
+  | Inches Double    -- ^ Number in inches, relative to DPI.
   deriving (Eq, Show)
 
 -- | Helper function to modify inner value of a number
-mapNumber :: (Float -> Float) -> Number -> Number
+mapNumber :: (Double -> Double) -> Number -> Number
 mapNumber f nu = case nu of
   Num n -> Num $ f n
   Px n -> Px $ f n
@@ -229,7 +229,7 @@ instance TextBuildable Number where
 data CssElement
     = CssIdent     !T.Text
     | CssString    !T.Text
-    | CssReference !T.Text 
+    | CssReference !T.Text
     | CssNumber    !Number
     | CssColor     !PixelRGBA8
     | CssFunction  !T.Text ![CssElement]
@@ -250,7 +250,7 @@ instance TextBuildable CssElement where
     CssOpComa -> si ','
     CssOpSlash -> si '/'
     where
-      ft = TB.fromText 
+      ft = TB.fromText
       si = TB.singleton
 
 -- | This function replace all device dependant units to user

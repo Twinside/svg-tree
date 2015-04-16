@@ -32,9 +32,9 @@ import Graphics.Svg.Types
 import qualified Data.Text as T
 import Text.Printf( printf )
 
-num :: Parser Float
+num :: Parser Double
 num = realToFrac <$> (skipSpace *> plusMinus <* skipSpace)
-  where doubleNumber :: Parser Float
+  where doubleNumber :: Parser Double
         doubleNumber = toRealFloat <$> scientific
 
         plusMinus = negate <$ string "-" <*> doubleNumber
@@ -148,7 +148,7 @@ serializeCommand p = case p of
   where
     serializeArg (a, b, c, d, e, V2 x y) =
         printf "%g %g %g %g %g %g,%g" a b c d e x y
-    serializeArgs = unwords . fmap serializeArg 
+    serializeArgs = unwords . fmap serializeArg
 
 
 
@@ -160,7 +160,7 @@ transformParser = matrixParser
                <|> skewYParser
                <|> skewXParser
 
-functionParser :: T.Text -> Parser [Float]
+functionParser :: T.Text -> Parser [Double]
 functionParser funcName =
     string funcName *> skipSpace
                     *> char '(' *> skipSpace
