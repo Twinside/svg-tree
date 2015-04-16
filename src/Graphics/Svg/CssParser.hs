@@ -58,7 +58,7 @@ import qualified Data.Map as M
 {-import Graphics.Rasterific.Linear( V2( V2 ) )-}
 {-import Graphics.Rasterific.Transformations-}
 
-num :: Parser Float
+num :: Parser Double
 num = realToFrac <$> (skipSpace *> plusMinus <* skipSpace)
   where doubleNumber = char '.' *> (scale <$> double)
                     <|> double
@@ -198,7 +198,7 @@ expr = ((:) <$> term <*> (concat <$> many termOp))
 dashArray :: Parser [Number]
 dashArray = skipSpace *> (complexNumber `sepBy1` commaWsp)
 
-numberList :: Parser [Float]
+numberList :: Parser [Double]
 numberList = skipSpace *> (num `sepBy1` commaWsp)
 
 complexNumber :: Parser Number
