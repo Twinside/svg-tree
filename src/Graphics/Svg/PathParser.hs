@@ -76,8 +76,8 @@ command =  (MoveTo OriginAbsolute <$ string "M" <*> pointList)
        <|> (QuadraticBezier OriginRelative <$ string "q" <*> pointPairList)
        <|> (SmoothQuadraticBezierCurveTo OriginAbsolute <$ string "T" <*> pointList)
        <|> (SmoothQuadraticBezierCurveTo OriginRelative <$ string "t" <*> pointList)
-       <|> (ElipticalArc OriginAbsolute <$ string "A" <*> manyComma elipticalArgs)
-       <|> (ElipticalArc OriginRelative <$ string "a" <*> manyComma elipticalArgs)
+       <|> (EllipticalArc OriginAbsolute <$ string "A" <*> manyComma ellipticalArgs)
+       <|> (EllipticalArc OriginRelative <$ string "a" <*> manyComma ellipticalArgs)
        <|> (EndPath <$ string "Z")
        <|> (EndPath <$ string "z")
     where pointList = point `sepBy1` commaWsp
@@ -90,7 +90,7 @@ command =  (MoveTo OriginAbsolute <$ string "M" <*> pointList)
           manyComma a = a `sepBy1` commaWsp
 
           numComma = num <* commaWsp
-          elipticalArgs = (,,,,,) <$> numComma
+          ellipticalArgs = (,,,,,) <$> numComma
                                   <*> numComma
                                   <*> numComma
                                   <*> numComma
@@ -142,8 +142,8 @@ serializeCommand p = case p of
   QuadraticBezier OriginRelative pointPairs -> "q" ++ serializePointPairs pointPairs
   SmoothQuadraticBezierCurveTo OriginAbsolute points -> "T" ++ serializePoints points
   SmoothQuadraticBezierCurveTo OriginRelative points -> "t" ++ serializePoints points
-  ElipticalArc OriginAbsolute args -> "A" ++ serializeArgs args
-  ElipticalArc OriginRelative args -> "a" ++ serializeArgs args
+  EllipticalArc OriginAbsolute args -> "A" ++ serializeArgs args
+  EllipticalArc OriginRelative args -> "a" ++ serializeArgs args
   EndPath -> "Z"
   where
     serializeArg (a, b, c, d, e, V2 x y) =

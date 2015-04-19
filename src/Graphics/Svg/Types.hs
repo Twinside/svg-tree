@@ -226,7 +226,7 @@ data PathCommand
     -- | Quadratic bezier, 'T' or 't' command
     | SmoothQuadraticBezierCurveTo  Origin [RPoint]
       -- | Eliptical arc, 'A' or 'a' command.
-    | ElipticalArc  Origin [(Coord, Coord, Coord, Coord, Coord, RPoint)]
+    | EllipticalArc  Origin [(Coord, Coord, Coord, Coord, Coord, RPoint)]
       -- | Close the path, 'Z' or 'z' svg path command.
     | EndPath
     deriving (Eq, Show)
@@ -235,12 +235,12 @@ data PathCommand
 toPoint :: Number -> Number -> Point
 toPoint = (,)
 
--- | Tell if the path command is an ElipticalArc.
+-- | Tell if the path command is an EllipticalArc.
 isPathArc :: PathCommand -> Bool
-isPathArc (ElipticalArc _ _) = True
+isPathArc (EllipticalArc _ _) = True
 isPathArc _ = False
 
--- | Tell if a full path contain an ElipticalArc.
+-- | Tell if a full path contain an EllipticalArc.
 isPathWithArc :: Foldable f => f PathCommand -> Bool
 isPathWithArc = F.any isPathArc
 
