@@ -91,11 +91,11 @@ command =  (MoveTo OriginAbsolute <$ string "M" <*> pointList)
 
           numComma = num <* commaWsp
           ellipticalArgs = (,,,,,) <$> numComma
-                                  <*> numComma
-                                  <*> numComma
-                                  <*> numComma
-                                  <*> numComma
-                                  <*> point
+                                   <*> numComma
+                                   <*> numComma
+                                   <*> (fmap (==0) numComma)
+                                   <*> (fmap (==0) numComma)
+                                   <*> point
 
 serializePoint :: RPoint -> String
 serializePoint (V2 x y) = printf "%g,%g" x y
@@ -147,7 +147,7 @@ serializeCommand p = case p of
   EndPath -> "Z"
   where
     serializeArg (a, b, c, d, e, V2 x y) =
-        printf "%g %g %g %g %g %g,%g" a b c d e x y
+        printf "%g %g %g %g %g %g,%g" a b c (fromEnum d) (fromEnum e) x y
     serializeArgs = unwords . fmap serializeArg
 
 

@@ -226,7 +226,7 @@ data PathCommand
     -- | Quadratic bezier, 'T' or 't' command
     | SmoothQuadraticBezierCurveTo  Origin [RPoint]
       -- | Eliptical arc, 'A' or 'a' command.
-    | EllipticalArc  Origin [(Coord, Coord, Coord, Coord, Coord, RPoint)]
+    | EllipticalArc  Origin [(Coord, Coord, Coord, Bool, Bool, RPoint)]
       -- | Close the path, 'Z' or 'z' svg path command.
     | EndPath
     deriving (Eq, Show)
