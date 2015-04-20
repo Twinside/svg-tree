@@ -1127,7 +1127,7 @@ data Spread
 data GradientStop = GradientStop
     { -- | Gradient offset between 0 and 1, correspond
       -- to the `offset` attribute.
-      _gradientOffset :: Double
+      _gradientOffset :: Float
       -- | Color of the gradient stop. Correspond
       -- to the `stop-color` attribute.
     , _gradientColor  :: PixelRGBA8

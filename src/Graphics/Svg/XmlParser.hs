@@ -837,7 +837,7 @@ gradientOffsetSetter = SvgAttributeLens "offset" setter serialize
 
     setter el str = el & gradientOffset .~ val
       where
-        val = case parseMayStartDot complexNumber str of
+        val = realToFrac $ case parseMayStartDot complexNumber str of
             Nothing -> 0
             Just (Num n) -> n
             Just (Px n) -> n
