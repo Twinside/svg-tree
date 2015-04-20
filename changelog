@@ -1,5 +1,9 @@
 -*-change-log-*-
 
+v0.3 April 2015
+ * Breaking change: Switching all the numeric types associated to geometry
+   to Double precision (thx to Kasbah)
+
 v0.2 April 2015
  * Fix: Differentiating opacity & fill-opacity, as they are
    semantically deferent (BREAKING CHANGE!)
