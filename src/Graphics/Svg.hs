@@ -56,8 +56,8 @@ saveXmlFile filePath =
     writeFile filePath . ppcTopElement prettyConfigPP . xmlOfDocument
 
 cssDeclApplyer :: DrawAttributes -> CssDeclaration
-               -> DrawAttributes 
-cssDeclApplyer value (CssDeclaration txt elems) = 
+               -> DrawAttributes
+cssDeclApplyer value (CssDeclaration txt elems) =
    case lookup txt cssUpdaters of
      Nothing -> value
      Just f -> f value elems

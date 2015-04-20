@@ -76,8 +76,8 @@ command =  (MoveTo OriginAbsolute <$ string "M" <*> pointList)
        <|> (QuadraticBezier OriginRelative <$ string "q" <*> pointPairList)
        <|> (SmoothQuadraticBezierCurveTo OriginAbsolute <$ string "T" <*> pointList)
        <|> (SmoothQuadraticBezierCurveTo OriginRelative <$ string "t" <*> pointList)
-       <|> (ElipticalArc OriginAbsolute <$ string "A" <*> manyComma elipticalArgs)
-       <|> (ElipticalArc OriginRelative <$ string "a" <*> manyComma elipticalArgs)
+       <|> (EllipticalArc OriginAbsolute <$ string "A" <*> manyComma ellipticalArgs)
+       <|> (EllipticalArc OriginRelative <$ string "a" <*> manyComma ellipticalArgs)
        <|> (EndPath <$ string "Z")
        <|> (EndPath <$ string "z")
     where pointList = point `sepBy1` commaWsp
@@ -90,12 +90,12 @@ command =  (MoveTo OriginAbsolute <$ string "M" <*> pointList)
           manyComma a = a `sepBy1` commaWsp
 
           numComma = num <* commaWsp
-          elipticalArgs = (,,,,,) <$> numComma
-                                  <*> numComma
-                                  <*> numComma
-                                  <*> numComma
-                                  <*> numComma
-                                  <*> point
+          ellipticalArgs = (,,,,,) <$> numComma
+                                   <*> numComma
+                                   <*> numComma
+                                   <*> (fmap (==0) numComma)
+                                   <*> (fmap (==0) numComma)
+                                   <*> point
 
 serializePoint :: RPoint -> String
 serializePoint (V2 x y) = printf "%g,%g" x y
@@ -142,13 +142,13 @@ serializeCommand p = case p of
   QuadraticBezier OriginRelative pointPairs -> "q" ++ serializePointPairs pointPairs
   SmoothQuadraticBezierCurveTo OriginAbsolute points -> "T" ++ serializePoints points
   SmoothQuadraticBezierCurveTo OriginRelative points -> "t" ++ serializePoints points
-  ElipticalArc OriginAbsolute args -> "A" ++ serializeArgs args
-  ElipticalArc OriginRelative args -> "a" ++ serializeArgs args
+  EllipticalArc OriginAbsolute args -> "A" ++ serializeArgs args
+  EllipticalArc OriginRelative args -> "a" ++ serializeArgs args
   EndPath -> "Z"
   where
     serializeArg (a, b, c, d, e, V2 x y) =
-        printf "%g %g %g %g %g %g,%g" a b c d e x y
-    serializeArgs = unwords . fmap serializeArg 
+        printf "%g %g %g %g %g %g,%g" a b c (fromEnum d) (fromEnum e) x y
+    serializeArgs = unwords . fmap serializeArg
 
 
 
