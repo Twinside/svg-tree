@@ -318,14 +318,14 @@ genericSerializeWithDrawAttr node = mergeAttributes thisXml drawAttrNode where
 type CssUpdater =
     DrawAttributes -> [[CssElement]] -> DrawAttributes
 
-opacitySetter :: String -> Lens' a (Maybe Double) -> SvgAttributeLens a
+opacitySetter :: String -> Lens' a (Maybe Float) -> SvgAttributeLens a
 opacitySetter attribute elLens =
     SvgAttributeLens attribute updater serializer
   where
     serializer a = printf "%g" <$> a ^. elLens
     updater el str = case parseMayStartDot num str of
         Nothing -> el
-        Just v -> el & elLens .~ Just v
+        Just v -> el & elLens .~ Just (realToFrac v)
 
 type Serializer e = e -> Maybe String
 
@@ -383,10 +383,11 @@ cssUniqueNumber setter attr ((CssNumber n:_):_) =
     attr & setter .~ Last (Just n)
 cssUniqueNumber _ attr _ = attr
 
-cssUniqueFloat :: ASetter DrawAttributes DrawAttributes a (Maybe Double)
+cssUniqueFloat :: (Fractional n)
+               => ASetter DrawAttributes DrawAttributes a (Maybe n)
                -> CssUpdater
 cssUniqueFloat setter attr ((CssNumber (Num n):_):_) =
-    attr & setter .~ Just n
+    attr & setter .~ Just (realToFrac n)
 cssUniqueFloat _ attr _ = attr
 
 cssUniqueMayFloat :: ASetter DrawAttributes DrawAttributes a (Last Double)

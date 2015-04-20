@@ -389,7 +389,7 @@ data DrawAttributes = DrawAttributes
     , _strokeColor      :: !(Last Texture)
       -- | Define the `stroke-opacity` attribute, the transparency
       -- for the "border".
-    , _strokeOpacity    :: !(Maybe Double)
+    , _strokeOpacity    :: !(Maybe Float)
       -- | Correspond to the `stroke-linecap` SVG
       -- attribute
     , _strokeLineCap    :: !(Last Cap)
@@ -404,9 +404,9 @@ data DrawAttributes = DrawAttributes
     , _fillColor        :: !(Last Texture)
       -- | Define the `fill-opacity` attribute, the transparency
       -- for the "content".
-    , _fillOpacity      :: !(Maybe Double)
+    , _fillOpacity      :: !(Maybe Float)
       -- | Define the global or group opacity attribute.
-    , _groupOpacity     :: !(Maybe Double)
+    , _groupOpacity     :: !(Maybe Float)
       -- | Content of the `transform` attribute
     , _transform        :: !(Maybe [Transformation])
       -- | Define the `fill-rule` used during the rendering.
