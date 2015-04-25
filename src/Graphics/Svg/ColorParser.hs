@@ -43,7 +43,7 @@ commaWsp = skipSpace *> option () (string "," *> return ())
 
 num :: Parser Double
 num = realToFrac <$> (skipSpace *> plusMinus <* skipSpace)
-  where doubleNumber :: Parser Float
+  where doubleNumber :: Parser Double
         doubleNumber = toRealFloat <$> scientific
 
         plusMinus = negate <$ string "-" <*> doubleNumber
@@ -70,7 +70,7 @@ colorParser = rgbColor
     namedColor = do
       str <- takeWhile1 (inClass "a-z")
       return $ M.findWithDefault black str svgNamedColors
-    
+
     percentToWord v = floor $ v * (255 / 100)
 
     numPercent = ((percentToWord <$> num) <* string "%")

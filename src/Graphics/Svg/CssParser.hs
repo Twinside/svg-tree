@@ -58,7 +58,7 @@ import qualified Data.Map as M
 {-import Graphics.Rasterific.Linear( V2( V2 ) )-}
 {-import Graphics.Rasterific.Transformations-}
 
-num :: Parser Float
+num :: Parser Double
 num = realToFrac <$> (skipSpace *> plusMinus <* skipSpace)
   where doubleNumber = char '.' *> (scale <$> double)
                     <|> double
@@ -171,7 +171,7 @@ simpleSelector = (:) <$> elementName <*> many whole
 declaration :: Parser CssDeclaration
 declaration =
   CssDeclaration <$> property
-                 <*> (char ':' 
+                 <*> (char ':'
                       *> cleanSpace
                       *> many1 expr
                       <* prio
@@ -185,7 +185,7 @@ operator :: Parser CssElement
 operator = skipSpace *> op <* skipSpace
   where
     op = CssOpSlash <$ char '/'
-      <|> CssOpComa <$ char ',' 
+      <|> CssOpComa <$ char ','
       <?> "operator"
 
 expr :: Parser [CssElement]
@@ -198,7 +198,7 @@ expr = ((:) <$> term <*> (concat <$> many termOp))
 dashArray :: Parser [Number]
 dashArray = skipSpace *> (complexNumber `sepBy1` commaWsp)
 
-numberList :: Parser [Float]
+numberList :: Parser [Double]
 numberList = skipSpace *> (num `sepBy1` commaWsp)
 
 complexNumber :: Parser Number
@@ -222,7 +222,7 @@ term = checkRgb <$> function
     <|> (CssColor <$> colorParser)
   where
     comma = skipSpace *> char ',' <* skipSpace
-    checkNamedColor n 
+    checkNamedColor n
         | Just c <- M.lookup n svgNamedColors = CssColor c
         | otherwise = CssIdent n
 
@@ -232,8 +232,8 @@ term = checkRgb <$> function
                 [CssNumber r, CssNumber g, CssNumber b]) =
         CssColor $ PixelRGBA8 (to r) (to g) (to b) 255
        where clamp = max 0 . min 255
-             to (Num n) = floor $ clamp n 
-             to (Px n) = floor $ clamp n 
+             to (Num n) = floor $ clamp n
+             to (Px n) = floor $ clamp n
              to (Percent p) = floor . clamp $ p * 255
              to (Em c) = floor $ clamp c
              to (Pc n) = floor $ clamp n
