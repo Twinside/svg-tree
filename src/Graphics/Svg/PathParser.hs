@@ -93,8 +93,8 @@ command =  (MoveTo OriginAbsolute <$ string "M" <*> pointList)
           ellipticalArgs = (,,,,,) <$> numComma
                                    <*> numComma
                                    <*> numComma
-                                   <*> (fmap (==1) numComma)
-                                   <*> (fmap (==1) numComma)
+                                   <*> (fmap (/= 0) numComma)
+                                   <*> (fmap (/= 0) numComma)
                                    <*> point
 
 serializePoint :: RPoint -> String
