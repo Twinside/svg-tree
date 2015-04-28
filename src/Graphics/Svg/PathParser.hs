@@ -78,8 +78,8 @@ command =  (MoveTo OriginAbsolute <$ string "M" <*> pointList)
        <|> (SmoothQuadraticBezierCurveTo OriginRelative <$ string "t" <*> pointList)
        <|> (EllipticalArc OriginAbsolute <$ string "A" <*> manyComma ellipticalArgs)
        <|> (EllipticalArc OriginRelative <$ string "a" <*> manyComma ellipticalArgs)
-       <|> (EndPath <$ string "Z")
-       <|> (EndPath <$ string "z")
+       <|> (EndPath <$ string "Z" <* commaWsp)
+       <|> (EndPath <$ string "z" <* commaWsp)
     where pointList = point `sepBy1` commaWsp
           pointPair = (,) <$> point <* commaWsp <*> point
           pointPairList = pointPair `sepBy1` commaWsp
