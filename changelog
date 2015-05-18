@@ -1,5 +1,8 @@
 -*-change-log-*-
 
+v0.3.1 May 2015
+ * Fix: Bumping lens dependency and removing upper bound.
+
 v0.3 April 2015
  * Breaking change: Switching all the numeric types associated to geometry
    to Double precision (thx to Kasbah)
