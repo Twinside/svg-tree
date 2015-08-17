@@ -11,6 +11,13 @@ module Graphics.Svg.XmlParser( xmlOfDocument
                              , drawAttributesList
                              ) where
 
+
+#if !MIN_VERSION_base(4,6,0)
+import Text.Read( reads )
+#else
+import Text.Read( readMaybe )
+#endif
+
 #if !MIN_VERSION_base(4,8,0)
 import Control.Applicative( pure, (<$>), (<$) )
 import Data.Foldable( foldMap )
@@ -25,7 +32,6 @@ import Data.Maybe( catMaybes )
 import Data.Monoid( Last( Last ), getLast, (<>) )
 import Data.List( foldl', intercalate )
 import Text.XML.Light.Proc( findAttrBy, elChildren, strContent )
-import Text.Read( readMaybe )
 import qualified Text.XML.Light as X
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
@@ -51,6 +57,13 @@ import Graphics.Svg.CssParser( complexNumber
 import Text.Printf( printf )
 
 {-import Debug.Trace-}
+
+#if !MIN_VERSION_base(4,6,0)
+readMaybe :: Read a => String -> Maybe a
+readMaybe str = case reads str of
+  [] -> Nothing
+  (x, _):_ -> Just x
+#endif
 
 nodeName :: X.Element -> String
 nodeName = X.qName . X.elName
