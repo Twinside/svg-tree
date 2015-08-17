@@ -46,7 +46,7 @@ library
                , Graphics.Svg.CssParser
                , Graphics.Svg.ColorParser
 
-  build-depends: base >= 4.6 && < 4.9
+  build-depends: base >= 4.5 && < 4.9
                , JuicyPixels >= 3.2
                , attoparsec >= 0.12
                , scientific >= 0.3
