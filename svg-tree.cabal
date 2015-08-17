@@ -50,7 +50,7 @@ library
                , JuicyPixels >= 3.2
                , attoparsec >= 0.12
                , scientific >= 0.3
-               , containers >= 0.5
+               , containers >= 0.4
                , xml        >= 1.3
                , bytestring >= 0.10
                , linear     >= 1.16
