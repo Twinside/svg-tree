@@ -232,7 +232,7 @@ instance ParseableAttribute MarkerOrientation where
     OrientationAuto -> "auto"
     OrientationAngle f -> show f
 
-instance ParseableAttribute (Int, Int, Int, Int) where
+instance ParseableAttribute (Double, Double, Double, Double) where
   aparse = parse viewBoxParser
   aserialize = Just . serializeViewBox
 
