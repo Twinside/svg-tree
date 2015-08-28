@@ -600,7 +600,7 @@ data Group a = Group
     -- inside the `<g>` tag.
   , _groupChildren  :: ![a]
     -- | Mapped to the attribute `viewBox`
-  , _groupViewBox   :: !(Maybe (Int, Int, Int, Int))
+  , _groupViewBox   :: !(Maybe (Double, Double, Double, Double))
   }
   deriving (Eq, Show)
 
@@ -945,7 +945,7 @@ data Marker = Marker
     -- | Map the `markerUnits` attribute.
   , _markerUnits    :: Maybe MarkerUnit
     -- | Optional viewbox
-  , _markerViewBox  :: !(Maybe (Int, Int, Int, Int))
+  , _markerViewBox  :: !(Maybe (Double, Double, Double, Double))
     -- | Elements defining the marker.
   , _markerElements :: [Tree]
   }
@@ -1289,7 +1289,7 @@ data Pattern = Pattern
     { -- | Pattern drawing attributes.
       _patternDrawAttributes :: DrawAttributes
       -- | Possible `viewBox`.
-    , _patternViewBox  :: Maybe (Int, Int, Int, Int)
+    , _patternViewBox  :: Maybe (Double, Double, Double, Double)
       -- | Width of the pattern tile, mapped to the
       -- `width` attribute
     , _patternWidth    :: Number
@@ -1340,7 +1340,7 @@ data Element
 -- | Represent a full svg document with style,
 -- geometry and named elements.
 data Document = Document
-    { _viewBox          :: Maybe (Int, Int, Int, Int)
+    { _viewBox          :: Maybe (Double, Double, Double, Double)
     , _width            :: Maybe Number
     , _height           :: Maybe Number
     , _elements         :: [Tree]
@@ -1363,8 +1363,8 @@ documentSize _ Document { _viewBox = Just (x1, y1, x2, y2)
                         } =
     (floor $ dx * pw, floor $ dy * ph)
       where
-        dx = fromIntegral . abs $ x2 - x1
-        dy = fromIntegral . abs $ y2 - y1
+        dx = abs $ x2 - x1
+        dy = abs $ y2 - y1
 documentSize _ Document { _width = Just (Num w)
                         , _height = Just (Num h) } = (floor w, floor h)
 documentSize dpi doc@(Document { _width = Just w
@@ -1373,7 +1373,7 @@ documentSize dpi doc@(Document { _width = Just w
     { _width = Just $ toUserUnit dpi w
     , _height = Just $ toUserUnit dpi h }
 documentSize _ Document { _viewBox = Just (x1, y1, x2, y2) } =
-    (abs $ x2 - x1, abs $ y2 - y1)
+    (floor . abs $ x2 - x1, floor . abs $ y2 - y1)
 documentSize _ _ = (1, 1)
 
 mayMerge :: Monoid a => Maybe a -> Maybe a -> Maybe a

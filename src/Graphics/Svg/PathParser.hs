@@ -41,14 +41,14 @@ num = realToFrac <$> (skipSpace *> plusMinus <* skipSpace)
                  <|> string "+" *> doubleNumber
                  <|> doubleNumber
 
-viewBoxParser :: Parser (Int, Int, Int, Int)
+viewBoxParser :: Parser (Double, Double, Double, Double)
 viewBoxParser = (,,,)
        <$> iParse <*> iParse <*> iParse <*> iParse
   where
-    iParse = floor <$> num <* skipSpace
+    iParse = num <* skipSpace
 
-serializeViewBox :: (Int, Int, Int, Int) -> String
-serializeViewBox (a, b, c, d) = printf "%d %d %d %d" a b c d
+serializeViewBox :: (Double, Double, Double, Double) -> String
+serializeViewBox (a, b, c, d) = printf "%g %g %g %g" a b c d
 
 commaWsp :: Parser ()
 commaWsp = skipSpace *> option () (string "," *> return ()) <* skipSpace
