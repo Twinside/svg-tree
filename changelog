@@ -1,5 +1,8 @@
 -*-change-log-*-
 
+v0.3.2.1 October 2015
+ * Fix: Don't add '#' for <img> serialization
+
 v0.3.2 August 2015
  * Fix: allow compilation with GHC 7.4
 

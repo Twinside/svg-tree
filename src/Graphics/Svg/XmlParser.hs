@@ -548,7 +548,7 @@ instance XMLUpdatable Image where
     ,"height" `parseIn` imageHeight
     ,"x" `parseIn` (imageCornerUpperLeft._1)
     ,"y" `parseIn` (imageCornerUpperLeft._2)
-    ,parserSetter "href" imageHref (Just . dropSharp) (Just . ('#':))
+    ,parserSetter "href" imageHref (Just . dropSharp) Just
     ]
 
 instance XMLUpdatable Line where
