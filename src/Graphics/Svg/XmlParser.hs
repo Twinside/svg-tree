@@ -1047,17 +1047,14 @@ xmlOfDocument doc =
     isElementNotNone (ElementGeometry el) = isNotNone el
     isElementNotNone _ = True
 
-    elementRender k e = case e of
+    elementRender k e = X.add_attr (attr "id" k) $ case e of
         ElementGeometry t -> serializeTreeNode t
         ElementMarker m -> serializeTreeNode m
         ElementMask m -> serializeTreeNode m
         ElementClipPath c -> serializeTreeNode c
-        ElementPattern p ->
-            X.add_attr (attr "id" k) $ serializeTreeNode p
-        ElementLinearGradient lg ->
-            X.add_attr (attr "id" k) $ serializeTreeNode lg
-        ElementRadialGradient rg ->
-            X.add_attr (attr "id" k) $ serializeTreeNode rg
+        ElementPattern p -> serializeTreeNode p
+        ElementLinearGradient lg -> serializeTreeNode lg
+        ElementRadialGradient rg -> serializeTreeNode rg
 
     docViewBox = case _viewBox doc of
         Nothing -> []
