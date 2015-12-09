@@ -123,6 +123,7 @@ module Graphics.Svg.Types
 
       -- * Marker definition
     , Marker( .. )
+    , Overflow( .. )
     , MarkerOrientation( .. )
     , MarkerUnit( .. )
     , HasMarker( .. )
@@ -927,6 +928,13 @@ data MarkerUnit
   | MarkerUnitUserSpaceOnUse -- ^ Value `userSpaceOnUse`
   deriving (Eq, Show)
 
+-- | Define the content of the `markerUnits` attribute
+-- on the Marker.
+data Overflow
+  = OverflowVisible    -- ^ Value `visible`
+  | OverflowHidden     -- ^ Value `hidden`
+  deriving (Eq, Show)
+
 -- | Define the `<marker>` tag.
 data Marker = Marker
   { -- | Draw attributes of the marker.
@@ -947,6 +955,8 @@ data Marker = Marker
     -- | Optional viewbox
   , _markerViewBox  :: !(Maybe (Double, Double, Double, Double))
     -- | Elements defining the marker.
+  , _markerOverflow :: !(Maybe Overflow)
+    -- | Elements defining the marker.
   , _markerElements :: [Tree]
   }
   deriving (Eq, Show)
@@ -966,6 +976,7 @@ instance WithDefaultSvg Marker where
     , _markerOrient = Nothing -- MarkerOrientation
     , _markerUnits = Nothing -- MarkerUnitStrokeWidth
     , _markerViewBox = Nothing
+    , _markerOverflow = Nothing
     , _markerElements = mempty
     }
 

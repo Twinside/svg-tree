@@ -222,6 +222,16 @@ instance ParseableAttribute MarkerUnit where
     MarkerUnitStrokeWidth -> "strokeWidth"
     MarkerUnitUserSpaceOnUse -> "userSpaceOnUse"
 
+instance ParseableAttribute Overflow where
+  aparse s = case s of
+    "visible" -> Just OverflowVisible
+    "hidden" -> Just OverflowHidden
+    _ -> Nothing
+
+  aserialize u = Just $ case u of
+    OverflowVisible -> "visible"
+    OverflowHidden -> "hidden"
+
 instance ParseableAttribute MarkerOrientation where
   aparse s = case (s, readMaybe s) of
     ("auto", _) -> Just OrientationAuto
@@ -770,6 +780,7 @@ instance XMLUpdatable Marker where
     ,"patternUnits" `parseIn` markerUnits
     ,"orient" `parseIn` markerOrient
     ,"viewBox" `parseIn` markerViewBox
+    ,"overflow" `parseIn` markerOverflow
     ]
 
 serializeText :: Text -> X.Element
