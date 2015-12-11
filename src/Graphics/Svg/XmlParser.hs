@@ -222,6 +222,16 @@ instance ParseableAttribute MarkerUnit where
     MarkerUnitStrokeWidth -> "strokeWidth"
     MarkerUnitUserSpaceOnUse -> "userSpaceOnUse"
 
+instance ParseableAttribute Overflow where
+  aparse s = case s of
+    "visible" -> Just OverflowVisible
+    "hidden" -> Just OverflowHidden
+    _ -> Nothing
+
+  aserialize u = Just $ case u of
+    OverflowVisible -> "visible"
+    OverflowHidden -> "hidden"
+
 instance ParseableAttribute MarkerOrientation where
   aparse s = case (s, readMaybe s) of
     ("auto", _) -> Just OrientationAuto
@@ -770,6 +780,7 @@ instance XMLUpdatable Marker where
     ,"patternUnits" `parseIn` markerUnits
     ,"orient" `parseIn` markerOrient
     ,"viewBox" `parseIn` markerViewBox
+    ,"overflow" `parseIn` markerOverflow
     ]
 
 serializeText :: Text -> X.Element
@@ -1036,17 +1047,14 @@ xmlOfDocument doc =
     isElementNotNone (ElementGeometry el) = isNotNone el
     isElementNotNone _ = True
 
-    elementRender k e = case e of
+    elementRender k e = X.add_attr (attr "id" k) $ case e of
         ElementGeometry t -> serializeTreeNode t
         ElementMarker m -> serializeTreeNode m
         ElementMask m -> serializeTreeNode m
         ElementClipPath c -> serializeTreeNode c
-        ElementPattern p ->
-            X.add_attr (attr "id" k) $ serializeTreeNode p
-        ElementLinearGradient lg ->
-            X.add_attr (attr "id" k) $ serializeTreeNode lg
-        ElementRadialGradient rg ->
-            X.add_attr (attr "id" k) $ serializeTreeNode rg
+        ElementPattern p -> serializeTreeNode p
+        ElementLinearGradient lg -> serializeTreeNode lg
+        ElementRadialGradient rg -> serializeTreeNode rg
 
     docViewBox = case _viewBox doc of
         Nothing -> []
