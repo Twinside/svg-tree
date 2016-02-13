@@ -19,7 +19,7 @@ import Text.Read( readMaybe )
 #endif
 
 #if !MIN_VERSION_base(4,8,0)
-import Control.Applicative( pure, (<$>), (<$) )
+import Control.Applicative( pure, (<$>), (<$), (<*>) )
 import Data.Foldable( foldMap )
 import Data.Monoid( mempty )
 #endif
@@ -222,6 +222,16 @@ instance ParseableAttribute MarkerUnit where
     MarkerUnitStrokeWidth -> "strokeWidth"
     MarkerUnitUserSpaceOnUse -> "userSpaceOnUse"
 
+instance ParseableAttribute Overflow where
+  aparse s = case s of
+    "visible" -> Just OverflowVisible
+    "hidden" -> Just OverflowHidden
+    _ -> Nothing
+
+  aserialize u = Just $ case u of
+    OverflowVisible -> "visible"
+    OverflowHidden -> "hidden"
+
 instance ParseableAttribute MarkerOrientation where
   aparse s = case (s, readMaybe s) of
     ("auto", _) -> Just OrientationAuto
@@ -232,7 +242,7 @@ instance ParseableAttribute MarkerOrientation where
     OrientationAuto -> "auto"
     OrientationAngle f -> show f
 
-instance ParseableAttribute (Int, Int, Int, Int) where
+instance ParseableAttribute (Double, Double, Double, Double) where
   aparse = parse viewBoxParser
   aserialize = Just . serializeViewBox
 
@@ -291,18 +301,19 @@ class (WithDefaultSvg treeNode) => XMLUpdatable treeNode where
   xmlTagName :: treeNode -> String
   attributes :: [SvgAttributeLens treeNode]
 
-  serializeTreeNode :: treeNode -> X.Element
+  serializeTreeNode :: treeNode -> Maybe X.Element
 
 setChildren :: X.Element -> [X.Content] -> X.Element
 setChildren xNode children = xNode { X.elContent = children }
 
-updateWithAccessor :: XMLUpdatable b => (a -> [b]) -> a -> X.Element -> X.Element
-updateWithAccessor accessor node xNode =
-    setChildren xNode $ X.Elem . serializeTreeNode <$> accessor node
+updateWithAccessor :: XMLUpdatable b => (a -> [b]) -> a -> Maybe X.Element -> Maybe X.Element
+updateWithAccessor        _    _ Nothing = Nothing
+updateWithAccessor accessor node (Just xNode) =
+    Just . setChildren xNode . fmap  X.Elem . catMaybes $ serializeTreeNode <$> accessor node
 
-genericSerializeNode :: (XMLUpdatable treeNode) => treeNode -> X.Element
+genericSerializeNode :: (XMLUpdatable treeNode) => treeNode -> Maybe X.Element
 genericSerializeNode node =
-    X.unode (xmlTagName node) $ concatMap generateAttribute attributes
+    Just . X.unode (xmlTagName node) $ concatMap generateAttribute attributes
   where
     generateAttribute attr = case _attributeSerializer attr node of
       Nothing -> []
@@ -323,8 +334,8 @@ mergeAttributes thisXml otherXml =
     thisXml { X.elAttribs = X.elAttribs otherXml ++ X.elAttribs thisXml }
 
 genericSerializeWithDrawAttr :: (XMLUpdatable treeNode, WithDrawAttributes treeNode)
-                             => treeNode -> X.Element
-genericSerializeWithDrawAttr node = mergeAttributes thisXml drawAttrNode where
+                             => treeNode -> Maybe X.Element
+genericSerializeWithDrawAttr node = mergeAttributes <$> thisXml <*> drawAttrNode where
   thisXml = genericSerializeNode node
   drawAttrNode = genericSerializeNode $ node ^. drawAttr
 
@@ -548,7 +559,7 @@ instance XMLUpdatable Image where
     ,"height" `parseIn` imageHeight
     ,"x" `parseIn` (imageCornerUpperLeft._1)
     ,"y" `parseIn` (imageCornerUpperLeft._2)
-    ,parserSetter "href" imageHref (Just . dropSharp) (Just . ('#':))
+    ,parserSetter "href" imageHref (Just . dropSharp) Just
     ]
 
 instance XMLUpdatable Line where
@@ -637,7 +648,7 @@ instance XMLUpdatable Tree where
   xmlTagName _ = "TREE"
   attributes = []
   serializeTreeNode e = case e of
-    None -> X.blank_element
+    None -> Nothing
     UseTree u _ -> serializeTreeNode u
     GroupTree g -> serializeTreeNode g
     SymbolTree s -> serializeTreeNode s
@@ -650,11 +661,11 @@ instance XMLUpdatable Tree where
     RectangleTree r -> serializeTreeNode r
     TextTree Nothing t -> serializeTreeNode t
     ImageTree i -> serializeTreeNode i
-    TextTree (Just p) t ->
-        setChildren textNode [X.Elem . setChildren pathNode $ X.elContent textNode]
-      where
-        textNode = serializeTreeNode t
-        pathNode = serializeTreeNode p
+    TextTree (Just p) t -> do
+       textNode <- serializeTreeNode t
+       pathNode <- serializeTreeNode p
+       let sub = [X.Elem . setChildren pathNode $ X.elContent textNode]
+       return $ setChildren textNode sub
 
 
 isNotNone :: Tree -> Bool
@@ -770,21 +781,28 @@ instance XMLUpdatable Marker where
     ,"patternUnits" `parseIn` markerUnits
     ,"orient" `parseIn` markerOrient
     ,"viewBox" `parseIn` markerViewBox
+    ,"overflow" `parseIn` markerOverflow
     ]
 
-serializeText :: Text -> X.Element
-serializeText topText = topNode { X.elName = X.unqual "text" } where
+serializeText :: Text -> Maybe X.Element
+serializeText topText = namedNode where
+  namedNode = fmap (\x -> x { X.elName = X.unqual "text" }) topNode
   topNode = serializeSpan $ _textRoot topText
 
-  serializeSpan tspan = setChildren (mergeAttributes info drawInfo) subContent
+  serializeSpan tspan = case (info, drawInfo) of
+    (Nothing, Nothing) -> Nothing
+    (Just a, Nothing) -> Just $ setChildren a subContent
+    (Nothing, Just b) -> Just $ setChildren b subContent
+    (Just a, Just b) -> 
+        Just $ setChildren (mergeAttributes a b) subContent
     where
       info = genericSerializeNode $ _spanInfo tspan
       drawInfo = genericSerializeNode $ _spanDrawAttributes tspan
-      subContent = serializeContent <$> _spanContent tspan
+      subContent = catMaybes $ serializeContent <$> _spanContent tspan
 
-  serializeContent (SpanText t) = X.Text $ X.blank_cdata { X.cdData = T.unpack t }
-  serializeContent (SpanTextRef _t) = X.Text $ X.blank_cdata { X.cdData = "" }
-  serializeContent (SpanSub sub) = X.Elem $ serializeSpan sub
+  serializeContent (SpanText t) = Just . X.Text $ X.blank_cdata { X.cdData = T.unpack t }
+  serializeContent (SpanTextRef _t) = Just . X.Text $ X.blank_cdata { X.cdData = "" }
+  serializeContent (SpanSub sub) = X.Elem <$> serializeSpan sub
 
 unparseText :: [X.Content] -> ([TextSpanContent], Maybe TextPath)
 unparseText = extractResult . go True
@@ -1025,28 +1043,21 @@ xmlOfDocument doc =
     X.node (X.unqual "svg") (attrs, descTag ++ styleTag ++ defsTag ++ children)
   where
     attr name = X.Attr (X.unqual name)
-    children = [serializeTreeNode el | el <- _elements doc, isNotNone el ]
+    children = catMaybes [serializeTreeNode el | el <- _elements doc]
 
     defsTag | null defs = []
             | otherwise = [X.node (X.unqual "defs") defs]
 
-    defs = [elementRender k e | (k, e) <- M.assocs $ _definitions doc
-                              , isElementNotNone e]
+    defs = catMaybes [elementRender k e | (k, e) <- M.assocs $ _definitions doc]
 
-    isElementNotNone (ElementGeometry el) = isNotNone el
-    isElementNotNone _ = True
-
-    elementRender k e = case e of
+    elementRender k e = X.add_attr (attr "id" k) <$> case e of
         ElementGeometry t -> serializeTreeNode t
         ElementMarker m -> serializeTreeNode m
         ElementMask m -> serializeTreeNode m
         ElementClipPath c -> serializeTreeNode c
-        ElementPattern p ->
-            X.add_attr (attr "id" k) $ serializeTreeNode p
-        ElementLinearGradient lg ->
-            X.add_attr (attr "id" k) $ serializeTreeNode lg
-        ElementRadialGradient rg ->
-            X.add_attr (attr "id" k) $ serializeTreeNode rg
+        ElementPattern p -> serializeTreeNode p
+        ElementLinearGradient lg -> serializeTreeNode lg
+        ElementRadialGradient rg -> serializeTreeNode rg
 
     docViewBox = case _viewBox doc of
         Nothing -> []
