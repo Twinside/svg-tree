@@ -19,7 +19,7 @@ import Text.Read( readMaybe )
 #endif
 
 #if !MIN_VERSION_base(4,8,0)
-import Control.Applicative( pure, (<$>), (<$) )
+import Control.Applicative( pure, (<$>), (<$), (<*>) )
 import Data.Foldable( foldMap )
 import Data.Monoid( mempty )
 #endif
