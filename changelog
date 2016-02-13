@@ -1,5 +1,8 @@
 -*-change-log-*-
 
+V0.3.2.2 February 2016
+ * Fix: Bad serialization of some None constructors.
+
 v0.3.2.1 October 2015
  * Fix: Don't add '#' for <img> serialization
 
