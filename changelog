@@ -1,5 +1,8 @@
 -*-change-log-*-
 
+v0.4.1: February 2016
+ * Fix: fixing duplicate ID with serialization
+
 v0.4: February 2016
  * Breaking change: viewbox types are no longer Int
    but double, sneakingly passed in v0.3.2.2. This
