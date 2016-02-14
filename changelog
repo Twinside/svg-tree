@@ -1,6 +1,11 @@
 -*-change-log-*-
 
-V0.3.2.2 February 2016
+v0.4: February 2016
+ * Breaking change: viewbox types are no longer Int
+   but double, sneakingly passed in v0.3.2.2. This
+   version acknoweledge this change
+
+V0.3.2.2 February 2016 (Deprecated)
  * Fix: Bad serialization of some None constructors.
 
 v0.3.2.1 October 2015
