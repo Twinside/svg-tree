@@ -1051,14 +1051,22 @@ xmlOfDocument doc =
     defs = catMaybes [elementRender k e | (k, e) <- M.assocs $ _definitions doc]
 
     elementRender k e = case e of
-        ElementGeometry t -> serializeTreeNode t
-        ElementMarker m -> serializeTreeNode m
-        ElementMask m -> serializeTreeNode m
-        ElementClipPath c -> addId $ serializeTreeNode c
-        ElementPattern p -> addId $ serializeTreeNode p
+        ElementGeometry t -> serialize t
+        ElementMarker m -> serialize m
+        ElementMask m -> serialize m
+        ElementClipPath c -> serialize c
+        ElementPattern p -> serialize p
         ElementLinearGradient lg -> addId $ serializeTreeNode lg
         ElementRadialGradient rg -> addId $ serializeTreeNode rg
-      where addId = fmap $ X.add_attr (attr "id" k)
+      where
+        addId = fmap (X.add_attr $ attr "id" k)
+
+        serialize :: (WithDrawAttributes e, XMLUpdatable e) => e -> Maybe X.Element
+        serialize el = case el^.drawAttr.attrId of
+          Nothing -> addId $ serializeTreeNode el
+          Just _id ->
+            let newNode = el & drawAttr.attrId .~ Just k in
+            serializeTreeNode newNode
 
     docViewBox = case _viewBox doc of
         Nothing -> []
