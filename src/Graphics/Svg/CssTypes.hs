@@ -107,8 +107,10 @@ instance TextBuildable CssRule where
      where
       ft = TB.fromText
       tserializeDecl d = ft "  " <> tserialize d <> ft ";\n"
-      tselectors =
-          intersperse (ft ",\n") . fmap tserialize $ concat selectors
+      tselector =
+          mconcat . intersperse (ft " ") . fmap tserialize
+      tselectors = 
+          intersperse (ft ",\n") $ fmap tselector selectors
 
 -- | Interface for elements to be matched against
 -- some CssRule.
