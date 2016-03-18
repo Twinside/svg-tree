@@ -397,8 +397,9 @@ classSetter = SvgAttributeLens "class" updater serializer
     updater el str =
       el & attrClass .~ (T.split (== ' ') $ T.pack str)
 
-    serializer a =
-       Just . T.unpack . T.intercalate " " $ a ^. attrClass
+    serializer a = case a ^. attrClass of
+      [] -> Nothing
+      lst -> Just . T.unpack $ T.intercalate " " lst
 
 cssUniqueNumber :: ASetter DrawAttributes DrawAttributes
                    a (Last Number)

@@ -2,6 +2,7 @@
 
 v0.4.2: March 2016
  * Fix: incorrect deserialization of complex CSS
+ * Enhancement: avoiding serializatinon of empty class attribute
 
 v0.4.1: February 2016
  * Fix: fixing duplicate ID with serialization
