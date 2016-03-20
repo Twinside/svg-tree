@@ -31,7 +31,6 @@ import qualified Data.Text.Lazy.Builder as TB
 import Text.Printf
 
 import Codec.Picture( PixelRGBA8( .. ) )
-{-import Debug.Trace-}
 
 -- | Alias describing a "dot per inch" information
 -- used for size calculation (see toUserUnit).
@@ -149,9 +148,9 @@ isMatching = go where
   go ((e:_):upper) (DirectChildren:AllOf descr:rest)
     | isDescribedBy e descr = go upper rest
   go _ (DirectChildren:_) = False
-  go ((e:_):upper) (AllOf descr : rest)
+  go ((e:_):upper) selectors@(AllOf descr : rest)
     | isDescribedBy e descr = go upper rest
-    | otherwise = False
+    | otherwise = go upper selectors
   go (_:upper) selector = go upper selector
 
 -- | Given CSS rules, find all the declaration to apply to the
