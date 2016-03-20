@@ -152,6 +152,12 @@ module Graphics.Svg.Types
     , ClipPath( .. )
     , HasClipPath( .. )
 
+      -- * Aspect Ratio description
+    , PreserveAspectRatio( .. )
+    , Alignment( .. )
+    , MeetSlice( .. )
+    , HasPreserveAspectRatio( .. )
+
       -- * MISC functions
     , isPathArc
     , isPathWithArc
@@ -209,25 +215,25 @@ data Origin
 -- | Path command definition.
 data PathCommand
       -- | 'M' or 'm' command
-    = MoveTo Origin [RPoint]
+    = MoveTo !Origin ![RPoint]
       -- | Line to, 'L' or 'l' Svg path command.
-    | LineTo Origin [RPoint]
+    | LineTo !Origin ![RPoint]
 
       -- | Equivalent to the 'H' or 'h' svg path command.
-    | HorizontalTo  Origin [Coord]
+    | HorizontalTo  !Origin ![Coord]
       -- | Equivalent to the 'V' or 'v' svg path command.
-    | VerticalTo    Origin [Coord]
+    | VerticalTo    !Origin ![Coord]
 
     -- | Cubic bezier, 'C' or 'c' command
-    | CurveTo  Origin [(RPoint, RPoint, RPoint)]
+    | CurveTo  !Origin ![(RPoint, RPoint, RPoint)]
     -- | Smooth cubic bezier, equivalent to 'S' or 's' command
-    | SmoothCurveTo  Origin [(RPoint, RPoint)]
+    | SmoothCurveTo  !Origin ![(RPoint, RPoint)]
     -- | Quadratic bezier, 'Q' or 'q' command
-    | QuadraticBezier  Origin [(RPoint, RPoint)]
+    | QuadraticBezier !Origin ![(RPoint, RPoint)]
     -- | Quadratic bezier, 'T' or 't' command
-    | SmoothQuadraticBezierCurveTo  Origin [RPoint]
+    | SmoothQuadraticBezierCurveTo  !Origin ![RPoint]
       -- | Eliptical arc, 'A' or 'a' command.
-    | EllipticalArc  Origin [(Coord, Coord, Coord, Bool, Bool, RPoint)]
+    | EllipticalArc !Origin ![(Coord, Coord, Coord, Bool, Bool, RPoint)]
       -- | Close the path, 'Z' or 'z' svg path command.
     | EndPath
     deriving (Eq, Show)
@@ -245,6 +251,43 @@ isPathArc _ = False
 isPathWithArc :: Foldable f => f PathCommand -> Bool
 isPathWithArc = F.any isPathArc
 
+-- | This type represent the align information of the
+-- preserveAspectRatio SVGattribute
+data Alignment
+  = AlignNone -- ^ "none" value
+  | AlignxMinYMin -- "xMinYMin" value
+  | AlignxMidYMin -- ^ "xMidYMin" value
+  | AlignxMaxYMin -- ^ "xMaxYMin" value
+  | AlignxMinYMid -- ^ "xMinYMid" value
+  | AlignxMidYMid -- ^ "xMidYMid" value
+  | AlignxMaxYMid -- ^ "xMaxYMid" value
+  | AlignxMinYMax -- ^ "xMinYMax" value
+  | AlignxMidYMax -- ^ "xMidYMax" value
+  | AlignxMaxYMax -- ^ "xMaxYMax" value
+  deriving (Eq, Show)
+
+-- | This type represent the "meet or slice" information
+-- of the preserveAspectRatio SVGattribute
+data MeetSlice = Meet | Slice
+    deriving (Eq, Show)
+
+-- | Describe the content of the preserveAspectRatio attribute.
+data PreserveAspectRatio = PreserveAspectRatio
+  { _aspectRatioDefer     :: !Bool
+  , _aspectRatioAlign     :: !Alignment
+  , _aspectRatioMeetSlice :: !(Maybe MeetSlice)
+  }
+  deriving (Eq, Show)
+
+-- | Lenses for the PreserveAspectRatio type
+makeClassy ''PreserveAspectRatio 
+
+instance WithDefaultSvg PreserveAspectRatio where
+  defaultSvg = PreserveAspectRatio 
+    { _aspectRatioDefer     = False
+    , _aspectRatioAlign     = AlignxMidYMid
+    , _aspectRatioMeetSlice = Nothing
+    }
 
 -- | Describe how the line should be terminated
 -- when stroking them. Describe the values of the
@@ -284,19 +327,19 @@ data FillRule
 -- see `_transform` and `transform`.
 data Transformation
     = -- | Directly encode the translation matrix.
-      TransformMatrix Coord Coord Coord
-                      Coord Coord Coord
+      TransformMatrix !Coord !Coord !Coord
+                      !Coord !Coord !Coord
       -- | Translation along a vector
-    | Translate Double Double
+    | Translate !Double !Double
       -- | Scaling on both axis or on X axis and Y axis.
-    | Scale Double (Maybe Double)
+    | Scale !Double !(Maybe Double)
       -- | Rotation around `(0, 0)` or around an optional
       -- point.
-    | Rotate Double (Maybe (Double, Double))
+    | Rotate !Double !(Maybe (Double, Double))
       -- | Skew transformation along the X axis.
-    | SkewX Double
+    | SkewX !Double
       -- | Skew transformation along the Y axis.
-    | SkewY Double
+    | SkewY !Double
       -- | Unkown transformation, like identity.
     | TransformUnknown
     deriving (Eq, Show)
@@ -461,11 +504,11 @@ makeClassy ''DrawAttributes
 -- segments. Correspond to the `<polyline>` tag.
 data PolyLine = PolyLine
   { -- | drawing attributes of the polyline.
-    _polyLineDrawAttributes :: DrawAttributes
+    _polyLineDrawAttributes :: !DrawAttributes
 
     -- | Geometry definition of the polyline.
     -- correspond to the `points` attribute
-  , _polyLinePoints :: [RPoint]
+  , _polyLinePoints :: ![RPoint]
   }
   deriving (Eq, Show)
 
@@ -487,10 +530,10 @@ instance WithDrawAttributes PolyLine where
 -- tag
 data Polygon = Polygon
   { -- | Drawing attributes for the polygon.
-    _polygonDrawAttributes :: DrawAttributes
+    _polygonDrawAttributes :: !DrawAttributes
     -- | Points of the polygon. Correspond to
     -- the `points` attributes.
-  , _polygonPoints :: [RPoint]
+  , _polygonPoints :: ![RPoint]
   }
   deriving (Eq, Show)
 
@@ -510,13 +553,13 @@ instance WithDefaultSvg Polygon where
 -- `<line>` tag.
 data Line = Line
   { -- | Drawing attributes of line.
-    _lineDrawAttributes :: DrawAttributes
+    _lineDrawAttributes :: !DrawAttributes
     -- | First point of the the line, correspond
     -- to the `x1` and `y1` attributes.
-  , _linePoint1 :: Point
+  , _linePoint1 :: !Point
     -- | Second point of the the line, correspond
     -- to the `x2` and `y2` attributes.
-  , _linePoint2 :: Point
+  , _linePoint2 :: !Point
   }
   deriving (Eq, Show)
 
@@ -538,20 +581,20 @@ instance WithDefaultSvg Line where
 -- `<rectangle>` svg tag.
 data Rectangle = Rectangle
   { -- | Rectangle drawing attributes.
-    _rectDrawAttributes  :: DrawAttributes
+    _rectDrawAttributes  :: !DrawAttributes
     -- | Upper left corner of the rectangle, correspond
     -- to the attributes `x` and `y`.
-  , _rectUpperLeftCorner :: Point
+  , _rectUpperLeftCorner :: !Point
     -- | Rectangle width, correspond, strangely, to
     -- the `width` attribute.
-  , _rectWidth           :: Number
+  , _rectWidth           :: !Number
     -- | Rectangle height, correspond, amazingly, to
     -- the `height` attribute.
-  , _rectHeight          :: Number
+  , _rectHeight          :: !Number
     -- | Define the rounded corner radius radius
     -- of the rectangle. Correspond to the `rx` and
     -- `ry` attributes.
-  , _rectCornerRadius    :: (Number, Number)
+  , _rectCornerRadius    :: !(Number, Number)
   }
   deriving (Eq, Show)
 
@@ -573,10 +616,10 @@ instance WithDefaultSvg Rectangle where
 -- | Type mapping the `<path>` svg tag.
 data Path = Path
   { -- | Drawing attributes of the path.
-    _pathDrawAttributes :: DrawAttributes
+    _pathDrawAttributes :: !DrawAttributes
     -- | Definition of the path, correspond to the
     -- `d` attributes.
-  , _pathDefinition :: [PathCommand]
+  , _pathDefinition :: ![PathCommand]
   }
   deriving (Eq, Show)
 
@@ -602,6 +645,8 @@ data Group a = Group
   , _groupChildren  :: ![a]
     -- | Mapped to the attribute `viewBox`
   , _groupViewBox   :: !(Maybe (Double, Double, Double, Double))
+    -- | used for symbols only
+  , _groupAspectRatio :: !PreserveAspectRatio
   }
   deriving (Eq, Show)
 
@@ -616,6 +661,7 @@ instance WithDefaultSvg (Group a) where
     { _groupDrawAttributes = mempty
     , _groupChildren  = []
     , _groupViewBox = Nothing
+    , _groupAspectRatio = defaultSvg
     }
 
 -- | Define the `<symbol>` tag, equivalent to
@@ -636,13 +682,13 @@ instance WithDefaultSvg (Symbol a) where
 -- | Define a `<circle>`.
 data Circle = Circle
   { -- | Drawing attributes of the circle.
-    _circleDrawAttributes :: DrawAttributes
+    _circleDrawAttributes :: !DrawAttributes
     -- | Define the center of the circle, describe
     -- the `cx` and `cy` attributes.
-  , _circleCenter   :: Point
+  , _circleCenter   :: !Point
     -- | Radius of the circle, equivalent to the `r`
     -- attribute.
-  , _circleRadius   :: Number
+  , _circleRadius   :: !Number
   }
   deriving (Eq, Show)
 
@@ -662,16 +708,16 @@ instance WithDefaultSvg Circle where
 -- | Define an `<ellipse>`
 data Ellipse = Ellipse
   {  -- | Drawing attributes of the ellipse.
-    _ellipseDrawAttributes :: DrawAttributes
+    _ellipseDrawAttributes :: !DrawAttributes
     -- | Center of the ellipse, map to the `cx`
     -- and `cy` attributes.
-  , _ellipseCenter :: Point
+  , _ellipseCenter :: !Point
     -- | Radius along the X axis, map the
     -- `rx` attribute.
-  , _ellipseXRadius :: Number
+  , _ellipseXRadius :: !Number
     -- | Radius along the Y axis, map the
     -- `ry` attribute.
-  , _ellipseYRadius :: Number
+  , _ellipseYRadius :: !Number
   }
   deriving (Eq, Show)
 
@@ -692,16 +738,18 @@ instance WithDefaultSvg Ellipse where
 -- | Define an `<image>` tag.
 data Image = Image
   { -- | Drawing attributes of the image
-    _imageDrawAttributes :: DrawAttributes
+    _imageDrawAttributes :: !DrawAttributes
     -- | Position of the image referenced by its
     -- upper left corner.
-  , _imageCornerUpperLeft :: Point
+  , _imageCornerUpperLeft :: !Point
     -- | Image width
-  , _imageWidth :: Number
+  , _imageWidth :: !Number
     -- | Image Height
-  , _imageHeight :: Number
+  , _imageHeight :: !Number
     -- | Image href, pointing to the real image.
-  , _imageHref :: String
+  , _imageHref :: !String
+    -- | preserveAspectRatio attribute
+  , _imageAspectRatio :: !PreserveAspectRatio
   }
   deriving (Eq, Show)
 
@@ -718,6 +766,7 @@ instance WithDefaultSvg Image where
     , _imageWidth = Num 0
     , _imageHeight = Num 0
     , _imageHref = ""
+    , _imageAspectRatio = defaultSvg
     }
 
 -- | Define an `<use>` for a named content.
@@ -941,21 +990,23 @@ data Marker = Marker
     _markerDrawAttributes :: DrawAttributes
     -- | Define the reference point of the marker.
     -- correspond to the `refX` and `refY` attributes.
-  , _markerRefPoint :: (Number, Number)
+  , _markerRefPoint    :: !(Number, Number)
     -- | Define the width of the marker. Correspond to
     -- the `markerWidth` attribute.
-  , _markerWidth    :: Maybe Number
+  , _markerWidth       :: !(Maybe Number)
     -- | Define the height of the marker. Correspond to
     -- the `markerHeight` attribute.
-  , _markerHeight   :: Maybe Number
+  , _markerHeight      :: !(Maybe Number)
     -- | Correspond to the `orient` attribute.
-  , _markerOrient   :: Maybe MarkerOrientation
+  , _markerOrient      :: !(Maybe MarkerOrientation)
     -- | Map the `markerUnits` attribute.
-  , _markerUnits    :: Maybe MarkerUnit
+  , _markerUnits       :: !(Maybe MarkerUnit)
     -- | Optional viewbox
-  , _markerViewBox  :: !(Maybe (Double, Double, Double, Double))
+  , _markerViewBox     :: !(Maybe (Double, Double, Double, Double))
     -- | Elements defining the marker.
-  , _markerOverflow :: !(Maybe Overflow)
+  , _markerOverflow    :: !(Maybe Overflow)
+    -- | preserveAspectRatio attribute
+  , _markerAspectRatio :: !PreserveAspectRatio
     -- | Elements defining the marker.
   , _markerElements :: [Tree]
   }
@@ -978,6 +1029,7 @@ instance WithDefaultSvg Marker where
     , _markerViewBox = Nothing
     , _markerOverflow = Nothing
     , _markerElements = mempty
+    , _markerAspectRatio = defaultSvg
     }
 
 -- | Insert element in the first sublist in the list of list.
@@ -1298,24 +1350,26 @@ instance WithDefaultSvg ClipPath where
 -- | Define a `<pattern>` tag.
 data Pattern = Pattern
     { -- | Pattern drawing attributes.
-      _patternDrawAttributes :: DrawAttributes
+      _patternDrawAttributes :: !DrawAttributes
       -- | Possible `viewBox`.
-    , _patternViewBox  :: Maybe (Double, Double, Double, Double)
+    , _patternViewBox  :: !(Maybe (Double, Double, Double, Double))
       -- | Width of the pattern tile, mapped to the
       -- `width` attribute
-    , _patternWidth    :: Number
+    , _patternWidth    :: !Number
       -- | Height of the pattern tile, mapped to the
       -- `height` attribute
-    , _patternHeight   :: Number
+    , _patternHeight   :: !Number
       -- | Pattern tile base, mapped to the `x` and
       -- `y` attributes.
-    , _patternPos      :: Point
+    , _patternPos      :: !Point
       -- | Elements used in the pattern.
-    , _patternElements :: [Tree]
+    , _patternElements :: ![Tree]
       -- | Define the cordinate system to use for
       -- the pattern. Mapped to the `patternUnits`
       -- attribute.
-    , _patternUnit     :: CoordinateUnits
+    , _patternUnit        :: !CoordinateUnits
+      -- | Value of the "preserveAspectRatio" attribute
+    , _patternAspectRatio :: !PreserveAspectRatio 
     }
     deriving Show
 
@@ -1334,6 +1388,7 @@ instance WithDefaultSvg Pattern where
     , _patternElements = []
     , _patternUnit = CoordBoundingBox
     , _patternDrawAttributes = mempty
+    , _patternAspectRatio = defaultSvg
     }
 
 -- | Sum types helping keeping track of all the namable
