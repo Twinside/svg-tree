@@ -1,5 +1,9 @@
 -*-change-log-*-
 
+v0.5: March 2016:
+ * Adding: preserveAspectRatio attribute
+ * Fix: Application of CSS rules with indirect parent/child relation.
+
 v0.4.2: March 2016
  * Enhancement: avoiding serializatinon of empty class attribute
  * Fix: incorrect deserialization of complex CSS

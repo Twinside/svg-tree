@@ -28,7 +28,7 @@ import Control.Applicative( (<|>), many )
 
 import Control.Lens hiding( transform, children, elements, element )
 import Control.Monad.State.Strict( State, runState, modify, gets )
-import Data.Maybe( catMaybes )
+import Data.Maybe( fromMaybe, catMaybes )
 import Data.Monoid( Last( Last ), getLast, (<>) )
 import Data.List( foldl', intercalate )
 import Text.XML.Light.Proc( findAttrBy, elChildren, strContent )
@@ -121,6 +121,71 @@ instance ParseableAttribute Texture where
 instance ParseableAttribute [Transformation] where
   aparse = parse $ many transformParser
   aserialize = Just . serializeTransformations
+
+instance ParseableAttribute Alignment where
+  aparse s = Just $ case s of
+    "none" -> AlignNone 
+    "xMinYMin" -> AlignxMinYMin
+    "xMidYMin" -> AlignxMidYMin
+    "xMaxYMin" -> AlignxMaxYMin
+    "xMinYMid" -> AlignxMinYMid
+    "xMidYMid" -> AlignxMidYMid
+    "xMaxYMid" -> AlignxMaxYMid
+    "xMinYMax" -> AlignxMinYMax
+    "xMidYMax" -> AlignxMidYMax
+    "xMaxYMax" -> AlignxMaxYMax
+    _ -> _aspectRatioAlign defaultSvg
+
+  aserialize v = Just $ case v of
+    AlignNone -> "none" 
+    AlignxMinYMin -> "xMinYMin"
+    AlignxMidYMin -> "xMidYMin"
+    AlignxMaxYMin -> "xMaxYMin"
+    AlignxMinYMid -> "xMinYMid"
+    AlignxMidYMid -> "xMidYMid"
+    AlignxMaxYMid -> "xMaxYMid"
+    AlignxMinYMax -> "xMinYMax"
+    AlignxMidYMax -> "xMidYMax"
+    AlignxMaxYMax -> "xMaxYMax"
+
+instance ParseableAttribute MeetSlice where
+  aparse s = case s of
+    "meet" -> Just Meet
+    "slice" -> Just Slice
+    _ -> Nothing
+
+  aserialize v = Just $ case v of
+    Meet -> "meet"
+    Slice -> "slice"
+
+instance ParseableAttribute PreserveAspectRatio where
+  aserialize v = Just $ defer <> align <> meetSlice where
+    defer = if _aspectRatioDefer v then "defer " else ""
+    align = fromMaybe "" . aserialize $ _aspectRatioAlign v
+    meetSlice = fromMaybe "" $ aserialize =<< _aspectRatioMeetSlice v
+
+  aparse s = case words s of
+      [] -> Nothing
+      [align] -> Just $ defaultSvg { _aspectRatioAlign = alignOf align }
+      ["defer", align] ->
+          Just $ defaultSvg
+            { _aspectRatioDefer = True
+            , _aspectRatioAlign = alignOf align
+            }
+      [align, meet] ->
+          Just $ defaultSvg
+            { _aspectRatioMeetSlice = aparse meet
+            , _aspectRatioAlign = alignOf align
+            }
+      ["defer", align, meet] ->
+          Just $ PreserveAspectRatio 
+              { _aspectRatioDefer = True
+              , _aspectRatioAlign = alignOf align
+              , _aspectRatioMeetSlice = aparse meet
+              }
+      _ -> Nothing
+    where
+      alignOf = fromMaybe (_aspectRatioAlign defaultSvg) . aparse
 
 instance ParseableAttribute Cap where
   aparse s = case s of
@@ -561,6 +626,7 @@ instance XMLUpdatable Image where
     ,"x" `parseIn` (imageCornerUpperLeft._1)
     ,"y" `parseIn` (imageCornerUpperLeft._2)
     ,parserSetter "href" imageHref (Just . dropSharp) Just
+    ,"preserveAspectRatio" `parseIn` imageAspectRatio
     ]
 
 instance XMLUpdatable Line where
@@ -686,7 +752,9 @@ instance XMLUpdatable (Symbol Tree) where
      updateWithAccessor (filter isNotNone . _groupChildren . _groupOfSymbol) node $
         genericSerializeWithDrawAttr node
   attributes =
-     ["viewBox" `parseIn` (groupOfSymbol . groupViewBox)]
+     ["viewBox" `parseIn` (groupOfSymbol . groupViewBox)
+     ,"preserveAspectRatio" `parseIn` (groupOfSymbol . groupAspectRatio)
+     ]
 
 
 instance XMLUpdatable RadialGradient where
@@ -768,6 +836,7 @@ instance XMLUpdatable Pattern where
     ,"height" `parseIn` patternHeight
     ,"x" `parseIn` (patternPos._1)
     ,"y" `parseIn` (patternPos._2)
+    ,"preserveAspectRatio" `parseIn` patternAspectRatio
     ]
 
 instance XMLUpdatable Marker where
@@ -783,6 +852,7 @@ instance XMLUpdatable Marker where
     ,"orient" `parseIn` markerOrient
     ,"viewBox" `parseIn` markerViewBox
     ,"overflow" `parseIn` markerOverflow
+    ,"preserveAspectRatio" `parseIn` markerAspectRatio
     ]
 
 serializeText :: Text -> Maybe X.Element
