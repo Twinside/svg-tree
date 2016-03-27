@@ -76,8 +76,7 @@ instance TextBuildable CssSelector where
   tserialize s = case s of
       Nearby -> si '+'
       DirectChildren -> si '>'
-      AllOf lst ->
-        mconcat . intersperse (si ' ') $ map tserialize lst
+      AllOf lst -> mconcat $ map tserialize lst
     where
       si = TB.singleton
 

@@ -1,5 +1,8 @@
 -*-change-log-*-
 
+v0.5.1: March 2016
+ * Fix: serialization of multi criteria css selector.
+
 v0.5: March 2016:
  * Adding: preserveAspectRatio attribute
  * Fix: Application of CSS rules with indirect parent/child relation.
