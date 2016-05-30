@@ -1,5 +1,8 @@
 -*-change-log-*-
 
+v0.5.1.1: May 2016
+ * Fix: GHC 8.0 compatibility
+
 v0.5.1: March 2016
  * Fix: serialization of multi criteria css selector.
 
