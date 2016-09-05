@@ -106,6 +106,10 @@ instance ParseableAttribute [PathCommand] where
   aparse = parse $ many1 command
   aserialize = Just . serializeCommands
 
+instance ParseableAttribute GradientPathCommand where
+  aparse = parse gradientCommand
+  aserialize = Just . serializeGradientCommand
+
 instance ParseableAttribute [RPoint] where
   aparse = parse pointData
   aserialize = Just . serializePoints
@@ -993,6 +997,7 @@ instance XMLUpdatable GradientStop where
     attributes =
         [gradientOffsetSetter
         ,"stop-color" `parseIn` gradientColor
+        ,"path" `parseIn` gradientPath
         ]
 
 

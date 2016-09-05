@@ -80,6 +80,7 @@ module Graphics.Svg.Types
     , HasEllipse( .. )
 
       -- ** Mesh (gradient mesh)
+    , GradientPathCommand( .. )
     , MeshGradientType( .. )
 
     , MeshGradient( .. )
@@ -253,6 +254,16 @@ data PathCommand
     | EllipticalArc !Origin ![(Coord, Coord, Coord, Bool, Bool, RPoint)]
       -- | Close the path, 'Z' or 'z' svg path command.
     | EndPath
+    deriving (Eq, Show)
+
+-- | Description of path used in meshgradient tag
+data GradientPathCommand
+      -- | Line to, 'L' or 'l' Svg path command.
+    = GLine !Origin !(Maybe RPoint)
+      -- | Cubic bezier, 'C' or 'c' command
+    | GCurve !Origin !RPoint !RPoint !(Maybe RPoint)
+      -- | 'Z' command
+    | GClose
     deriving (Eq, Show)
 
 -- | Little helper function to build a point.
@@ -768,6 +779,8 @@ data GradientStop = GradientStop
       -- | Color of the gradient stop. Correspond
       -- to the `stop-color` attribute.
     , _gradientColor  :: !PixelRGBA8
+      -- | Path command used in mesh patch
+    , _gradientPath   :: !(Maybe GradientPathCommand)
     }
     deriving (Eq, Show)
 
@@ -778,8 +791,8 @@ instance WithDefaultSvg GradientStop where
   defaultSvg = GradientStop
     { _gradientOffset = 0.0
     , _gradientColor  = PixelRGBA8 0 0 0 255
+    , _gradientPath   = Nothing
     }
-
 
 -- | Define `<meshpatch>` SVG tag
 data MeshGradientPatch = MeshGradientPatch
