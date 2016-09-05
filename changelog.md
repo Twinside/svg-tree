@@ -1,5 +1,8 @@
 -*-change-log-*-
 
+v0.6: September 2016
+ * Add SVG 2.0 gradient mesh
+
 v0.5.1.1: May 2016
  * Fix: GHC 8.0 compatibility
 
