@@ -2,6 +2,7 @@
 {-# LANGUAGE CPP #-}
 module Graphics.Svg.PathParser( transformParser
                               , command
+                              , pathParser
                               , viewBoxParser
                               , pointData
                               , gradientCommand
@@ -24,6 +25,7 @@ import Data.Attoparsec.Text
     , string
     , skipSpace
     , char
+    , many1
     )
 import Data.Attoparsec.Combinator( option
                                  , sepBy
@@ -60,6 +62,9 @@ point = V2 <$> num <* commaWsp <*> num
 
 pointData :: Parser [RPoint]
 pointData = point `sepBy` commaWsp
+
+pathParser :: Parser [PathCommand]
+pathParser = skipSpace *> many1 command
 
 command :: Parser PathCommand
 command =  (MoveTo OriginAbsolute <$ string "M" <*> pointList)

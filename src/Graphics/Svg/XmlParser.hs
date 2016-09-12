@@ -103,7 +103,7 @@ instance ParseableAttribute PixelRGBA8 where
   aserialize = Just . colorSerializer
 
 instance ParseableAttribute [PathCommand] where
-  aparse = parse $ many1 command
+  aparse = parse pathParser
   aserialize = Just . serializeCommands
 
 instance ParseableAttribute GradientPathCommand where
