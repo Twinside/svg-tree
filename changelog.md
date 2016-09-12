@@ -1,5 +1,8 @@
 -*-change-log-*-
 
+v0.5.1.2: September 2016
+ * Fix path parsing with white space prefix
+
 v0.5.1.1: May 2016
  * Fix: GHC 8.0 compatibility
 
