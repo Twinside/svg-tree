@@ -996,6 +996,7 @@ instance XMLUpdatable GradientStop where
     serializeTreeNode = genericSerializeNode
     attributes =
         [gradientOffsetSetter
+        ,opacitySetter "stop-opacity" gradientOpacity
         ,"stop-color" `parseIn` gradientColor
         ,"path" `parseIn` gradientPath
         ]

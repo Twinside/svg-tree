@@ -781,6 +781,8 @@ data GradientStop = GradientStop
     , _gradientColor  :: !PixelRGBA8
       -- | Path command used in mesh patch
     , _gradientPath   :: !(Maybe GradientPathCommand)
+      -- | Stop color opacity
+    , _gradientOpacity :: !(Maybe Float)
     }
     deriving (Eq, Show)
 
@@ -792,7 +794,9 @@ instance WithDefaultSvg GradientStop where
     { _gradientOffset = 0.0
     , _gradientColor  = PixelRGBA8 0 0 0 255
     , _gradientPath   = Nothing
+    , _gradientOpacity = Nothing
     }
+
 
 -- | Define `<meshpatch>` SVG tag
 data MeshGradientPatch = MeshGradientPatch
