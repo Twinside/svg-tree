@@ -79,6 +79,19 @@ module Graphics.Svg.Types
     , Ellipse( .. )
     , HasEllipse( .. )
 
+      -- ** Mesh (gradient mesh)
+    , GradientPathCommand( .. )
+    , MeshGradientType( .. )
+
+    , MeshGradient( .. )
+    , HasMeshGradient( .. )
+
+    , MeshGradientRow( .. )
+    , HasMeshGradientRow( .. )
+
+    , MeshGradientPatch( .. )
+    , HasMeshGradientPatch( .. )
+
       -- ** Image
     , Image( .. )
     , HasImage( .. )
@@ -212,6 +225,11 @@ data Origin
   | OriginRelative -- ^ Next point relative to the previous
   deriving (Eq, Show)
 
+data MeshGradientType
+  = GradientBilinear
+  | GradientBicubic
+  deriving (Eq, Show)
+
 -- | Path command definition.
 data PathCommand
       -- | 'M' or 'm' command
@@ -238,6 +256,16 @@ data PathCommand
     | EndPath
     deriving (Eq, Show)
 
+-- | Description of path used in meshgradient tag
+data GradientPathCommand
+      -- | Line to, 'L' or 'l' Svg path command.
+    = GLine !Origin !(Maybe RPoint)
+      -- | Cubic bezier, 'C' or 'c' command
+    | GCurve !Origin !RPoint !RPoint !(Maybe RPoint)
+      -- | 'Z' command
+    | GClose
+    deriving (Eq, Show)
+
 -- | Little helper function to build a point.
 toPoint :: Number -> Number -> Point
 toPoint = (,)
@@ -250,6 +278,13 @@ isPathArc _ = False
 -- | Tell if a full path contain an EllipticalArc.
 isPathWithArc :: Foldable f => f PathCommand -> Bool
 isPathWithArc = F.any isPathArc
+
+-- | Define the possible values of various *units attributes
+-- used in the definition of the gradients and masks.
+data CoordinateUnits
+    = CoordUserSpace   -- ^ `userSpaceOnUse` value
+    | CoordBoundingBox -- ^ `objectBoundingBox` value
+    deriving (Eq, Show)
 
 -- | This type represent the align information of the
 -- preserveAspectRatio SVGattribute
@@ -735,6 +770,94 @@ instance WithDefaultSvg Ellipse where
     , _ellipseYRadius = Num 0
     }
 
+-- | Define a color stop for the gradients. Represent
+-- the `<stop>` SVG tag.
+data GradientStop = GradientStop
+    { -- | Gradient offset between 0 and 1, correspond
+      -- to the `offset` attribute.
+      _gradientOffset :: !Float
+      -- | Color of the gradient stop. Correspond
+      -- to the `stop-color` attribute.
+    , _gradientColor  :: !PixelRGBA8
+      -- | Path command used in mesh patch
+    , _gradientPath   :: !(Maybe GradientPathCommand)
+      -- | Stop color opacity
+    , _gradientOpacity :: !(Maybe Float)
+    }
+    deriving (Eq, Show)
+
+-- | Lenses for the GradientStop type.
+makeClassy ''GradientStop
+
+instance WithDefaultSvg GradientStop where
+  defaultSvg = GradientStop
+    { _gradientOffset = 0.0
+    , _gradientColor  = PixelRGBA8 0 0 0 255
+    , _gradientPath   = Nothing
+    , _gradientOpacity = Nothing
+    }
+
+
+-- | Define `<meshpatch>` SVG tag
+data MeshGradientPatch = MeshGradientPatch
+  { -- | List of stop, from 2 to 4 in a patch
+    _meshGradientPatchStops :: ![GradientStop]
+  }
+  deriving (Eq, Show)
+
+makeClassy ''MeshGradientPatch
+
+instance WithDefaultSvg MeshGradientPatch where
+  defaultSvg = MeshGradientPatch []
+
+-- | Define a `<meshrow>` tag.
+data MeshGradientRow = MeshGradientRow
+  { -- | List of patch in a row
+    _meshGradientRowPatches :: ![MeshGradientPatch]
+  }
+  deriving (Eq, Show)
+
+makeClassy ''MeshGradientRow
+
+instance WithDefaultSvg MeshGradientRow where
+  defaultSvg = MeshGradientRow []
+
+
+-- | Define a `<meshgradient>` tag.
+data MeshGradient = MeshGradient
+  { _meshGradientDrawAttributes :: !DrawAttributes
+    -- | Original x coordinate of the mesh gradient
+  , _meshGradientX              :: !Number
+    -- | Original y coordinate of the mesh gradient
+  , _meshGradientY              :: !Number
+    -- | Type of color interpolation to use
+  , _meshGradientType           :: !MeshGradientType
+    -- | Coordiante system to use
+  , _meshGradientUnits          :: !CoordinateUnits
+    -- | Optional transform
+  , _meshGradientTransform      :: ![Transformation]
+    -- | List of patch rows in the the mesh.
+  , _meshGradientRows           :: ![MeshGradientRow]
+  }
+  deriving (Eq, Show)
+
+makeClassy ''MeshGradient
+
+instance WithDrawAttributes MeshGradient where
+  drawAttr = meshGradientDrawAttributes
+
+instance WithDefaultSvg MeshGradient where
+  defaultSvg = MeshGradient
+    { _meshGradientDrawAttributes = mempty
+    , _meshGradientX              = Percent 0
+    , _meshGradientY              = Percent 0
+    , _meshGradientType           = GradientBilinear
+    , _meshGradientUnits          = CoordBoundingBox
+    , _meshGradientTransform      = mempty
+    , _meshGradientRows           = mempty
+    }
+
+
 -- | Define an `<image>` tag.
 data Image = Image
   { -- | Drawing attributes of the image
@@ -961,6 +1084,7 @@ data Tree
     | RectangleTree !Rectangle
     | TextTree      !(Maybe TextPath) !Text
     | ImageTree     !Image
+    | MeshGradientTree !MeshGradient
     deriving (Eq, Show)
 
 -- | Define the orientation, associated to the
@@ -1061,6 +1185,7 @@ zipTree f = dig [] where
   dig prev e@(RectangleTree _) = f $ appNode prev e
   dig prev e@(TextTree _ _) = f $ appNode prev e
   dig prev e@(ImageTree _) = f $ appNode prev e
+  dig prev e@(MeshGradientTree _) = f $ appNode prev e
 
   zipGroup prev g = g { _groupChildren = updatedChildren }
     where
@@ -1084,6 +1209,7 @@ foldTree f = go where
     RectangleTree _ -> f acc e
     TextTree    _ _ -> f acc e
     ImageTree _     -> f acc e
+    MeshGradientTree _ -> f acc e
     GroupTree g     ->
       let subAcc = F.foldl' go acc $ _groupChildren g in
       f subAcc e
@@ -1109,6 +1235,7 @@ mapTree f = go where
   go e@(RectangleTree _) = f e
   go e@(TextTree _ _) = f e
   go e@(ImageTree _) = f e
+  go e@(MeshGradientTree _) = f e
 
   mapGroup g =
       g { _groupChildren = map go $ _groupChildren g }
@@ -1131,6 +1258,7 @@ nameOfTree v =
    RectangleTree _ -> "rectangle"
    TextTree    _ _ -> "text"
    ImageTree _     -> "image"
+   MeshGradientTree _ -> "meshgradient"
 
 drawAttrOfTree :: Tree -> DrawAttributes
 drawAttrOfTree v = case v of
@@ -1147,6 +1275,7 @@ drawAttrOfTree v = case v of
   RectangleTree e -> e ^. drawAttr
   TextTree _ e -> e ^. drawAttr
   ImageTree e -> e ^. drawAttr
+  MeshGradientTree e -> e ^. drawAttr
 
 setDrawAttrOfTree :: Tree -> DrawAttributes -> Tree
 setDrawAttrOfTree v attr = case v of
@@ -1163,19 +1292,13 @@ setDrawAttrOfTree v attr = case v of
   RectangleTree e -> RectangleTree $ e & drawAttr .~ attr
   TextTree a e -> TextTree a $ e & drawAttr .~ attr
   ImageTree e -> ImageTree $ e & drawAttr .~ attr
+  MeshGradientTree e -> MeshGradientTree $ e & drawAttr .~ attr
 
 instance WithDrawAttributes Tree where
     drawAttr = lens drawAttrOfTree setDrawAttrOfTree
 
 instance WithDefaultSvg Tree where
     defaultSvg = None
-
--- | Define the possible values of various *units attributes
--- used in the definition of the gradients and masks.
-data CoordinateUnits
-    = CoordUserSpace   -- ^ `userSpaceOnUse` value
-    | CoordBoundingBox -- ^ `objectBoundingBox` value
-    deriving (Eq, Show)
 
 -- | Define the possible values for the `spreadMethod`
 -- values used for the gradient definitions.
@@ -1184,27 +1307,6 @@ data Spread
     | SpreadPad     -- ^ `pad` value
     | SpreadReflect -- ^ `reflect value`
     deriving (Eq, Show)
-
--- | Define a color stop for the gradients. Represent
--- the `<stop>` SVG tag.
-data GradientStop = GradientStop
-    { -- | Gradient offset between 0 and 1, correspond
-      -- to the `offset` attribute.
-      _gradientOffset :: Float
-      -- | Color of the gradient stop. Correspond
-      -- to the `stop-color` attribute.
-    , _gradientColor  :: PixelRGBA8
-    }
-    deriving (Eq, Show)
-
--- | Lenses for the GradientStop type.
-makeClassy ''GradientStop
-
-instance WithDefaultSvg GradientStop where
-  defaultSvg = GradientStop
-    { _gradientOffset = 0.0
-    , _gradientColor  = PixelRGBA8 0 0 0 255
-    }
 
 -- | Define a `<linearGradient>` tag.
 data LinearGradient = LinearGradient
@@ -1396,6 +1498,7 @@ instance WithDefaultSvg Pattern where
 data Element
     = ElementLinearGradient LinearGradient
     | ElementRadialGradient RadialGradient
+    | ElementMeshGradient   MeshGradient
     | ElementGeometry Tree
     | ElementPattern  Pattern
     | ElementMarker Marker

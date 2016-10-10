@@ -1,5 +1,9 @@
 -*-change-log-*-
 
+v0.6: September 2016
+ * Add SVG 2.0 gradient mesh
+ * Add gradient opacity parsing
+
 v0.5.1.2: September 2016
  * Fix path parsing with white space prefix
 

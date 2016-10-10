@@ -106,6 +106,10 @@ instance ParseableAttribute [PathCommand] where
   aparse = parse pathParser
   aserialize = Just . serializeCommands
 
+instance ParseableAttribute GradientPathCommand where
+  aparse = parse gradientCommand
+  aserialize = Just . serializeGradientCommand
+
 instance ParseableAttribute [RPoint] where
   aparse = parse pointData
   aserialize = Just . serializePoints
@@ -147,6 +151,16 @@ instance ParseableAttribute Alignment where
     AlignxMinYMax -> "xMinYMax"
     AlignxMidYMax -> "xMidYMax"
     AlignxMaxYMax -> "xMaxYMax"
+
+instance ParseableAttribute MeshGradientType where
+  aparse s = Just $ case s of
+    "bilinear" -> GradientBilinear
+    "bicubic" -> GradientBicubic
+    _ -> GradientBilinear
+  
+  aserialize v = Just $ case v of
+    GradientBilinear -> "bilinear"
+    GradientBicubic -> "bicubic"
 
 instance ParseableAttribute MeetSlice where
   aparse s = case s of
@@ -696,6 +710,31 @@ instance XMLUpdatable Path where
   serializeTreeNode = genericSerializeWithDrawAttr
   attributes = ["d" `parseIn` pathDefinition]
 
+instance XMLUpdatable MeshGradientPatch where
+  xmlTagName _ = "meshpatch"
+  attributes = []
+  serializeTreeNode node =
+     updateWithAccessor _meshGradientPatchStops node $ genericSerializeNode node
+
+instance XMLUpdatable MeshGradientRow where
+  xmlTagName _ = "meshrow"
+  serializeTreeNode node =
+     updateWithAccessor _meshGradientRowPatches node $ genericSerializeNode node
+  attributes = []
+
+instance XMLUpdatable MeshGradient where
+  xmlTagName _ = "meshgradient"
+  serializeTreeNode node =
+     updateWithAccessor _meshGradientRows node $ genericSerializeWithDrawAttr node
+  attributes =
+    ["x" `parseIn` meshGradientX
+    ,"y" `parseIn` meshGradientY
+    ,"type" `parseIn` meshGradientType
+    ,"gradientUnits" `parseIn` meshGradientUnits
+    ,"gradientTransform" `parseIn` meshGradientTransform
+    ]
+
+
 instance XMLUpdatable LinearGradient where
   xmlTagName _ = "linearGradient"
   serializeTreeNode node =
@@ -728,6 +767,7 @@ instance XMLUpdatable Tree where
     RectangleTree r -> serializeTreeNode r
     TextTree Nothing t -> serializeTreeNode t
     ImageTree i -> serializeTreeNode i
+    MeshGradientTree m -> serializeTreeNode m
     TextTree (Just p) t -> do
        textNode <- serializeTreeNode t
        pathNode <- serializeTreeNode p
@@ -956,7 +996,9 @@ instance XMLUpdatable GradientStop where
     serializeTreeNode = genericSerializeNode
     attributes =
         [gradientOffsetSetter
+        ,opacitySetter "stop-opacity" gradientOpacity
         ,"stop-color" `parseIn` gradientColor
+        ,"path" `parseIn` gradientPath
         ]
 
 
@@ -973,6 +1015,16 @@ parseGradientStops = concatMap unStop . elChildren
   where
     unStop e@(nodeName -> "stop") = [xmlUnparse e]
     unStop _ = []
+
+parseMeshGradientPatches :: X.Element -> [MeshGradientPatch]
+parseMeshGradientPatches = foldMap unparsePatch . elChildren where
+  unparsePatch e@(nodeName -> "meshpatch") = [MeshGradientPatch $ parseGradientStops e]
+  unparsePatch _ = []
+
+parseMeshGradientRows :: X.Element -> [MeshGradientRow]
+parseMeshGradientRows = foldMap unRows . elChildren where
+  unRows e@(nodeName -> "meshrow") = [MeshGradientRow $ parseMeshGradientPatches e]
+  unRows _ = []
 
 withId :: X.Element -> (X.Element -> Element)
        -> State Symbols Tree
@@ -1011,6 +1063,13 @@ unparseDefs e@(nodeName -> "linearGradient") =
   where
     unparser ee =
       xmlUnparse ee & linearGradientStops .~ parseGradientStops ee
+
+unparseDefs e@(nodeName -> "meshgradient") =
+  withId e $ ElementMeshGradient . unparser
+  where
+    unparser ee =
+      xmlUnparseWithDrawAttr ee & meshGradientRows .~ parseMeshGradientRows ee
+
 unparseDefs e@(nodeName -> "radialGradient") =
   withId e $ ElementRadialGradient . unparser
   where
@@ -1060,6 +1119,7 @@ unparse e@(nodeName -> "text") = do
           Nothing -> pure Nothing
           Just (ElementLinearGradient _) -> pure Nothing
           Just (ElementRadialGradient _) -> pure Nothing
+          Just (ElementMeshGradient _) -> pure Nothing
           Just (ElementPattern _) -> pure Nothing
           Just (ElementMask _) -> pure Nothing
           Just (ElementClipPath _) -> pure Nothing
@@ -1083,6 +1143,8 @@ unparse e = pure $ case nodeName e of
     "circle"-> CircleTree parsed
     "line"  -> LineTree parsed
     "path" -> PathTree parsed
+    "meshgradient" ->
+      MeshGradientTree $ parsed & meshGradientRows .~ parseMeshGradientRows e
     "use" -> UseTree parsed Nothing
     _ -> None
   where
@@ -1129,6 +1191,7 @@ xmlOfDocument doc =
         ElementPattern p -> serialize p
         ElementLinearGradient lg -> addId $ serializeTreeNode lg
         ElementRadialGradient rg -> addId $ serializeTreeNode rg
+        ElementMeshGradient   mg -> addId $ serializeTreeNode mg
       where
         addId = fmap (X.add_attr $ attr "id" k)
 

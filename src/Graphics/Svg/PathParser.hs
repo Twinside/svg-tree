@@ -5,8 +5,10 @@ module Graphics.Svg.PathParser( transformParser
                               , pathParser
                               , viewBoxParser
                               , pointData
+                              , gradientCommand
                               , serializePoints
                               , serializeCommand
+                              , serializeGradientCommand 
                               , serializeCommands
                               , serializeViewBox
                               ) where
@@ -229,3 +231,30 @@ skewX(<skew-angle>), which specifies a skew transformation along the x-axis.
 
 skewY(<skew-angle>), which specifies a skew transformation along the y-axis.
     -}
+gradientCommand :: Parser GradientPathCommand
+gradientCommand = 
+        (GLine OriginAbsolute <$> (string "L" *> mayPoint))
+    <|> (GLine OriginRelative <$> (string "l" *> mayPoint))
+    <|> (string "C" *> curveToArgs OriginAbsolute)
+    <|> (string "c" *> curveToArgs OriginRelative)
+    <|> (GClose <$ string "Z")
+  where 
+    mayPoint = option Nothing $ Just <$> point
+    curveToArgs o =
+        GCurve o <$> (point <* commaWsp)
+                 <*> (point <* commaWsp)
+                 <*> mayPoint
+
+serializeGradientCommand :: GradientPathCommand -> String
+serializeGradientCommand p = case p of
+  GLine OriginAbsolute points -> "L" ++ smp points
+  GLine OriginRelative points -> "l" ++ smp points
+  GClose -> "Z"
+
+  GCurve OriginAbsolute a b c -> "C" ++ sp a ++ sp b ++ smp c
+  GCurve OriginRelative a b c -> "c" ++ sp a ++ sp b ++ smp c
+  where
+    sp = serializePoint
+    smp Nothing = ""
+    smp (Just pp) = serializePoint pp
+
