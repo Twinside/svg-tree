@@ -1,5 +1,5 @@
 name:                svg-tree
-version:             0.6
+version:             0.6.1
 synopsis:            SVG file loader and serializer
 description:
   svg-tree provides types representing a SVG document,
@@ -29,7 +29,7 @@ Source-Repository head
 Source-Repository this
     Type:      git
     Location:  git://github.com/Twinside/svg-tree.git
-    Tag:       v0.6
+    Tag:       v0.6.1
 
 library
   hs-source-dirs: src

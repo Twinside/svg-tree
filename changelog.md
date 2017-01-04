@@ -1,5 +1,8 @@
 -*-change-log-*-
 
+v0.6.1: January 2017
+ * Fix: some gradient mesh parsing, stop can have style (like with Inkscape 0.92)
+ * Fix: norm say "<mesh>" is the global tag
 
 v0.6: September 2016
  * Add SVG 2.0 gradient mesh
