@@ -783,8 +783,6 @@ data GradientStop = GradientStop
     , _gradientPath   :: !(Maybe GradientPathCommand)
       -- | Stop color opacity
     , _gradientOpacity :: !(Maybe Float)
-      -- | Gradient stop can have style... like in the inkscape case
-    , _gradientStopStyle :: [CssRule]
     }
     deriving (Eq, Show)
 
@@ -797,7 +795,6 @@ instance WithDefaultSvg GradientStop where
     , _gradientColor  = PixelRGBA8 0 0 0 255
     , _gradientPath   = Nothing
     , _gradientOpacity = Nothing
-    , _gradientStopStyle = mempty
     }
 
 
