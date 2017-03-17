@@ -1464,6 +1464,9 @@ data Pattern = Pattern
       -- | Pattern tile base, mapped to the `x` and
       -- `y` attributes.
     , _patternPos      :: !Point
+      -- | Patterns can be chained, so this is a potential
+      -- reference to another pattern
+    , _patternHref     :: !String
       -- | Elements used in the pattern.
     , _patternElements :: ![Tree]
       -- | Define the cordinate system to use for
@@ -1472,6 +1475,8 @@ data Pattern = Pattern
     , _patternUnit        :: !CoordinateUnits
       -- | Value of the "preserveAspectRatio" attribute
     , _patternAspectRatio :: !PreserveAspectRatio 
+      -- | Value of "patternTransform" attribute
+    , _patternTransform   :: !(Maybe [Transformation])
     }
     deriving Show
 
@@ -1491,6 +1496,8 @@ instance WithDefaultSvg Pattern where
     , _patternUnit = CoordBoundingBox
     , _patternDrawAttributes = mempty
     , _patternAspectRatio = defaultSvg
+    , _patternHref = ""
+    , _patternTransform = mempty
     }
 
 -- | Sum types helping keeping track of all the namable

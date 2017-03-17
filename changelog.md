@@ -3,6 +3,8 @@
 v0.6.1: January 2017
  * Fix: some gradient mesh parsing, stop can have style (like with Inkscape 0.92)
  * Fix: norm say "<mesh>" is the global tag
+ * Fix: Adding `xlink:href` attribute on patterns
+ * Fix: Adding `patternTransform` attribute on patterns
 
 v0.6: September 2016
  * Add SVG 2.0 gradient mesh

@@ -879,6 +879,8 @@ instance XMLUpdatable Pattern where
     ,"x" `parseIn` (patternPos._1)
     ,"y" `parseIn` (patternPos._2)
     ,"preserveAspectRatio" `parseIn` patternAspectRatio
+    ,parserSetter "href" patternHref (Just . dropSharp) (Just . ('#':))
+    ,"patternTransform" `parseIn` patternTransform
     ]
 
 instance XMLUpdatable Marker where
