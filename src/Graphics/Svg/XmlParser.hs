@@ -418,8 +418,8 @@ genericSerializeWithDrawAttr node = mergeAttributes <$> thisXml <*> drawAttrNode
   thisXml = genericSerializeNode node
   drawAttrNode = genericSerializeNode $ node ^. drawAttr
 
-type CssUpdater =
-    DrawAttributes -> [[CssElement]] -> DrawAttributes
+type CssUpdater a =
+    a -> [[CssElement]] -> a
 
 opacitySetter :: String -> Lens' a (Maybe Float) -> SvgAttributeLens a
 opacitySetter attribute elLens =
@@ -480,33 +480,33 @@ classSetter = SvgAttributeLens "class" updater serializer
       [] -> Nothing
       lst -> Just . T.unpack $ T.intercalate " " lst
 
-cssUniqueNumber :: ASetter DrawAttributes DrawAttributes
+cssUniqueNumber :: ASetter el el
                    a (Last Number)
-                -> CssUpdater
+                -> CssUpdater el
 cssUniqueNumber setter attr ((CssNumber n:_):_) =
     attr & setter .~ Last (Just n)
 cssUniqueNumber _ attr _ = attr
 
 cssUniqueFloat :: (Fractional n)
-               => ASetter DrawAttributes DrawAttributes a (Maybe n)
-               -> CssUpdater
+               => ASetter el el a (Maybe n)
+               -> CssUpdater el
 cssUniqueFloat setter attr ((CssNumber (Num n):_):_) =
     attr & setter .~ Just (realToFrac n)
 cssUniqueFloat _ attr _ = attr
 
-cssUniqueMayFloat :: ASetter DrawAttributes DrawAttributes a (Last Double)
-               -> CssUpdater
+cssUniqueMayFloat :: ASetter el el a (Last Double)
+               -> CssUpdater el
 cssUniqueMayFloat setter attr ((CssNumber (Num n):_):_) =
     attr & setter .~ Last (Just n)
 cssUniqueMayFloat _ attr _ = attr
 
-cssIdentAttr :: ParseableAttribute a => Lens' DrawAttributes a -> CssUpdater
+cssIdentAttr :: ParseableAttribute a => Lens' el a -> CssUpdater el
 cssIdentAttr setter attr ((CssIdent i:_):_) = case aparse $ T.unpack i of
     Nothing -> attr
     Just v -> attr & setter .~ v
 cssIdentAttr _ attr _ = attr
 
-fontFamilyParser :: CssUpdater
+fontFamilyParser :: CssUpdater DrawAttributes
 fontFamilyParser attr (lst:_) = attr & fontFamily .~ fontNames
   where
     fontNames = Last . Just $ T.unpack <$> extractString lst
@@ -518,38 +518,39 @@ fontFamilyParser attr (lst:_) = attr & fontFamily .~ fontNames
 fontFamilyParser attr _ = attr
 
 
-cssUniqueTexture :: ASetter DrawAttributes DrawAttributes
+cssUniqueTexture :: ASetter el el
                     a (Last Texture)
-                 -> CssUpdater
-cssUniqueTexture setter attr ((CssIdent "none":_):_) =
-    attr & setter .~ Last (Just FillNone)
-cssUniqueTexture setter attr ((CssColor c:_):_) =
-    attr & setter .~ Last (Just $ ColorRef c)
-cssUniqueTexture setter attr ((CssFunction "url" [CssReference c]:_):_) =
-    attr & setter .~ Last (Just . TextureRef $ T.unpack c)
-cssUniqueTexture _ attr _ = attr
+                 -> CssUpdater el
+cssUniqueTexture setter attr css = case css of
+  ((CssIdent "none":_):_) -> attr & setter .~ Last (Just FillNone)
+  ((CssColor c:_):_) -> attr & setter .~ Last (Just $ ColorRef c)
+  ((CssFunction "url" [CssReference c]:_):_) ->
+        attr & setter .~ Last (Just . TextureRef $ T.unpack c)
+  _ -> attr
 
-cssElementRefSetter :: Lens' DrawAttributes (Last ElementRef)
-                         -> CssUpdater
+cssUniqueColor :: ASetter el el a PixelRGBA8 -> CssUpdater el
+cssUniqueColor setter attr css = case css of
+  ((CssColor c:_):_) -> attr & setter .~ c
+  _ -> attr
+
+cssElementRefSetter :: Lens' el (Last ElementRef) -> CssUpdater el
 cssElementRefSetter setter attr ((CssFunction "url" [CssReference c]:_):_) =
     attr & setter .~ Last (Just . Ref $ T.unpack c)
 cssElementRefSetter setter attr ((CssIdent "none":_):_) =
     attr & setter .~ Last (Just RefNone)
 cssElementRefSetter _ attr _ = attr
 
-cssMayStringSetter :: ASetter DrawAttributes DrawAttributes a (Maybe String)
-                   -> CssUpdater
+cssMayStringSetter :: ASetter el el a (Maybe String) -> CssUpdater el
 cssMayStringSetter setter attr ((CssIdent i:_):_) =
     attr & setter .~ Just (T.unpack i)
 cssMayStringSetter setter attr ((CssString i:_):_) =
     attr & setter .~ Just (T.unpack i)
 cssMayStringSetter _ attr _ = attr
 
-cssNullSetter :: CssUpdater
+cssNullSetter :: CssUpdater a
 cssNullSetter attr _ = attr
 
-cssDashArray :: ASetter DrawAttributes DrawAttributes a (Last [Number])
-             -> CssUpdater
+cssDashArray :: ASetter el el a (Last [Number]) -> CssUpdater el
 cssDashArray setter attr (lst:_) =
   case [n | CssNumber n <- lst ] of
     [] -> attr
@@ -557,7 +558,7 @@ cssDashArray setter attr (lst:_) =
 cssDashArray _ attr _ = attr
 
 
-drawAttributesList :: [(SvgAttributeLens DrawAttributes, CssUpdater)]
+drawAttributesList :: [(SvgAttributeLens DrawAttributes, CssUpdater DrawAttributes)]
 drawAttributesList =
   [("stroke-width" `parseIn` strokeWidth, cssUniqueNumber strokeWidth)
   ,("stroke" `parseIn` strokeColor, cssUniqueTexture strokeColor)
@@ -599,11 +600,12 @@ serializeDashArray =
 
 instance XMLUpdatable DrawAttributes where
   xmlTagName _ = "DRAWATTRIBUTES"
-  attributes = styleAttribute : fmap fst drawAttributesList
+  attributes =
+      styleAttribute drawAttributesList : fmap fst drawAttributesList
   serializeTreeNode = genericSerializeNode
 
-styleAttribute :: SvgAttributeLens DrawAttributes
-styleAttribute = SvgAttributeLens
+styleAttribute :: [(SvgAttributeLens a, CssUpdater a)] -> SvgAttributeLens a
+styleAttribute styleAttrs = SvgAttributeLens
   { _attributeName       = "style"
   , _attributeUpdater    = updater
   , _attributeSerializer = const Nothing
@@ -613,7 +615,7 @@ styleAttribute = SvgAttributeLens
         Nothing -> attrs
         Just decls -> foldl' applyer attrs decls
 
-    cssUpdaters = [(T.pack $ _attributeName n, u) | (n, u) <- drawAttributesList]
+    cssUpdaters = [(T.pack $ _attributeName n, u) | (n, u) <- styleAttrs]
     applyer value (CssDeclaration txt elems) =
         case lookup txt cssUpdaters of
           Nothing -> value
@@ -877,6 +879,8 @@ instance XMLUpdatable Pattern where
     ,"x" `parseIn` (patternPos._1)
     ,"y" `parseIn` (patternPos._2)
     ,"preserveAspectRatio" `parseIn` patternAspectRatio
+    ,parserSetter "href" patternHref (Just . dropSharp) (Just . ('#':))
+    ,"patternTransform" `parseIn` patternTransform
     ]
 
 instance XMLUpdatable Marker where
@@ -994,10 +998,15 @@ gradientOffsetSetter = SvgAttributeLens "offset" setter serialize
 instance XMLUpdatable GradientStop where
     xmlTagName _ = "stop"
     serializeTreeNode = genericSerializeNode
-    attributes =
+    attributes = styleAttribute cssAvailable : fmap fst cssAvailable ++ lst where
+      cssAvailable :: [(SvgAttributeLens GradientStop, CssUpdater GradientStop)]
+      cssAvailable =
+          [(opacitySetter "stop-opacity" gradientOpacity, (cssUniqueFloat gradientOpacity))
+          ,("stop-color" `parseIn` gradientColor, cssUniqueColor gradientColor)
+          ]
+      
+      lst =
         [gradientOffsetSetter
-        ,opacitySetter "stop-opacity" gradientOpacity
-        ,"stop-color" `parseIn` gradientColor
         ,"path" `parseIn` gradientPath
         ]
 
