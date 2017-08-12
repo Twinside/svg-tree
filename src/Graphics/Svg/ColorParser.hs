@@ -98,7 +98,7 @@ textureSerializer FillNone = "none"
 
 urlRef :: Parser String
 urlRef = string "url(" *> skipSpace *>
-       char '#' *> many1 (letter <|> digit)
+       char '#' *> many1 (letter <|> digit <|> char '_' <|> char '.' <|> char '-' <|> char ':')
        <* skipSpace <* char ')' <* skipSpace
 
 

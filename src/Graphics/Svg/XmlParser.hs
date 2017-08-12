@@ -1044,6 +1044,17 @@ withId el f = case attributeFinder "id" el of
         s { symbols = M.insert elemId (f el) $ symbols s }
       return None
 
+isDefTag :: String -> Bool
+isDefTag n = n `elem` defList where
+  defList =
+    [ "pattern"
+    , "marker"
+    , "mask"
+    , "clipPath"
+    , "linearGradient"
+    , "meshgradient"
+    , "radialGradient"]
+
 unparseDefs :: X.Element -> State Symbols Tree
 unparseDefs e@(nodeName -> "pattern") = do
   subElements <- mapM unparse $ elChildren e
@@ -1143,19 +1154,20 @@ unparse e@(nodeName -> "text") = do
            , _spanContent = textContent
            }
 
-unparse e = pure $ case nodeName e of
-    "image" -> ImageTree parsed
-    "ellipse" -> EllipseTree parsed
-    "rect" -> RectangleTree parsed
-    "polyline" -> PolyLineTree parsed
-    "polygon" -> PolygonTree parsed
-    "circle"-> CircleTree parsed
-    "line"  -> LineTree parsed
-    "path" -> PathTree parsed
+unparse e = case nodeName e of
+    "image" -> pure $ ImageTree parsed
+    "ellipse" -> pure $ EllipseTree parsed
+    "rect" -> pure $ RectangleTree parsed
+    "polyline" -> pure $ PolyLineTree parsed
+    "polygon" -> pure $ PolygonTree parsed
+    "circle"-> pure $ CircleTree parsed
+    "line"  -> pure $ LineTree parsed
+    "path" -> pure $ PathTree parsed
     "meshgradient" ->
-      MeshGradientTree $ parsed & meshGradientRows .~ parseMeshGradientRows e
-    "use" -> UseTree parsed Nothing
-    _ -> None
+      pure $ MeshGradientTree $ parsed & meshGradientRows .~ parseMeshGradientRows e
+    "use" -> pure $ UseTree parsed Nothing
+    n | isDefTag n -> unparseDefs e
+    _ -> pure None
   where
     parsed :: (XMLUpdatable a, WithDrawAttributes a) => a
     parsed = xmlUnparseWithDrawAttr e

@@ -1,5 +1,9 @@
 -*-change-log-*-
 
+v0.6.2 August 2017
+ * Fix: gather named elements even outside of <defs> tags.
+ * Fix: URL ID now can contain more characters.
+
 v0.6.1: January 2017
  * Fix: some gradient mesh parsing, stop can have style (like with Inkscape 0.92)
  * Fix: norm say "<mesh>" is the global tag
