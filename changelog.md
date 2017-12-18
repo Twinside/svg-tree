@@ -1,5 +1,11 @@
 -*-change-log-*-
 
+v0.6.2.1 December 2017
+ * Workaround/Fix: removed reliance on Template Haskell to derive lenses,
+   by writing them directly in the file, using the ddump-splices. For some
+   reason Haddock associated with GHC 8.2.2 was entering infinite loop on
+   the Types file. Ugly workaround, but at least it works.
+
 v0.6.2 August 2017
  * Fix: gather named elements even outside of <defs> tags.
  * Fix: URL ID now can contain more characters.
