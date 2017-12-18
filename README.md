@@ -1,7 +1,6 @@
 svg-tree
 ========
 
-[![Build Status](https://travis-ci.org/Twinside/svg-tree.png?branch=master)](https://travis-ci.org/Twinside/svg-tree)
 [![Hackage](https://img.shields.io/hackage/v/svg-tree.svg)](http://hackage.haskell.org/package/svg-tree)
 
 SVG loader/serializer for Haskell with a tree type geared toward SVG
