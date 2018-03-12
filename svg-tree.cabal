@@ -38,10 +38,10 @@ library
   exposed-modules: Graphics.Svg
                  , Graphics.Svg.CssTypes
                  , Graphics.Svg.Types
+                 , Graphics.Svg.PathParser
 
   other-modules: Graphics.Svg.NamedColors
                , Graphics.Svg.XmlParser
-               , Graphics.Svg.PathParser
                , Graphics.Svg.CssParser
                , Graphics.Svg.ColorParser
 
@@ -59,3 +59,15 @@ library
                , mtl        >= 2.1 && < 2.3
                , lens       >= 4.6 && < 5
 
+test-suite test
+  hs-source-dirs: test
+  main-is: Spec.hs
+  type: exitcode-stdio-1.0
+  build-depends: base
+               , svg-tree
+               , attoparsec >= 0.12
+               , scientific >= 0.3
+               , linear     >= 1.20
+               , hspec
+  ghc-options: -Wall -threaded
+  other-modules: PathParserSpec
