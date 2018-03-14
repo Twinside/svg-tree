@@ -1,5 +1,9 @@
 -*-change-log-*-
 
+v0.6.2.2 December 2017
+
+ * Adding `Semigroup` instances for defined `Monoid`, for GHC 8.4
+
 v0.6.2.1 December 2017
  * Workaround/Fix: removed reliance on Template Haskell to derive lenses,
    by writing them directly in the file, using the ddump-splices. For some
