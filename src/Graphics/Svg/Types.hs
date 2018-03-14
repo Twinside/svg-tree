@@ -189,7 +189,8 @@ import Data.Foldable( Foldable )
 import Data.Function( on )
 import Data.List( inits )
 import qualified Data.Map as M
-import Data.Monoid( Last( .. ), (<>) )
+import Data.Semigroup( Semigroup( .. ) )
+import Data.Monoid( Last( .. ) )
 import qualified Data.Foldable as F
 import qualified Data.Text as T
 import Codec.Picture( PixelRGBA8( .. ) )
@@ -1314,14 +1315,17 @@ data TextInfo = TextInfo
   }
   deriving (Eq, Show)
 
-instance Monoid TextInfo where
-  mempty = TextInfo [] [] [] [] [] Nothing
-  mappend (TextInfo x1 y1 dx1 dy1 r1 l1)
-          (TextInfo x2 y2 dx2 dy2 r2 l2) =
+instance Semigroup TextInfo where
+  (<>) (TextInfo x1 y1 dx1 dy1 r1 l1)
+       (TextInfo x2 y2 dx2 dy2 r2 l2) =
     TextInfo (x1 <> x2)   (y1 <> y2)
                 (dx1 <> dx2) (dy1 <> dy2)
                 (r1 <> r2)
                 (getLast $ Last l1 <> Last l2)
+
+instance Monoid TextInfo where
+  mempty = TextInfo [] [] [] [] [] Nothing
+  mappend = (<>)
 
 -- makeClassy ''TextInfo
 -- | Lenses for the TextInfo type.
@@ -2405,37 +2409,8 @@ mayMerge (Just a) (Just b) = Just $ mappend a b
 mayMerge _ b@(Just _) = b
 mayMerge a Nothing = a
 
-instance Monoid DrawAttributes where
-    mempty = DrawAttributes
-        { _strokeWidth      = Last Nothing
-        , _strokeColor      = Last Nothing
-        , _strokeOpacity    = Nothing
-        , _strokeLineCap    = Last Nothing
-        , _strokeLineJoin   = Last Nothing
-        , _strokeMiterLimit = Last Nothing
-        , _fillColor        = Last Nothing
-        , _groupOpacity     = Nothing
-        , _fillOpacity      = Nothing
-        , _fontSize         = Last Nothing
-        , _fontFamily       = Last Nothing
-        , _fontStyle        = Last Nothing
-        , _transform        = Nothing
-        , _fillRule         = Last Nothing
-        , _attrClass        = mempty
-        , _attrId           = Nothing
-        , _strokeOffset     = Last Nothing
-        , _strokeDashArray  = Last Nothing
-        , _textAnchor       = Last Nothing
-        , _maskRef          = Last Nothing
-        , _clipPathRef      = Last Nothing
-        , _clipRule         = Last Nothing
-
-        , _markerStart      = Last Nothing
-        , _markerMid        = Last Nothing
-        , _markerEnd        = Last Nothing
-        }
-
-    mappend a b = DrawAttributes
+instance Semigroup DrawAttributes where
+  (<>) a b = DrawAttributes
         { _strokeWidth = (mappend `on` _strokeWidth) a b
         , _strokeColor =  (mappend `on` _strokeColor) a b
         , _strokeLineCap = (mappend `on` _strokeLineCap) a b
@@ -2467,6 +2442,37 @@ instance Monoid DrawAttributes where
         opacityMappend (Just v) Nothing = Just v
         opacityMappend Nothing (Just v) = Just v
         opacityMappend (Just v) (Just v2) = Just $ v * v2
+
+instance Monoid DrawAttributes where
+    mappend = (<>)
+    mempty = DrawAttributes
+        { _strokeWidth      = Last Nothing
+        , _strokeColor      = Last Nothing
+        , _strokeOpacity    = Nothing
+        , _strokeLineCap    = Last Nothing
+        , _strokeLineJoin   = Last Nothing
+        , _strokeMiterLimit = Last Nothing
+        , _fillColor        = Last Nothing
+        , _groupOpacity     = Nothing
+        , _fillOpacity      = Nothing
+        , _fontSize         = Last Nothing
+        , _fontFamily       = Last Nothing
+        , _fontStyle        = Last Nothing
+        , _transform        = Nothing
+        , _fillRule         = Last Nothing
+        , _attrClass        = mempty
+        , _attrId           = Nothing
+        , _strokeOffset     = Last Nothing
+        , _strokeDashArray  = Last Nothing
+        , _textAnchor       = Last Nothing
+        , _maskRef          = Last Nothing
+        , _clipPathRef      = Last Nothing
+        , _clipRule         = Last Nothing
+
+        , _markerStart      = Last Nothing
+        , _markerMid        = Last Nothing
+        , _markerEnd        = Last Nothing
+        }
 
 instance WithDefaultSvg DrawAttributes where
   defaultSvg = mempty
