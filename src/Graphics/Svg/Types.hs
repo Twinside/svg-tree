@@ -207,7 +207,7 @@ import Linear hiding ( angle )
 
 import Text.Printf
 
--- | Basic coordiante type.
+-- | Basic coordinate type.
 type Coord = Double
 
 -- | Real Point, fully determined and not
