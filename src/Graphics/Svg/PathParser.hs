@@ -8,7 +8,7 @@ module Graphics.Svg.PathParser( transformParser
                               , gradientCommand
                               , serializePoints
                               , serializeCommand
-                              , serializeGradientCommand 
+                              , serializeGradientCommand
                               , serializeCommands
                               , serializeViewBox
                               ) where
@@ -26,6 +26,8 @@ import Data.Attoparsec.Text
     , skipSpace
     , char
     , many1
+    , digit
+    , parseOnly
     )
 import Data.Attoparsec.Combinator( option
                                  , sepBy
@@ -39,11 +41,14 @@ import Text.Printf( printf )
 num :: Parser Double
 num = realToFrac <$> (skipSpace *> plusMinus <* skipSpace)
   where doubleNumber :: Parser Double
-        doubleNumber = toRealFloat <$> scientific
+        doubleNumber = toRealFloat <$> scientific <|> shorthand
 
         plusMinus = negate <$ string "-" <*> doubleNumber
                  <|> string "+" *> doubleNumber
                  <|> doubleNumber
+
+        shorthand = process' <$> (string "." *> many1 digit)
+        process' = either (const 0) id . parseOnly doubleNumber . T.pack . (++) "0."
 
 viewBoxParser :: Parser (Double, Double, Double, Double)
 viewBoxParser = (,,,)
@@ -232,13 +237,13 @@ skewX(<skew-angle>), which specifies a skew transformation along the x-axis.
 skewY(<skew-angle>), which specifies a skew transformation along the y-axis.
     -}
 gradientCommand :: Parser GradientPathCommand
-gradientCommand = 
+gradientCommand =
         (GLine OriginAbsolute <$> (string "L" *> mayPoint))
     <|> (GLine OriginRelative <$> (string "l" *> mayPoint))
     <|> (string "C" *> curveToArgs OriginAbsolute)
     <|> (string "c" *> curveToArgs OriginRelative)
     <|> (GClose <$ string "Z")
-  where 
+  where
     mayPoint = option Nothing $ Just <$> point
     curveToArgs o =
         GCurve o <$> (point <* commaWsp)
@@ -257,4 +262,3 @@ serializeGradientCommand p = case p of
     sp = serializePoint
     smp Nothing = ""
     smp (Just pp) = serializePoint pp
-
