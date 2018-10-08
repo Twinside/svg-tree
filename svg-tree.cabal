@@ -1,5 +1,5 @@
 name:                svg-tree
-version:             0.6.2.2
+version:             0.6.2.3
 synopsis:            SVG file loader and serializer
 description:
   svg-tree provides types representing a SVG document,
@@ -29,7 +29,7 @@ Source-Repository head
 Source-Repository this
     Type:      git
     Location:  git://github.com/Twinside/svg-tree.git
-    Tag:       v0.6.2.2
+    Tag:       v0.6.2.3
 
 library
   hs-source-dirs: src
@@ -38,10 +38,10 @@ library
   exposed-modules: Graphics.Svg
                  , Graphics.Svg.CssTypes
                  , Graphics.Svg.Types
+                 , Graphics.Svg.PathParser
 
   other-modules: Graphics.Svg.NamedColors
                , Graphics.Svg.XmlParser
-               , Graphics.Svg.PathParser
                , Graphics.Svg.CssParser
                , Graphics.Svg.ColorParser
 
@@ -51,7 +51,7 @@ library
     -- provide/emulate `Control.Monad.Fail` and `Data.Semigroups` API for pre-GHC8
     build-depends: fail == 4.9.*, semigroups == 0.18.*
 
-  build-depends: base >= 4.5 && < 5
+  build-depends: base >= 4.5 && < 6
                , JuicyPixels >= 3.2
                , attoparsec >= 0.12
                , scientific >= 0.3
@@ -65,3 +65,15 @@ library
                , mtl        >= 2.1 && < 2.3
                , lens       >= 4.6 && < 5
 
+test-suite test
+  hs-source-dirs: test
+  main-is: Spec.hs
+  type: exitcode-stdio-1.0
+  build-depends: base
+               , svg-tree
+               , attoparsec >= 0.12
+               , scientific >= 0.3
+               , linear     >= 1.20
+               , hspec
+  ghc-options: -Wall -threaded
+  other-modules: PathParserSpec
