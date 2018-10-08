@@ -1,5 +1,9 @@
 -*-change-log-*-
 
+v0.6.2.3 October 2018
+
+ * GHC 8.6 fixes
+
 v0.6.2.2 December 2017
 
  * Adding `Semigroup` instances for defined `Monoid`, for GHC 8.4
