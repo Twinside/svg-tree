@@ -91,22 +91,10 @@ resolveUses doc =
     fetchUses (UseTree useInfo _) = UseTree useInfo $ search useInfo
     fetchUses a = a
 
-    search nfo = maybe Nothing geometryExtract found where
-      found = M.lookup (_useName nfo) $ _definitions doc
-
-    geometryExtract c = case c of
-      ElementLinearGradient _ -> Nothing
-      ElementRadialGradient _ -> Nothing
-      ElementMeshGradient _ -> Nothing
-      ElementMask _ -> Nothing
-      ElementClipPath _ -> Nothing
-      ElementGeometry t -> Just t
-      ElementPattern _ -> Nothing
-      ElementMarker _ -> Nothing
+    search nfo = M.lookup (_useName nfo) $ _definitions doc
 
 -- | Rewrite the document by applying the CSS rules embedded
 -- inside it.
 applyCSSRules :: Document -> Document
 applyCSSRules doc = doc
     { _elements = cssApply (_styleRules doc) <$> _elements doc }
-

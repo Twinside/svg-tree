@@ -108,6 +108,10 @@ module Graphics.Svg.Types
     , Symbol( .. )
     , groupOfSymbol
 
+      -- ** Definitions
+    , Definitions( .. )
+    , groupOfDefinitions
+
       -- * Text related types
       -- ** Text
     , Text( .. )
@@ -844,7 +848,7 @@ instance WithDefaultSvg (Group a) where
     }
 
 -- | Define the `<symbol>` tag, equivalent to
--- a named group.
+-- a hidden named group.
 newtype Symbol a =
     Symbol { _groupOfSymbol :: Group a }
   deriving (Eq, Show)
@@ -860,6 +864,24 @@ instance WithDrawAttributes (Symbol a) where
 
 instance WithDefaultSvg (Symbol a) where
   defaultSvg = Symbol defaultSvg
+
+-- | Define the `<defs>` tag, equivalent to
+-- a named symbol.
+newtype Definitions a =
+    Definitions { _groupOfDefinitions :: Group a }
+  deriving (Eq, Show)
+
+-- makeLenses ''Definitions
+-- | Lenses associated with the Definitions type.
+groupOfDefinitions :: Lens (Definitions s) (Definitions t) (Group s) (Group t)
+{-# INLINE groupOfDefinitions #-}
+groupOfDefinitions f = fmap Definitions . f . _groupOfDefinitions
+
+instance WithDrawAttributes (Definitions a) where
+  drawAttr = groupOfDefinitions . drawAttr
+
+instance WithDefaultSvg (Definitions a) where
+  defaultSvg = Definitions defaultSvg
 
 -- | Define a `<circle>`.
 data Circle = Circle
@@ -1563,6 +1585,7 @@ data Tree
               , useSubTree     :: !(Maybe Tree) }
     | GroupTree     !(Group Tree)
     | SymbolTree    !(Symbol Tree)
+    | DefinitionTree !(Definitions Tree)
     | PathTree      !Path
     | CircleTree    !Circle
     | PolyLineTree  !PolyLine
@@ -1572,7 +1595,13 @@ data Tree
     | RectangleTree !Rectangle
     | TextTree      !(Maybe TextPath) !Text
     | ImageTree     !Image
+    | LinearGradientTree !LinearGradient
+    | RadialGradientTree !RadialGradient
     | MeshGradientTree !MeshGradient
+    | PatternTree   !Pattern
+    | MarkerTree    !Marker
+    | MaskTree      !Mask
+    | ClipPathTree  !ClipPath
     deriving (Eq, Show)
 
 -- | Define the orientation, associated to the
@@ -1739,6 +1768,14 @@ zipTree f = dig [] where
   dig prev e@(TextTree _ _) = f $ appNode prev e
   dig prev e@(ImageTree _) = f $ appNode prev e
   dig prev e@(MeshGradientTree _) = f $ appNode prev e
+  dig prev e@(DefinitionTree _) = f $ appNode prev e
+  dig prev e@(LinearGradientTree _) = f $ appNode prev e
+  dig prev e@(RadialGradientTree _) = f $ appNode prev e
+  dig prev e@(PatternTree _) = f $ appNode prev e
+  dig prev e@(MarkerTree _) = f $ appNode prev e
+  dig prev e@(MaskTree _) = f $ appNode prev e
+  dig prev e@(ClipPathTree _) = f $ appNode prev e
+
 
   zipGroup prev g = g { _groupChildren = updatedChildren }
     where
@@ -1762,7 +1799,17 @@ foldTree f = go where
     RectangleTree _ -> f acc e
     TextTree    _ _ -> f acc e
     ImageTree _     -> f acc e
+    LinearGradientTree _ -> f acc e
+    RadialGradientTree _ -> f acc e
     MeshGradientTree _ -> f acc e
+    PatternTree _ -> f acc e
+    MarkerTree _ -> f acc e
+    MaskTree _ -> f acc e
+    ClipPathTree _ -> f acc e
+    DefinitionTree d ->
+      let subAcc =
+            F.foldl' go acc . _groupChildren $ _groupOfDefinitions d in
+      f subAcc e
     GroupTree g     ->
       let subAcc = F.foldl' go acc $ _groupChildren g in
       f subAcc e
@@ -1779,6 +1826,8 @@ mapTree f = go where
   go (GroupTree g) = f . GroupTree $ mapGroup g
   go (SymbolTree g) =
       f . SymbolTree . Symbol . mapGroup $ _groupOfSymbol g
+  go (DefinitionTree defs) =
+    f . DefinitionTree . Definitions . mapGroup $ _groupOfDefinitions defs
   go e@(PathTree _) = f e
   go e@(CircleTree _) = f e
   go e@(PolyLineTree _) = f e
@@ -1788,7 +1837,13 @@ mapTree f = go where
   go e@(RectangleTree _) = f e
   go e@(TextTree _ _) = f e
   go e@(ImageTree _) = f e
+  go e@(LinearGradientTree _) = f e
+  go e@(RadialGradientTree _) = f e
   go e@(MeshGradientTree _) = f e
+  go e@(PatternTree _) = f e
+  go e@(MarkerTree _) = f e
+  go e@(MaskTree _) = f e
+  go e@(ClipPathTree _) = f e
 
   mapGroup g =
       g { _groupChildren = map go $ _groupChildren g }
@@ -1802,6 +1857,7 @@ nameOfTree v =
    UseTree _ _     -> "use"
    GroupTree _     -> "g"
    SymbolTree _    -> "symbol"
+   DefinitionTree _ -> "defs"
    PathTree _      -> "path"
    CircleTree _    -> "circle"
    PolyLineTree _  -> "polyline"
@@ -1811,7 +1867,13 @@ nameOfTree v =
    RectangleTree _ -> "rectangle"
    TextTree    _ _ -> "text"
    ImageTree _     -> "image"
+   LinearGradientTree _ -> "lineargradient"
+   RadialGradientTree _ -> "radialgradient"
    MeshGradientTree _ -> "meshgradient"
+   PatternTree _   -> "pattern"
+   MarkerTree _   -> "marker"
+   MaskTree _   -> "mask"
+   ClipPathTree _   -> "clipPath"
 
 drawAttrOfTree :: Tree -> DrawAttributes
 drawAttrOfTree v = case v of
@@ -1819,6 +1881,7 @@ drawAttrOfTree v = case v of
   UseTree e _ -> e ^. drawAttr
   GroupTree e -> e ^. drawAttr
   SymbolTree e -> e ^. drawAttr
+  DefinitionTree e -> e ^. drawAttr
   PathTree e -> e ^. drawAttr
   CircleTree e -> e ^. drawAttr
   PolyLineTree e -> e ^. drawAttr
@@ -1828,7 +1891,13 @@ drawAttrOfTree v = case v of
   RectangleTree e -> e ^. drawAttr
   TextTree _ e -> e ^. drawAttr
   ImageTree e -> e ^. drawAttr
+  LinearGradientTree e -> e ^. drawAttr
+  RadialGradientTree e -> e ^. drawAttr
   MeshGradientTree e -> e ^. drawAttr
+  PatternTree e -> e ^. drawAttr
+  MarkerTree e -> e ^. drawAttr
+  MaskTree e -> e ^. drawAttr
+  ClipPathTree e -> e ^. drawAttr
 
 setDrawAttrOfTree :: Tree -> DrawAttributes -> Tree
 setDrawAttrOfTree v attr = case v of
@@ -1836,6 +1905,7 @@ setDrawAttrOfTree v attr = case v of
   UseTree e m -> UseTree (e & drawAttr .~ attr) m
   GroupTree e -> GroupTree $ e & drawAttr .~ attr
   SymbolTree e -> SymbolTree $ e & drawAttr .~ attr
+  DefinitionTree e -> DefinitionTree e
   PathTree e -> PathTree $ e & drawAttr .~ attr
   CircleTree e -> CircleTree $ e & drawAttr .~ attr
   PolyLineTree e -> PolyLineTree $ e & drawAttr .~ attr
@@ -1845,7 +1915,13 @@ setDrawAttrOfTree v attr = case v of
   RectangleTree e -> RectangleTree $ e & drawAttr .~ attr
   TextTree a e -> TextTree a $ e & drawAttr .~ attr
   ImageTree e -> ImageTree $ e & drawAttr .~ attr
+  LinearGradientTree e -> LinearGradientTree $ e & drawAttr .~ attr
+  RadialGradientTree e -> RadialGradientTree $ e & drawAttr .~ attr
   MeshGradientTree e -> MeshGradientTree $ e & drawAttr .~ attr
+  PatternTree e -> PatternTree $ e & drawAttr .~ attr
+  MarkerTree e -> MarkerTree $ e & drawAttr .~ attr
+  MaskTree e -> MaskTree $ e & drawAttr .~ attr
+  ClipPathTree e -> ClipPathTree $ e & drawAttr .~ attr
 
 instance WithDrawAttributes Tree where
     drawAttr = lens drawAttrOfTree setDrawAttrOfTree
@@ -1863,9 +1939,11 @@ data Spread
 
 -- | Define a `<linearGradient>` tag.
 data LinearGradient = LinearGradient
-    { -- | Define coordinate system of the gradient,
+    { -- | Drawing attributes of the RadialGradient
+      _linearGradientDrawAttributes :: DrawAttributes
+      -- | Define coordinate system of the gradient,
       -- associated to the `gradientUnits` attribute.
-      _linearGradientUnits  :: CoordinateUnits
+    , _linearGradientUnits  :: CoordinateUnits
       -- | Point defining the beginning of the line gradient.
       -- Associated to the `x1` and `y1` attribute.
     , _linearGradientStart  :: Point
@@ -1889,6 +1967,7 @@ data LinearGradient = LinearGradient
 -- | Lenses for the LinearGradient type.
 class HasLinearGradient c_apmJ where
   linearGradient :: Lens' c_apmJ LinearGradient
+  linearGradientDrawAttributes :: Lens' c_apmJ DrawAttributes
   linearGradientSpread :: Lens' c_apmJ Spread
   {-# INLINE linearGradientSpread #-}
   linearGradientStart :: Lens' c_apmJ Point
@@ -1901,6 +1980,7 @@ class HasLinearGradient c_apmJ where
   {-# INLINE linearGradientTransform #-}
   linearGradientUnits :: Lens' c_apmJ CoordinateUnits
   {-# INLINE linearGradientUnits #-}
+  linearGradientDrawAttributes = ((.) linearGradient) linearGradientDrawAttributes
   linearGradientSpread = ((.) linearGradient) linearGradientSpread
   linearGradientStart = ((.) linearGradient) linearGradientStart
   linearGradientStop = ((.) linearGradient) linearGradientStop
@@ -1930,9 +2010,13 @@ instance HasLinearGradient LinearGradient where
   linearGradientUnits f attr =
     fmap (\y -> attr { _linearGradientUnits = y }) (f $ _linearGradientUnits attr)
 
+instance WithDrawAttributes LinearGradient where
+  drawAttr = linearGradientDrawAttributes
+
 instance WithDefaultSvg LinearGradient where
   defaultSvg = LinearGradient
-    { _linearGradientUnits     = CoordBoundingBox
+    { _linearGradientDrawAttributes = mempty
+    , _linearGradientUnits     = CoordBoundingBox
     , _linearGradientStart     = (Percent 0, Percent 0)
     , _linearGradientStop      = (Percent 1, Percent 0)
     , _linearGradientSpread    = SpreadPad
@@ -1942,9 +2026,11 @@ instance WithDefaultSvg LinearGradient where
 
 -- | Define a `<radialGradient>` tag.
 data RadialGradient = RadialGradient
-  { -- | Define coordinate system of the gradient,
+  { -- | Drawing attributes of the RadialGradient
+    _radialGradientDrawAttributes :: DrawAttributes
+    -- | Define coordinate system of the gradient,
     -- associated to the `gradientUnits` attribute.
-    _radialGradientUnits   :: CoordinateUnits
+  , _radialGradientUnits   :: CoordinateUnits
     -- | Center of the radial gradient. Associated to
     -- the `cx` and `cy` attributes.
   , _radialGradientCenter  :: Point
@@ -1975,6 +2061,7 @@ data RadialGradient = RadialGradient
 
 class HasRadialGradient c_apwt where
   radialGradient :: Lens' c_apwt RadialGradient
+  radialGradientDrawAttributes :: Lens' c_apwt DrawAttributes
   radialGradientCenter :: Lens' c_apwt Point
   {-# INLINE radialGradientCenter #-}
   radialGradientFocusX :: Lens' c_apwt (Maybe Number)
@@ -1991,6 +2078,7 @@ class HasRadialGradient c_apwt where
   {-# INLINE radialGradientTransform #-}
   radialGradientUnits :: Lens' c_apwt CoordinateUnits
   {-# INLINE radialGradientUnits #-}
+  radialGradientDrawAttributes = ((.) radialGradient) radialGradientDrawAttributes
   radialGradientCenter = ((.) radialGradient) radialGradientCenter
   radialGradientFocusX = ((.) radialGradient) radialGradientFocusX
   radialGradientFocusY = ((.) radialGradient) radialGradientFocusY
@@ -2028,9 +2116,13 @@ instance HasRadialGradient RadialGradient where
   radialGradientUnits f attr =
     fmap (\y -> attr { _radialGradientUnits = y }) (f $ _radialGradientUnits attr)
 
+instance WithDrawAttributes RadialGradient where
+  drawAttr = radialGradientDrawAttributes
+
 instance WithDefaultSvg RadialGradient where
   defaultSvg = RadialGradient
-    { _radialGradientUnits   = CoordBoundingBox
+    { _radialGradientDrawAttributes = mempty
+    , _radialGradientUnits   = CoordBoundingBox
     , _radialGradientCenter  = (Percent 0.5, Percent 0.5)
     , _radialGradientRadius  = Percent 0.5
     , _radialGradientFocusX  = Nothing
@@ -2193,11 +2285,11 @@ data Pattern = Pattern
       -- attribute.
     , _patternUnit        :: !CoordinateUnits
       -- | Value of the "preserveAspectRatio" attribute
-    , _patternAspectRatio :: !PreserveAspectRatio 
+    , _patternAspectRatio :: !PreserveAspectRatio
       -- | Value of "patternTransform" attribute
     , _patternTransform   :: !(Maybe [Transformation])
     }
-    deriving Show
+    deriving (Eq, Show)
 
 -- makeClassy ''Pattern
 -- | Lenses for the Patter type.
@@ -2296,7 +2388,7 @@ data Element
     | ElementMarker Marker
     | ElementMask Mask
     | ElementClipPath ClipPath
-    deriving Show
+    deriving (Eq, Show)
 
 -- | Represent a full svg document with style,
 -- geometry and named elements.
@@ -2305,7 +2397,7 @@ data Document = Document
     , _width            :: Maybe Number
     , _height           :: Maybe Number
     , _elements         :: [Tree]
-    , _definitions      :: M.Map String Element
+    , _definitions      :: M.Map String Tree
     , _description      :: String
     , _styleRules       :: [CssRule]
     , _documentLocation :: FilePath
@@ -2316,7 +2408,7 @@ data Document = Document
 -- | Lenses associated to a SVG document.
 class HasDocument c_aqpq where
   document :: Lens' c_aqpq Document
-  definitions :: Lens' c_aqpq (M.Map String Element)
+  definitions :: Lens' c_aqpq (M.Map String Tree)
   {-# INLINE definitions #-}
   definitions = document . definitions
 
