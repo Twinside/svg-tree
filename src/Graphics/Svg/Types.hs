@@ -674,14 +674,14 @@ data Rectangle = Rectangle
   , _rectUpperLeftCorner :: !Point
     -- | Rectangle width, correspond, strangely, to
     -- the `width` attribute.
-  , _rectWidth           :: !Number
+  , _rectWidth           :: !(Maybe Number)
     -- | Rectangle height, correspond, amazingly, to
     -- the `height` attribute.
-  , _rectHeight          :: !Number
+  , _rectHeight          :: !(Maybe Number)
     -- | Define the rounded corner radius radius
     -- of the rectangle. Correspond to the `rx` and
     -- `ry` attributes.
-  , _rectCornerRadius    :: !(Number, Number)
+  , _rectCornerRadius    :: !(Maybe Number, Maybe Number)
   }
   deriving (Eq, Show)
 
@@ -689,7 +689,7 @@ data Rectangle = Rectangle
 -- | Lenses for the Rectangle type.
 class HasRectangle a where
   rectangle :: Lens' a Rectangle
-  rectCornerRadius :: Lens' a (Number, Number)
+  rectCornerRadius :: Lens' a (Maybe Number, Maybe Number)
   {-# INLINE rectCornerRadius #-}
   rectCornerRadius = rectangle . rectCornerRadius
 
@@ -697,7 +697,7 @@ class HasRectangle a where
   {-# INLINE rectDrawAttributes #-}
   rectDrawAttributes = rectangle . rectDrawAttributes
 
-  rectHeight :: Lens' a Number
+  rectHeight :: Lens' a (Maybe Number)
   {-# INLINE rectHeight #-}
   rectHeight = rectangle . rectHeight
 
@@ -705,7 +705,7 @@ class HasRectangle a where
   {-# INLINE rectUpperLeftCorner #-}
   rectUpperLeftCorner = rectangle . rectUpperLeftCorner
 
-  rectWidth :: Lens' a Number
+  rectWidth :: Lens' a (Maybe Number)
   {-# INLINE rectWidth #-}
   rectWidth = rectangle . rectWidth
 
@@ -734,9 +734,9 @@ instance WithDefaultSvg Rectangle where
   defaultSvg = Rectangle
     { _rectDrawAttributes  = mempty
     , _rectUpperLeftCorner = (Num 0, Num 0)
-    , _rectWidth           = Num 0
-    , _rectHeight          = Num 0
-    , _rectCornerRadius    = (Num 0, Num 0)
+    , _rectWidth           = Nothing
+    , _rectHeight          = Nothing
+    , _rectCornerRadius    = (Nothing, Nothing)
     }
 
 -- | Type mapping the `<path>` svg tag.
