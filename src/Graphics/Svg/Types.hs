@@ -1802,10 +1802,10 @@ foldTree f = go where
     LinearGradientTree _ -> f acc e
     RadialGradientTree _ -> f acc e
     MeshGradientTree _ -> f acc e
-    PatternTree _ -> f acc e
-    MarkerTree _ -> f acc e
-    MaskTree _ -> f acc e
-    ClipPathTree _ -> f acc e
+    PatternTree _   -> f acc e
+    MarkerTree _    -> f acc e
+    MaskTree _      -> f acc e
+    ClipPathTree _  -> f acc e
     DefinitionTree d ->
       let subAcc =
             F.foldl' go acc . _groupChildren $ _groupOfDefinitions d in
@@ -1871,9 +1871,9 @@ nameOfTree v =
    RadialGradientTree _ -> "radialgradient"
    MeshGradientTree _ -> "meshgradient"
    PatternTree _   -> "pattern"
-   MarkerTree _   -> "marker"
-   MaskTree _   -> "mask"
-   ClipPathTree _   -> "clipPath"
+   MarkerTree _    -> "marker"
+   MaskTree _      -> "mask"
+   ClipPathTree _  -> "clipPath"
 
 drawAttrOfTree :: Tree -> DrawAttributes
 drawAttrOfTree v = case v of
