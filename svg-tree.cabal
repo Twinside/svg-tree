@@ -39,9 +39,9 @@ library
                  , Graphics.Svg.CssTypes
                  , Graphics.Svg.Types
                  , Graphics.Svg.PathParser
+                 , Graphics.Svg.NamedColors
 
-  other-modules: Graphics.Svg.NamedColors
-               , Graphics.Svg.XmlParser
+  other-modules: Graphics.Svg.XmlParser
                , Graphics.Svg.CssParser
                , Graphics.Svg.ColorParser
 
