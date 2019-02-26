@@ -314,7 +314,7 @@ data PreserveAspectRatio = PreserveAspectRatio
   deriving (Eq, Show)
 
 instance WithDefaultSvg PreserveAspectRatio where
-  defaultSvg = PreserveAspectRatio 
+  defaultSvg = PreserveAspectRatio
     { _aspectRatioDefer     = False
     , _aspectRatioAlign     = AlignxMidYMid
     , _aspectRatioMeetSlice = Nothing
@@ -2193,7 +2193,7 @@ data Pattern = Pattern
       -- attribute.
     , _patternUnit        :: !CoordinateUnits
       -- | Value of the "preserveAspectRatio" attribute
-    , _patternAspectRatio :: !PreserveAspectRatio 
+    , _patternAspectRatio :: !PreserveAspectRatio
       -- | Value of "patternTransform" attribute
     , _patternTransform   :: !(Maybe [Transformation])
     }
@@ -2486,7 +2486,7 @@ instance CssMatcheable Tree where
 --------------------------------------------------------------------------
 --- Dumped
 --------------------------------------------------------------------------
--- makeClassy ''PreserveAspectRatio 
+-- makeClassy ''PreserveAspectRatio
 --
 -- | Lenses for the PreserveAspectRatio type
 class HasPreserveAspectRatio a where
@@ -2699,4 +2699,3 @@ instance HasDrawAttributes DrawAttributes where
     fmap (\y -> attr { _textAnchor = y }) (f $ _textAnchor attr)
   transform f attr =
     fmap (\y -> attr { _transform = y }) (f $ _transform attr)
-
