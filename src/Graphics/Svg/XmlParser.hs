@@ -128,7 +128,7 @@ instance ParseableAttribute [Transformation] where
 
 instance ParseableAttribute Alignment where
   aparse s = Just $ case s of
-    "none" -> AlignNone 
+    "none" -> AlignNone
     "xMinYMin" -> AlignxMinYMin
     "xMidYMin" -> AlignxMidYMin
     "xMaxYMin" -> AlignxMaxYMin
@@ -141,7 +141,7 @@ instance ParseableAttribute Alignment where
     _ -> _aspectRatioAlign defaultSvg
 
   aserialize v = Just $ case v of
-    AlignNone -> "none" 
+    AlignNone -> "none"
     AlignxMinYMin -> "xMinYMin"
     AlignxMidYMin -> "xMidYMin"
     AlignxMaxYMin -> "xMaxYMin"
@@ -157,7 +157,7 @@ instance ParseableAttribute MeshGradientType where
     "bilinear" -> GradientBilinear
     "bicubic" -> GradientBicubic
     _ -> GradientBilinear
-  
+
   aserialize v = Just $ case v of
     GradientBilinear -> "bilinear"
     GradientBicubic -> "bicubic"
@@ -192,7 +192,7 @@ instance ParseableAttribute PreserveAspectRatio where
             , _aspectRatioAlign = alignOf align
             }
       ["defer", align, meet] ->
-          Just $ PreserveAspectRatio 
+          Just $ PreserveAspectRatio
               { _aspectRatioDefer = True
               , _aspectRatioAlign = alignOf align
               , _aspectRatioMeetSlice = aparse meet
@@ -908,7 +908,7 @@ serializeText topText = namedNode where
     (Nothing, Nothing) -> Nothing
     (Just a, Nothing) -> Just $ setChildren a subContent
     (Nothing, Just b) -> Just $ setChildren b subContent
-    (Just a, Just b) -> 
+    (Just a, Just b) ->
         Just $ setChildren (mergeAttributes a b) subContent
     where
       info = genericSerializeNode $ _spanInfo tspan
@@ -1004,7 +1004,7 @@ instance XMLUpdatable GradientStop where
           [(opacitySetter "stop-opacity" gradientOpacity, (cssUniqueFloat gradientOpacity))
           ,("stop-color" `parseIn` gradientColor, cssUniqueColor gradientColor)
           ]
-      
+
       lst =
         [gradientOffsetSetter
         ,"path" `parseIn` gradientPath
@@ -1245,4 +1245,3 @@ xmlOfDocument doc =
         catMaybes [attr "width" . serializeNumber <$> _width doc
                   ,attr "height" . serializeNumber <$> _height doc
                   ]
-
