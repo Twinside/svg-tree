@@ -4,6 +4,7 @@ v0.7.0.0 March 2019
 
  * fork from svg-tree due to 'reanimate' requiring breaking changes
  * Fix: change x,y rect defaults from '0' to 'auto'.
+ * Expose list of named svg colors.
 
 v0.6.2.3 October 2018
 
