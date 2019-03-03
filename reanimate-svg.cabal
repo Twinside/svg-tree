@@ -1,5 +1,5 @@
-name:                svg-tree
-version:             0.6.2.3
+name:                reanimate-svg
+version:             0.7.0.0
 synopsis:            SVG file loader and serializer
 description:
   svg-tree provides types representing a SVG document,
@@ -13,8 +13,8 @@ description:
 
 
 license:             BSD3
-author:              Vincent Berthoux
-maintainer:          Vincent Berthoux
+author:              Vincent Berthoux, David Himmelstrup
+maintainer:          David Himmelstrup <lemmih@gmail.com>
 -- copyright:
 category:            Graphics, Svg
 build-type:          Simple
@@ -24,12 +24,7 @@ extra-source-files: changelog.md
 
 Source-Repository head
     Type:      git
-    Location:  git://github.com/Twinside/svg-tree.git
-
-Source-Repository this
-    Type:      git
-    Location:  git://github.com/Twinside/svg-tree.git
-    Tag:       v0.6.2.3
+    Location:  git://github.com/lemmih/reanimate-svg.git
 
 library
   hs-source-dirs: src
