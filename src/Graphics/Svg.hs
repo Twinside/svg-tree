@@ -25,6 +25,7 @@ import Data.List( foldl' )
 import qualified Data.ByteString as B
 import qualified Data.Map as M
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 import Text.XML.Light.Input( parseXMLDoc )
 import Text.XML.Light.Output( ppcTopElement, prettyConfigPP )
 import Control.Lens
@@ -53,7 +54,11 @@ parseSvgFile filename fileContent =
 -- | Save a svg Document on a file on disk.
 saveXmlFile :: FilePath -> Document -> IO ()
 saveXmlFile filePath =
-    writeFile filePath . ppcTopElement prettyConfigPP . xmlOfDocument
+    B.writeFile filePath
+        . T.encodeUtf8
+        . T.pack
+        . ppcTopElement prettyConfigPP
+        . xmlOfDocument
 
 cssDeclApplyer :: DrawAttributes -> CssDeclaration
                -> DrawAttributes

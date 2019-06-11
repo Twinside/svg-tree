@@ -1,5 +1,9 @@
 -*-change-log-*-
 
+v0.6.2.3 June 2019
+
+ * Hopefully not crashing in the presence of unicode inputs
+
 v0.6.2.3 October 2018
 
  * GHC 8.6 fixes
