@@ -50,6 +50,11 @@ num = realToFrac <$> (skipSpace *> plusMinus <* skipSpace)
         shorthand = process' <$> (string "." *> many1 digit)
         process' = either (const 0) id . parseOnly doubleNumber . T.pack . (++) "0."
 
+bool :: Parser Bool
+bool = ("1" ==) <$> (skipSpace *> zeroOrOne <* skipSpace)
+  where zeroOrOne = string "0" <|> string "1"
+
+
 viewBoxParser :: Parser (Double, Double, Double, Double)
 viewBoxParser = (,,,)
        <$> iParse <*> iParse <*> iParse <*> iParse
@@ -102,11 +107,12 @@ command =  (MoveTo OriginAbsolute <$ string "M" <*> pointList)
           manyComma a = a `sepBy1` commaWsp
 
           numComma = num <* commaWsp
+          boolComma = bool <* commaWsp
           ellipticalArgs = (,,,,,) <$> numComma
                                    <*> numComma
                                    <*> numComma
-                                   <*> (fmap (/= 0) numComma)
-                                   <*> (fmap (/= 0) numComma)
+                                   <*> boolComma
+                                   <*> boolComma
                                    <*> point
 
 serializePoint :: RPoint -> String
