@@ -41,12 +41,12 @@ import Graphics.Svg.XmlParser
 -- a SVG Document.
 loadSvgFile :: FilePath -> IO (Maybe Document)
 loadSvgFile filename =
-  parseSvgFile filename <$> B.readFile filename
+  parseSvgFile filename . T.unpack . T.decodeUtf8 <$> B.readFile filename
 
 -- | Parse an in-memory SVG file
 parseSvgFile :: FilePath    -- ^ Source path/URL of the document, used
                             -- to resolve relative links.
-             -> B.ByteString
+             -> String
              -> Maybe Document
 parseSvgFile filename fileContent =
   parseXMLDoc fileContent >>= unparseDocument filename
