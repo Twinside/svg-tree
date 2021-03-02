@@ -63,7 +63,7 @@ library
                , text       >= 1.1
                , transformers >= 0.3 && < 0.6
                , mtl        >= 2.1 && < 2.3
-               , lens       >= 4.6 && < 5
+               , lens       >= 4.6
 
 test-suite test
   hs-source-dirs: test
