@@ -32,22 +32,25 @@ import Data.Attoparsec.Text
     , letter
     , char
     , digit
-    {-, skip-}
     , sepBy1
     , (<?>)
     , skipMany
     , notChar
     , parseOnly
+    , satisfy
     )
 import qualified Data.Attoparsec.Text as AT
 
 import Data.Attoparsec.Combinator
     ( option
     , sepBy
-    {-, sepBy1-}
+    , many'
     , many1
+    , choice
     )
 
+import Numeric ( readHex )
+import Data.Char ( chr, isAscii, isHexDigit )
 import Codec.Picture( PixelRGBA8( .. ) )
 import Graphics.Svg.Types
 import Graphics.Svg.NamedColors( svgNamedColors )
@@ -74,16 +77,52 @@ num = realToFrac <$> (skipSpace *> plusMinus <* skipSpace)
                  <|> doubleNumber
 
 
+-- https://www.w3.org/TR/css-syntax-3/#ident-token-diagram
 ident :: Parser T.Text
-ident =
-  (\f c -> f . T.cons c . T.pack)
-        <$> trailingSub
-        <*> nmstart <*> nmchar
+ident = T.append <$> idstart <*> idtail
   where
-    trailingSub = option id $ T.cons '-' <$ char '-'
+    ts = fmap T.singleton
+    -- https://www.w3.org/TR/css-syntax-3/#would-start-an-identifier
+    idstart :: Parser T.Text
+    idstart = choice
+      [ T.append <$> ts hyphen
+                 <*> ts (namestartcp <|> hyphen <|> escsequence)
+      , ts namestartcp
+      , ts escsequence
+      ]
+    idtail :: Parser T.Text
+    idtail = T.pack <$> many' (namecp <|> escsequence)
+    underscore :: Parser Char
     underscore = char '_'
-    nmstart = letter <|> underscore
-    nmchar = many (letter <|> digit <|> underscore <|> char '-')
+    hyphen :: Parser Char
+    hyphen = char '-'
+    -- https://www.w3.org/TR/css-syntax-3/#name-start-code-point
+    namestartcp :: Parser Char
+    namestartcp = letter <|> underscore <|> nonAscii
+    -- https://www.w3.org/TR/css-syntax-3/#name-code-point
+    namecp :: Parser Char
+    namecp = namestartcp <|> digit <|> hyphen
+    nonAscii :: Parser Char
+    nonAscii = satisfy $ not . isAscii
+    -- https://www.w3.org/TR/css-syntax-3/#escape-diagram
+    escsequence :: Parser Char
+    escsequence = char '\\' *>
+      ((hexUcode "" <* skipOptionalWhitespace) <|> notNewLineOrHex)
+    notNewLineOrHex :: Parser Char
+    notNewLineOrHex = satisfy (\c -> c /= '\n' && not (isHexDigit c))
+    hexUcode :: String -> Parser Char
+    hexUcode xs = case xs of
+      [] -> hex >>= \c -> hexUcode [c]
+      _   | length xs == 6 -> pure $ fromUcode xs
+          | otherwise -> (hex >>= (hexUcode . (:xs))) <|> (pure $ fromUcode xs)
+    hex = satisfy isHexDigit
+    fromUcode :: String -> Char
+    fromUcode = chr . fst . head . readHex . reverse
+    -- https://www.w3.org/TR/css-syntax-3/#whitespace-diagram
+    whitespace :: Parser Char
+    whitespace = satisfy (`elem` (" \n\t" :: String))
+    skipOptionalWhitespace :: Parser ()
+    skipOptionalWhitespace = option () (() <$ whitespace)
 
 str :: Parser T.Text
 str = char '"' *> AT.takeWhile (/= '"') <* char '"' <* skipSpace
