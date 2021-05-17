@@ -102,11 +102,12 @@ command =  (MoveTo OriginAbsolute <$ string "M" <*> pointList)
           manyComma a = a `sepBy1` commaWsp
 
           numComma = num <* commaWsp
+          flagComma = ((True <$ char '1' <|> False <$ char '0') <* commaWsp)
           ellipticalArgs = (,,,,,) <$> numComma
                                    <*> numComma
                                    <*> numComma
-                                   <*> (fmap (/= 0) numComma)
-                                   <*> (fmap (/= 0) numComma)
+                                   <*> flagComma
+                                   <*> flagComma
                                    <*> point
 
 serializePoint :: RPoint -> String
