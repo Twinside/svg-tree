@@ -168,7 +168,7 @@ data CssDeclaration = CssDeclaration
     { -- | Property name to change (like font-family or color).
       _cssDeclarationProperty :: T.Text
       -- | List of values
-    , _cssDecarationlValues   :: [[CssElement]]
+    , _cssDeclarationValues   :: [[CssElement]]
     }
     deriving (Eq, Show)
 
