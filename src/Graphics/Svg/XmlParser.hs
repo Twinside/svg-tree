@@ -29,7 +29,7 @@ import Control.Applicative( (<|>), many )
 import Control.Lens hiding( transform, children, elements, element )
 import Control.Monad.State.Strict( State, runState, modify, gets )
 import Data.Maybe( fromMaybe, catMaybes )
-import Data.Monoid( Last( Last ), getLast, (<>) )
+import Data.Monoid( Last( Last ), getLast )
 import Data.List( foldl', intercalate )
 import Text.XML.Light.Proc( findAttrBy, elChildren, strContent )
 import qualified Text.XML.Light as X
@@ -128,7 +128,7 @@ instance ParseableAttribute [Transformation] where
 
 instance ParseableAttribute Alignment where
   aparse s = Just $ case s of
-    "none" -> AlignNone 
+    "none" -> AlignNone
     "xMinYMin" -> AlignxMinYMin
     "xMidYMin" -> AlignxMidYMin
     "xMaxYMin" -> AlignxMaxYMin
@@ -141,7 +141,7 @@ instance ParseableAttribute Alignment where
     _ -> _aspectRatioAlign defaultSvg
 
   aserialize v = Just $ case v of
-    AlignNone -> "none" 
+    AlignNone -> "none"
     AlignxMinYMin -> "xMinYMin"
     AlignxMidYMin -> "xMidYMin"
     AlignxMaxYMin -> "xMaxYMin"
@@ -157,7 +157,7 @@ instance ParseableAttribute MeshGradientType where
     "bilinear" -> GradientBilinear
     "bicubic" -> GradientBicubic
     _ -> GradientBilinear
-  
+
   aserialize v = Just $ case v of
     GradientBilinear -> "bilinear"
     GradientBicubic -> "bicubic"
@@ -192,7 +192,7 @@ instance ParseableAttribute PreserveAspectRatio where
             , _aspectRatioAlign = alignOf align
             }
       ["defer", align, meet] ->
-          Just $ PreserveAspectRatio 
+          Just $ PreserveAspectRatio
               { _aspectRatioDefer = True
               , _aspectRatioAlign = alignOf align
               , _aspectRatioMeetSlice = aparse meet
@@ -523,6 +523,7 @@ cssUniqueTexture :: ASetter el el
                  -> CssUpdater el
 cssUniqueTexture setter attr css = case css of
   ((CssIdent "none":_):_) -> attr & setter .~ Last (Just FillNone)
+  ((CssIdent "currentColor":_):_) -> attr & setter .~ Last (Just FillCurrent)
   ((CssColor c:_):_) -> attr & setter .~ Last (Just $ ColorRef c)
   ((CssFunction "url" [CssReference c]:_):_) ->
         attr & setter .~ Last (Just . TextureRef $ T.unpack c)
@@ -908,7 +909,7 @@ serializeText topText = namedNode where
     (Nothing, Nothing) -> Nothing
     (Just a, Nothing) -> Just $ setChildren a subContent
     (Nothing, Just b) -> Just $ setChildren b subContent
-    (Just a, Just b) -> 
+    (Just a, Just b) ->
         Just $ setChildren (mergeAttributes a b) subContent
     where
       info = genericSerializeNode $ _spanInfo tspan
@@ -1004,7 +1005,7 @@ instance XMLUpdatable GradientStop where
           [(opacitySetter "stop-opacity" gradientOpacity, (cssUniqueFloat gradientOpacity))
           ,("stop-color" `parseIn` gradientColor, cssUniqueColor gradientColor)
           ]
-      
+
       lst =
         [gradientOffsetSetter
         ,"path" `parseIn` gradientPath

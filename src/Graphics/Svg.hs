@@ -26,6 +26,7 @@ import qualified Data.ByteString as B
 import qualified Data.Map as M
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
+import Text.XML.Light.Lexer ( XmlSource )
 import Text.XML.Light.Input( parseXMLDoc )
 import Text.XML.Light.Output( ppcTopElement, prettyConfigPP )
 import Control.Lens
@@ -38,15 +39,17 @@ import Graphics.Svg.XmlParser
 {-import Graphics.Svg.CssParser-}
 
 -- | Try to load an svg file on disc and parse it as
--- a SVG Document.
+-- a SVG Document using UTF-8 encoding.
 loadSvgFile :: FilePath -> IO (Maybe Document)
 loadSvgFile filename =
-  parseSvgFile filename <$> B.readFile filename
+  parseSvgFile filename . T.decodeUtf8 <$> B.readFile filename
 
--- | Parse an in-memory SVG file
-parseSvgFile :: FilePath    -- ^ Source path/URL of the document, used
+-- | Parse an in-memory SVG file.
+-- Note: Using `B.ByteString` can cause issues with multibyte characters.
+parseSvgFile :: XmlSource s
+             => FilePath    -- ^ Source path/URL of the document, used
                             -- to resolve relative links.
-             -> B.ByteString
+             -> s
              -> Maybe Document
 parseSvgFile filename fileContent =
   parseXMLDoc fileContent >>= unparseDocument filename

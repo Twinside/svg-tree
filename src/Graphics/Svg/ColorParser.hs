@@ -95,6 +95,7 @@ textureSerializer :: Texture -> String
 textureSerializer (ColorRef px) = colorSerializer px
 textureSerializer (TextureRef str) = printf "url(#%s)" str
 textureSerializer FillNone = "none"
+textureSerializer FillCurrent = "currentColor"
 
 urlRef :: Parser String
 urlRef = string "url(" *> skipSpace *>
@@ -104,8 +105,10 @@ urlRef = string "url(" *> skipSpace *>
 
 textureParser :: Parser Texture
 textureParser =
-  none <|> (TextureRef <$> urlRef)
+  none <|> current
+       <|> (TextureRef <$> urlRef)
        <|> (ColorRef <$> colorParser)
   where
     none = FillNone <$ string "none"
+    current = FillCurrent <$ string "currentColor"
 

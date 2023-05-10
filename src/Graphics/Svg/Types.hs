@@ -189,7 +189,6 @@ import Data.Foldable( Foldable )
 import Data.Function( on )
 import Data.List( inits )
 import qualified Data.Map as M
-import Data.Semigroup( Semigroup( .. ) )
 import Data.Monoid( Last( .. ) )
 import qualified Data.Foldable as F
 import qualified Data.Text as T
@@ -314,7 +313,7 @@ data PreserveAspectRatio = PreserveAspectRatio
   deriving (Eq, Show)
 
 instance WithDefaultSvg PreserveAspectRatio where
-  defaultSvg = PreserveAspectRatio 
+  defaultSvg = PreserveAspectRatio
     { _aspectRatioDefer     = False
     , _aspectRatioAlign     = AlignxMidYMid
     , _aspectRatioMeetSlice = Nothing
@@ -345,6 +344,7 @@ data Texture
   = ColorRef   PixelRGBA8 -- ^ Direct solid color (#rrggbb, #rgb)
   | TextureRef String     -- ^ Link to a complex texture (url(#name))
   | FillNone              -- ^ Equivalent to the `none` value.
+  | FillCurrent           -- ^ Equivalent to the `currentColor` value.
   deriving (Eq, Show)
 
 -- | Describe the possile filling algorithms.
@@ -2193,7 +2193,7 @@ data Pattern = Pattern
       -- attribute.
     , _patternUnit        :: !CoordinateUnits
       -- | Value of the "preserveAspectRatio" attribute
-    , _patternAspectRatio :: !PreserveAspectRatio 
+    , _patternAspectRatio :: !PreserveAspectRatio
       -- | Value of "patternTransform" attribute
     , _patternTransform   :: !(Maybe [Transformation])
     }
@@ -2486,7 +2486,7 @@ instance CssMatcheable Tree where
 --------------------------------------------------------------------------
 --- Dumped
 --------------------------------------------------------------------------
--- makeClassy ''PreserveAspectRatio 
+-- makeClassy ''PreserveAspectRatio
 --
 -- | Lenses for the PreserveAspectRatio type
 class HasPreserveAspectRatio a where

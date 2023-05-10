@@ -24,7 +24,7 @@ module Graphics.Svg.CssTypes
 import Data.Monoid( mconcat )
 #endif
 
-import Data.Monoid( (<>) )
+import Data.Char (isAscii, ord)
 import Data.List( intersperse )
 import qualified Data.Text as T
 import qualified Data.Text.Lazy.Builder as TB
@@ -61,7 +61,7 @@ instance TextBuildable CssDescriptor where
       AnyElem -> si '*'
       WithAttrib a b -> mconcat [si '[', ft a, si '=', ft b, si ']']
      where
-      ft = TB.fromText
+      ft = TB.fromText . escapeSpecialChars
       si = TB.singleton
 
 -- | Define complex selector.
@@ -107,7 +107,7 @@ instance TextBuildable CssRule where
       tserializeDecl d = ft "  " <> tserialize d <> ft ";\n"
       tselector =
           mconcat . intersperse (ft " ") . fmap tserialize
-      tselectors = 
+      tselectors =
           intersperse (ft ",\n") $ fmap tselector selectors
 
 -- | Interface for elements to be matched against
@@ -269,3 +269,15 @@ toUserUnit dpi = go where
     Cm n -> go . Inches $ n / 2.54
     Point n -> go . Inches $ n / 72
 
+-- | Escapes special characters in CSS identifiers.
+-- Does not support unicode sequences.
+escapeSpecialChars :: T.Text -> T.Text
+escapeSpecialChars = T.concatMap escape
+  where
+    escape c
+      | c `elem` cssSpecialChars = T.pack ['\\', c]
+      | isAscii c = T.singleton c
+      | otherwise = T.pack . printf "\\%x " $ ord c
+
+cssSpecialChars :: String
+cssSpecialChars = "!\"#$%&'()*+,./:;<=>?@[\\]^`{|}~"
