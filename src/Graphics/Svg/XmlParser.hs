@@ -760,6 +760,7 @@ instance XMLUpdatable Tree where
     UseTree u _ -> serializeTreeNode u
     GroupTree g -> serializeTreeNode g
     SymbolTree s -> serializeTreeNode s
+    DefinitionTree d -> serializeTreeNode d
     PathTree p -> serializeTreeNode p
     CircleTree c -> serializeTreeNode c
     PolyLineTree p -> serializeTreeNode p
@@ -769,7 +770,13 @@ instance XMLUpdatable Tree where
     RectangleTree r -> serializeTreeNode r
     TextTree Nothing t -> serializeTreeNode t
     ImageTree i -> serializeTreeNode i
+    LinearGradientTree l -> serializeTreeNode l
+    RadialGradientTree r -> serializeTreeNode r
     MeshGradientTree m -> serializeTreeNode m
+    PatternTree p -> serializeTreeNode p
+    MarkerTree m -> serializeTreeNode m
+    MaskTree m -> serializeTreeNode m
+    ClipPathTree c -> serializeTreeNode c
     TextTree (Just p) t -> do
        textNode <- serializeTreeNode t
        pathNode <- serializeTreeNode p
@@ -796,6 +803,16 @@ instance XMLUpdatable (Symbol Tree) where
   attributes =
      ["viewBox" `parseIn` (groupOfSymbol . groupViewBox)
      ,"preserveAspectRatio" `parseIn` (groupOfSymbol . groupAspectRatio)
+     ]
+
+instance XMLUpdatable (Definitions Tree) where
+  xmlTagName _ = "defs"
+  serializeTreeNode node =
+     updateWithAccessor (filter isNotNone . _groupChildren . _groupOfDefinitions) node $
+        genericSerializeWithDrawAttr node
+  attributes =
+     ["viewBox" `parseIn` (groupOfDefinitions . groupViewBox)
+     ,"preserveAspectRatio" `parseIn` (groupOfDefinitions . groupAspectRatio)
      ]
 
 
@@ -1035,71 +1052,27 @@ parseMeshGradientRows = foldMap unRows . elChildren where
   unRows e@(nodeName -> "meshrow") = [MeshGradientRow $ parseMeshGradientPatches e]
   unRows _ = []
 
-withId :: X.Element -> (X.Element -> Element)
-       -> State Symbols Tree
-withId el f = case attributeFinder "id" el of
-  Nothing -> return None
-  Just elemId -> do
-      modify $ \s ->
-        s { symbols = M.insert elemId (f el) $ symbols s }
-      return None
-
-isDefTag :: String -> Bool
-isDefTag n = n `elem` defList where
-  defList =
-    [ "pattern"
-    , "marker"
-    , "mask"
-    , "clipPath"
-    , "linearGradient"
-    , "meshgradient"
-    , "radialGradient"]
-
-unparseDefs :: X.Element -> State Symbols Tree
-unparseDefs e@(nodeName -> "pattern") = do
+unparse :: X.Element -> State Symbols Tree
+unparse e@(nodeName -> "pattern") =  do
   subElements <- mapM unparse $ elChildren e
-  withId e . const . ElementPattern $ pat { _patternElements = subElements}
+  pure $ PatternTree $ pat { _patternElements = subElements}
     where
       pat = xmlUnparse e
-unparseDefs e@(nodeName -> "marker") = do
+unparse e@(nodeName -> "marker") = do
   subElements <- mapM unparse $ elChildren e
-  withId e . const . ElementMarker $ mark {_markerElements = subElements }
+  pure $ MarkerTree $ mark {_markerElements = subElements }
     where
       mark = xmlUnparseWithDrawAttr e
-unparseDefs e@(nodeName -> "mask") = do
+unparse e@(nodeName -> "mask") = do
   children <- mapM unparse $ elChildren e
   let realChildren = filter isNotNone children
       parsedMask = xmlUnparseWithDrawAttr e
-  withId e . const . ElementMask $ parsedMask { _maskContent = realChildren }
-
-unparseDefs e@(nodeName -> "clipPath") = do
+  pure $ MaskTree $ parsedMask { _maskContent = realChildren }
+unparse e@(nodeName -> "clipPath") = do
   children <- mapM unparse $ elChildren e
   let realChildren = filter isNotNone children
       parsedClip = xmlUnparseWithDrawAttr e
-  withId e . const . ElementClipPath $ parsedClip { _clipPathContent = realChildren }
-
-unparseDefs e@(nodeName -> "linearGradient") =
-  withId e $ ElementLinearGradient . unparser
-  where
-    unparser ee =
-      xmlUnparse ee & linearGradientStops .~ parseGradientStops ee
-
-unparseDefs e@(nodeName -> "meshgradient") =
-  withId e $ ElementMeshGradient . unparser
-  where
-    unparser ee =
-      xmlUnparseWithDrawAttr ee & meshGradientRows .~ parseMeshGradientRows ee
-
-unparseDefs e@(nodeName -> "radialGradient") =
-  withId e $ ElementRadialGradient . unparser
-  where
-    unparser ee =
-      xmlUnparse ee & radialGradientStops .~ parseGradientStops ee
-unparseDefs e = do
-  el <- unparse e
-  withId e (const $ ElementGeometry el)
-
-unparse :: X.Element -> State Symbols Tree
+  pure $ ClipPathTree $ parsedClip { _clipPathContent = realChildren }
 unparse e@(nodeName -> "style") = do
   case parseOnly (many1 ruleSet) . T.pack $ strContent e of
     Left _ -> return ()
@@ -1107,8 +1080,12 @@ unparse e@(nodeName -> "style") = do
       modify $ \s -> s { cssStyle = cssStyle s ++ rules }
   return None
 unparse e@(nodeName -> "defs") = do
-    mapM_ unparseDefs $ elChildren e
-    return None
+  defsChildren <- mapM unparse $ elChildren e
+  let realChildren = filter isNotNone defsChildren
+  pure . DefinitionTree . Definitions $ groupNode & groupChildren .~ realChildren
+  where
+    groupNode :: Group Tree
+    groupNode = _groupOfSymbol $ xmlUnparseWithDrawAttr e
 unparse e@(nodeName -> "symbol") = do
   symbolChildren <- mapM unparse $ elChildren e
   let realChildren = filter isNotNone symbolChildren
@@ -1116,7 +1093,6 @@ unparse e@(nodeName -> "symbol") = do
   where
     groupNode :: Group Tree
     groupNode = _groupOfSymbol $ xmlUnparseWithDrawAttr e
-
 unparse e@(nodeName -> "g") = do
   children <- mapM unparse $ elChildren e
   let realChildren = filter isNotNone children
@@ -1163,10 +1139,13 @@ unparse e = case nodeName e of
     "circle"-> pure $ CircleTree parsed
     "line"  -> pure $ LineTree parsed
     "path" -> pure $ PathTree parsed
+    "linearGradient" ->
+      pure $ LinearGradientTree $ parsed & linearGradientStops .~ parseGradientStops e
+    "radialGradient" ->
+      pure $ RadialGradientTree $ parsed & radialGradientStops .~ parseGradientStops e
     "meshgradient" ->
       pure $ MeshGradientTree $ parsed & meshGradientRows .~ parseMeshGradientRows e
     "use" -> pure $ UseTree parsed Nothing
-    n | isDefTag n -> unparseDefs e
     _ -> pure None
   where
     parsed :: (XMLUpdatable a, WithDrawAttributes a) => a
@@ -1179,7 +1158,7 @@ unparseDocument rootLocation e@(nodeName -> "svg") = Just Document
     , _elements = parsedElements
     , _width = lengthFind "width"
     , _height = lengthFind "height"
-    , _definitions = symbols named
+    , _definitions = defs
     , _description = ""
     , _styleRules = cssStyle named
     , _documentLocation = rootLocation
@@ -1187,6 +1166,11 @@ unparseDocument rootLocation e@(nodeName -> "svg") = Just Document
   where
     (parsedElements, named) =
         runState (mapM unparse $ elChildren e) emptyState
+    defs = foldl' (foldTree worker) M.empty parsedElements
+    worker m t =
+      case t ^.drawAttr.attrId of
+        Nothing -> m
+        Just tid -> M.insert tid t m
     lengthFind n =
         attributeFinder n e >>= parse complexNumber
 unparseDocument _ _ = Nothing
@@ -1194,34 +1178,10 @@ unparseDocument _ _ = Nothing
 -- | Transform a SVG document to a XML node.
 xmlOfDocument :: Document -> X.Element
 xmlOfDocument doc =
-    X.node (X.unqual "svg") (attrs, descTag ++ styleTag ++ defsTag ++ children)
+    X.node (X.unqual "svg") (attrs, descTag ++ styleTag ++ children)
   where
     attr name = X.Attr (X.unqual name)
     children = catMaybes [serializeTreeNode el | el <- _elements doc]
-
-    defsTag | null defs = []
-            | otherwise = [X.node (X.unqual "defs") defs]
-
-    defs = catMaybes [elementRender k e | (k, e) <- M.assocs $ _definitions doc]
-
-    elementRender k e = case e of
-        ElementGeometry t -> serialize t
-        ElementMarker m -> serialize m
-        ElementMask m -> serialize m
-        ElementClipPath c -> serialize c
-        ElementPattern p -> serialize p
-        ElementLinearGradient lg -> addId $ serializeTreeNode lg
-        ElementRadialGradient rg -> addId $ serializeTreeNode rg
-        ElementMeshGradient   mg -> addId $ serializeTreeNode mg
-      where
-        addId = fmap (X.add_attr $ attr "id" k)
-
-        serialize :: (WithDrawAttributes e, XMLUpdatable e) => e -> Maybe X.Element
-        serialize el = case el^.drawAttr.attrId of
-          Nothing -> addId $ serializeTreeNode el
-          Just _id ->
-            let newNode = el & drawAttr.attrId .~ Just k in
-            serializeTreeNode newNode
 
     docViewBox = case _viewBox doc of
         Nothing -> []
