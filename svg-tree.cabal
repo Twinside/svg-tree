@@ -1,5 +1,5 @@
 name:                svg-tree
-version:             0.6.2.4
+version:             0.6.2.4.999
 synopsis:            SVG file loader and serializer
 description:
   svg-tree provides types representing a SVG document,
